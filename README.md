@@ -5,9 +5,13 @@ rides from Strava and Garmin Connect, computes training load (CTL/ATL/TSB),
 plans workouts, preps for races, and gives Claude-powered coaching advice —
 all backed by a local SQLite database, no cloud account required.
 
+## Demo
+
+![Cycling Coach demo](screenshots/demo.gif)
+
 ## Screenshots
 
-> _Screenshots use sample data._
+> _Screenshots and demo use sample data._
 
 **Training Dashboard** — CTL/ATL/TSB at a glance with a Performance Management Chart and daily check-in:
 
