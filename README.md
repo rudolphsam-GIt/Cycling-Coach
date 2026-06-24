@@ -51,6 +51,25 @@ all backed by a local SQLite database, no cloud account required.
   weekly training hours; the app estimates starting FTP/LTHR/CTL and tailors
   AI Coach advice accordingly.
 
+## Technical highlights
+
+- **Training-load model** — computes the Performance Management Chart from daily
+  TSS: CTL as a 42-day rolling average, ATL as a 7-day average, TSB as
+  yesterday's CTL − ATL, with a forward projection that scales a planned-TSS
+  schedule toward a target peak CTL for race day.
+- **Cross-source deduplication** — Strava, Garmin, and `.fit`/`.csv` imports all
+  upsert into SQLite keyed on a source-tagged `external_id`, then a dedup pass
+  collapses the same ride seen by two devices (matched on date + duration within
+  5 min + distance within 10% or 500 m), keeping the richer record.
+- **Resilient ingestion** — Strava OAuth with automatic token refresh, Garmin
+  `garth` auth with saved-token reuse and a manual import fallback when Garmin
+  rate-limits.
+- **Context-aware AI coach** — builds a snapshot of the athlete's real data
+  (FTP, weight, CTL/ATL/TSB, recent rides, upcoming races, goals) and feeds it to
+  Claude (`claude-sonnet-4-6`) so coaching advice is grounded, not generic.
+- **OBRA integration** — scrapes the public race schedule and results for the
+  race calendar and competitor-scouting briefs.
+
 ## Data sources
 
 - **Strava** (OAuth) and **Garmin Connect** (garth-based auth) for activity
@@ -92,3 +111,7 @@ scripts/                One-off setup scripts (Garmin auth)
 
 Single-user by design — each person runs their own copy with their own
 `.env` and local database.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
