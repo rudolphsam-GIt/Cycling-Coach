@@ -1,0 +1,21 @@
+# Secrets
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Local data — personal training history, not meant to be versioned
+data/*.db
+data/*.db-journal
+
+# Garmin session tokens
+.cycling_coach_garmin/
+
+# Streamlit
+.streamlit/
+
+# OS
+.DS_Store
