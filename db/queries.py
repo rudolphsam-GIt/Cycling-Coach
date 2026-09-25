@@ -202,6 +202,10 @@ def get_daily_tss(start: str, end: str) -> dict:
 
 # ── Workouts ──────────────────────────────────────────────────────────────────
 
+WORKOUT_TYPES = ["Endurance", "Tempo", "Threshold", "VO2 Max", "Sprint/Anaerobic",
+                 "Recovery", "Long Ride", "Race", "Other"]
+
+
 def add_workout(data: dict) -> int:
     conn = get_conn()
     cur = conn.execute(

@@ -16,7 +16,15 @@ Be direct and specific. Name competitors by name when discussing tactics.
 Focus on: positioning, when to cover moves, who to mark, pacing strategy,
 and how to use your athlete's strengths against the field's weaknesses.
 
-Use only the data provided — don't invent facts about competitors."""
+Use only the data provided — don't invent facts about competitors.
+
+Evidence rules:
+- Back every claim about a competitor with the specific OBRA result it comes from, written
+  inline in brackets, for example [Mt Tabor Series, 3rd of 42, Cat 3].
+- If a rider has few or no results, say the read on them is thin rather than guessing.
+- Keep your athlete's strengths grounded in the FTP, W/kg, CTL and TSB given.
+- End with a short "Confidence" line: High, Medium or Low, and why, based on how much
+  result data the field has."""
 
 
 def build_competitor_summary(profiles: list[dict]) -> str:
@@ -86,7 +94,8 @@ Please provide:
 3. **Race Strategy** — start positioning, when to cover moves, when to attack
 4. **When to Go** — specific race scenario triggers (e.g., "if X attacks on the climb, cover immediately")
 5. **Pacing Plan** — how to manage effort given the field
-6. **Wildcard** — one thing that could change the race"""
+6. **Wildcard** — one thing that could change the race
+7. **Confidence** — how much to trust this brief given the data available"""
 
     # Tactics call for real reasoning about the field, so use high effort.
     return claude_client.ask(

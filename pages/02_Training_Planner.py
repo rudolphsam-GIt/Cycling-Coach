@@ -7,7 +7,7 @@ from components import inject_styles, section_header
 
 from db.schema import run_migrations
 from db.queries import (get_workouts, add_workout, update_workout, delete_workout,
-                         get_activities, get_setting, get_races)
+                         get_activities, get_setting, get_races, WORKOUT_TYPES)
 from metrics.training_load import get_current_metrics
 
 run_migrations()
@@ -18,8 +18,6 @@ st.title("🗓️ Training Planner")
 
 ftp = float(get_setting("ftp_watts", 200) or 200)
 
-WORKOUT_TYPES = ["Endurance", "Tempo", "Threshold", "VO2 Max", "Sprint/Anaerobic",
-                 "Recovery", "Long Ride", "Race", "Other"]
 
 TSS_DEFAULTS = {
     "Endurance": 60, "Tempo": 80, "Threshold": 90,

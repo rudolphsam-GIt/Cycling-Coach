@@ -43,9 +43,13 @@ all backed by a local SQLite database, no cloud account required.
   tailored for cycling-specific strength.
 - **AI Coach** — chat with Claude using your actual training data (FTP,
   weight, CTL/ATL/TSB, recent rides, upcoming races, and stated goals) for
-  specific, evidence-based coaching.
+  specific, evidence-based coaching. Replies stream in as they're written, the
+  coach looks up deeper history on its own when a question needs it, and you
+  can attach screenshots of workouts or charts. Ask it to plan your week and
+  it proposes workouts you confirm with one click before they hit the planner.
 - **Competitor Research** — pulls OBRA public race results to scout fields
-  and generate race tactics briefs.
+  and generate race tactics briefs that cite the specific result behind every
+  claim about a rival.
 - **Onboarding questionnaire** — new athletes pick their goals (speed,
   endurance, weight loss, race prep, general fitness), experience level, and
   weekly training hours; the app estimates starting FTP/LTHR/CTL and tailors
@@ -67,6 +71,11 @@ all backed by a local SQLite database, no cloud account required.
 - **Context-aware AI coach** — builds a snapshot of the athlete's real data
   (FTP, weight, CTL/ATL/TSB, recent rides, upcoming races, goals) and feeds it to
   Claude Opus 5.5 (`claude-opus-5-5`) so coaching advice is grounded, not generic.
+- **Tool-using agent loop** — the coach streams its reply while calling
+  read-only tools over the SQLite data (ride history, PMC, weekly zone totals,
+  wellness, FTP history, planner). Tool inputs are validated before they run,
+  and the one write action, proposing workouts, only takes effect after the
+  athlete confirms in the UI.
 - **OBRA integration** — scrapes the public race schedule and results for the
   race calendar and competitor-scouting briefs.
 

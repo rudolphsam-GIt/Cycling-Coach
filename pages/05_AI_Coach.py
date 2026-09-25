@@ -1,11 +1,15 @@
 from __future__ import annotations
+import base64
+import io
 import streamlit as st
+import pandas as pd
+from PIL import Image
 from datetime import date, timedelta
 import json
 from components import inject_styles, section_header
 
 from db.schema import run_migrations
-from db.queries import (get_setting, get_activities, get_races,
+from db.queries import (get_setting, get_activities, get_races, add_workout,
                          save_message, get_conversation_history)
 from metrics.training_load import get_current_metrics
 from config import ANTHROPIC_API_KEY
@@ -23,6 +27,7 @@ if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "paste_your_key_here":
 
 try:
     import claude_client
+    import coach_tools
 except ImportError:
     st.error("anthropic package not installed. Run: pip install -r requirements.txt")
     st.stop()
@@ -45,7 +50,17 @@ When prescribing workouts, be specific:
 - Duration, intervals, power targets (% FTP or watts), rest periods
 - Give alternatives if they don't have a power meter (use RPE or % of LTHR)
 
-Keep responses focused and actionable. If the athlete's data suggests a specific issue, address it directly."""
+Keep responses focused and actionable. If the athlete's data suggests a specific issue, address it directly.
+
+Using the athlete's data:
+- The snapshot below covers the basics. Use your tools to look up anything beyond it, such as
+  longer ride history, weekly zone totals, wellness check ins, FTP history or planned workouts.
+- Only quote numbers that appear in the snapshot or a tool result. If the data you need isn't
+  there, say what's missing instead of estimating it.
+- When the athlete asks you to plan, schedule or import workouts, call propose_workouts. They
+  confirm before anything is saved, so tell them to review the proposal below the chat.
+- The athlete may attach screenshots, such as a workout from TrainingPeaks or Zwift, or a chart.
+  Read them carefully, and if a workout screenshot should go on the planner, propose it."""
 
 
 GOAL_COACHING_NOTES = {
@@ -129,13 +144,92 @@ def get_quick_questions(next_race=None) -> list[str]:
     return qs
 
 
-def ask_claude(user_message: str, history: list, context: str) -> str:
-    messages = history + [{"role": "user", "content": user_message}]
+MAX_IMAGE_BYTES = 3_500_000
+IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+
+
+def image_block(upload) -> dict:
+    """Turn an uploaded screenshot into an image block, shrinking it if it's too big."""
+    data, media_type = upload.getvalue(), upload.type
+    if len(data) > MAX_IMAGE_BYTES or media_type not in IMAGE_TYPES:
+        img = Image.open(io.BytesIO(data))
+        img.thumbnail((2400, 2400))
+        buf = io.BytesIO()
+        img.convert("RGB").save(buf, "JPEG", quality=85)
+        data, media_type = buf.getvalue(), "image/jpeg"
+    return {"type": "image",
+            "source": {"type": "base64", "media_type": media_type,
+                       "data": base64.b64encode(data).decode()}}
+
+
+def recent_history() -> list:
+    history = get_conversation_history(limit=18)
+    # The conversation sent to Claude has to start with the athlete's message.
+    while history and history[0]["role"] != "user":
+        history.pop(0)
+    return history
+
+
+def respond(text: str, images: list) -> None:
+    """Stream the coach's reply to one message, then save the exchange."""
+    text = (text or "").strip()
+    with st.chat_message("user"):
+        for img in images:
+            st.image(img, width=320)
+        if text:
+            st.markdown(text)
+
+    content = [image_block(img) for img in images]
+    content.append({"type": "text", "text": text or "Take a look at this."})
     system = [
         {"type": "text", "text": SYSTEM_PROMPT},
-        {"type": "text", "text": context},
+        {"type": "text", "text": build_context()},
     ]
-    return claude_client.ask(system, messages, effort="medium")
+    proposals: list[dict] = []
+    reply, error, looked_up = "", None, []
+
+    with st.chat_message("assistant"):
+        status = st.empty()
+        status.caption("Thinking…")
+        body = st.empty()
+        events = claude_client.stream_chat(
+            system,
+            recent_history() + [{"role": "user", "content": content}],
+            coach_tools.TOOLS,
+            lambda name, args: coach_tools.run_tool(name, args, proposals),
+            effort="medium",
+        )
+        for kind, value in events:
+            if kind == "text":
+                reply += value
+                body.markdown(reply + "▌")
+            elif kind == "tool":
+                label = coach_tools.STATUS_LABELS.get(value, value)
+                if label not in looked_up:
+                    looked_up.append(label)
+                status.caption(f"{label}…")
+            elif kind == "error":
+                error = value
+        body.markdown(reply)
+        if looked_up:
+            status.caption("Looked at your data: " + ", ".join(l.replace("Checking your ", "") for l in looked_up))
+        else:
+            status.empty()
+        if error:
+            st.error(error)
+
+    # Keep failed replies out of the saved history so they don't confuse later answers.
+    if error or not reply.strip():
+        return
+    saved_text = text
+    if images:
+        saved_text += f"\n\n_({len(images)} image{'s' if len(images) > 1 else ''} attached)_"
+    save_message("user", saved_text.strip(),
+                 {"ctl": metrics["ctl"], "atl": metrics["atl"], "tsb": metrics["tsb"]})
+    save_message("assistant", reply)
+    if proposals:
+        st.session_state["proposed_workouts"] = proposals
+    st.rerun()
 
 
 # ── UI ────────────────────────────────────────────────────────────────────────
@@ -154,6 +248,8 @@ with st.expander("Your current stats (what the coach sees)", expanded=False):
     if next_race:
         days_out = (date.fromisoformat(next_race["date"]) - date.today()).days
         st.info(f"Next race: **{next_race['name']}** — {days_out} days away")
+    st.caption("The coach can also look up your full ride history, weekly zone totals, "
+               "check ins, FTP history and planner when a question needs it.")
 
 # Quick question buttons
 st.subheader("Quick Questions")
@@ -170,40 +266,46 @@ st.subheader("Conversation")
 history = get_conversation_history(limit=20)
 
 if not history:
-    st.info("Ask your coach anything — workouts, race prep, pacing, recovery, strength training.")
+    st.info("Ask your coach anything — workouts, race prep, pacing, recovery, strength training. "
+            "You can also attach a screenshot of a workout or chart.")
 
 for msg in history:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
+# Workouts the coach proposed, waiting for the athlete to confirm
+if added := st.session_state.pop("workouts_added", None):
+    st.success(f"Added {added} workout{'s' if added > 1 else ''} to your Training Planner.")
+
+proposed = st.session_state.get("proposed_workouts")
+if proposed:
+    with st.container(border=True):
+        st.markdown("**Proposed workouts** — review before adding to your planner")
+        st.dataframe(
+            pd.DataFrame(proposed).rename(columns={
+                "date": "Date", "name": "Workout", "workout_type": "Type",
+                "description": "Details", "tss_planned": "TSS"}),
+            hide_index=True, use_container_width=True,
+        )
+        c1, c2 = st.columns(2)
+        if c1.button("Add to Training Planner", type="primary", use_container_width=True):
+            for w in proposed:
+                add_workout({**w, "structured_json": None, "notes": "Planned by AI Coach"})
+            st.session_state.pop("proposed_workouts")
+            st.session_state["workouts_added"] = len(proposed)
+            st.rerun()
+        if c2.button("Discard", use_container_width=True):
+            st.session_state.pop("proposed_workouts")
+            st.rerun()
+
 # Handle quick question clicks
 if "pending_message" in st.session_state:
-    pending = st.session_state.pop("pending_message")
-    with st.chat_message("user"):
-        st.markdown(pending)
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            context = build_context()
-            fresh_history = get_conversation_history(limit=18)
-            reply = ask_claude(pending, fresh_history, context)
-        st.markdown(reply)
-    save_message("user", pending, {"ctl": metrics["ctl"], "atl": metrics["atl"], "tsb": metrics["tsb"]})
-    save_message("assistant", reply)
-    st.rerun()
+    respond(st.session_state.pop("pending_message"), [])
 
 # Chat input
-if prompt := st.chat_input("Ask your coach..."):
-    with st.chat_message("user"):
-        st.markdown(prompt)
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            context = build_context()
-            fresh_history = get_conversation_history(limit=18)
-            reply = ask_claude(prompt, fresh_history, context)
-        st.markdown(reply)
-    save_message("user", prompt, {"ctl": metrics["ctl"], "atl": metrics["atl"], "tsb": metrics["tsb"]})
-    save_message("assistant", reply)
-    st.rerun()
+if prompt := st.chat_input("Ask your coach, or attach a screenshot...",
+                           accept_file="multiple", file_type=["png", "jpg", "jpeg", "gif", "webp"]):
+    respond(prompt.text, list(prompt.files))
 
 # Clear conversation
 with st.sidebar:
