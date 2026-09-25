@@ -2,7 +2,7 @@
 Generate a race tactics brief using Claude, given competitor profiles and race info.
 """
 
-import anthropic
+import claude_client
 from config import ANTHROPIC_API_KEY
 from db.queries import get_setting
 from metrics.training_load import get_current_metrics
@@ -53,8 +53,6 @@ def generate_tactics_brief(
     if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "paste_your_key_here":
         return "Claude API key not configured. Add ANTHROPIC_API_KEY to your .env file."
 
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
     ftp = get_setting("ftp_watts", "unknown")
     weight = get_setting("weight_kg", "unknown")
     metrics = get_current_metrics()
@@ -90,19 +88,9 @@ Please provide:
 5. **Pacing Plan** — how to manage effort given the field
 6. **Wildcard** — one thing that could change the race"""
 
-    try:
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1500,
-            system=[
-                {
-                    "type": "text",
-                    "text": TACTICS_SYSTEM,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response.content[0].text
-    except Exception as e:
-        return f"Error generating tactics: {e}"
+    # Tactics call for real reasoning about the field, so use high effort.
+    return claude_client.ask(
+        [{"type": "text", "text": TACTICS_SYSTEM}],
+        [{"role": "user", "content": prompt}],
+        effort="high",
+    )

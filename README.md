@@ -66,7 +66,7 @@ all backed by a local SQLite database, no cloud account required.
   rate-limits.
 - **Context-aware AI coach** — builds a snapshot of the athlete's real data
   (FTP, weight, CTL/ATL/TSB, recent rides, upcoming races, goals) and feeds it to
-  Claude (`claude-sonnet-4-6`) so coaching advice is grounded, not generic.
+  Claude Opus 5.5 (`claude-opus-5-5`) so coaching advice is grounded, not generic.
 - **OBRA integration** — scrapes the public race schedule and results for the
   race calendar and competitor-scouting briefs.
 

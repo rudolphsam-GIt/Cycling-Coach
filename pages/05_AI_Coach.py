@@ -22,10 +22,9 @@ if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "paste_your_key_here":
     st.stop()
 
 try:
-    import anthropic
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    import claude_client
 except ImportError:
-    st.error("anthropic package not installed. Run: pip install anthropic")
+    st.error("anthropic package not installed. Run: pip install -r requirements.txt")
     st.stop()
 
 SYSTEM_PROMPT = """You are an expert road cycling coach with deep knowledge of:
@@ -132,26 +131,11 @@ def get_quick_questions(next_race=None) -> list[str]:
 
 def ask_claude(user_message: str, history: list, context: str) -> str:
     messages = history + [{"role": "user", "content": user_message}]
-    try:
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1500,
-            system=[
-                {
-                    "type": "text",
-                    "text": SYSTEM_PROMPT,
-                    "cache_control": {"type": "ephemeral"},
-                },
-                {
-                    "type": "text",
-                    "text": context,
-                },
-            ],
-            messages=messages,
-        )
-        return response.content[0].text
-    except Exception as e:
-        return f"Error reaching Claude: {e}\n\nCheck that your ANTHROPIC_API_KEY is correct in the .env file."
+    system = [
+        {"type": "text", "text": SYSTEM_PROMPT},
+        {"type": "text", "text": context},
+    ]
+    return claude_client.ask(system, messages, effort="medium")
 
 
 # ── UI ────────────────────────────────────────────────────────────────────────
