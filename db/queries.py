@@ -75,6 +75,7 @@ def _same_ride(a: dict, b: dict) -> bool:
     time is compared: within 5 minutes, or within 10 minutes / 10% when the
     distances agree within 3%. Distances must agree within 10% (or 500 m),
     allowing for older .csv imports that stored miles as kilometers.
+    Records need a "source" key for that allowance to apply.
     """
     ta, tb = _times(a), _times(b)
     if not ta or not tb:
@@ -82,14 +83,16 @@ def _same_ride(a: dict, b: dict) -> bool:
     time_gap = min(abs(x - y) for x in ta for y in tb)
 
     da, db_ = a.get("distance_meters") or 0, b.get("distance_meters") or 0
+    # Only older .csv imports ever stored miles as kilometers; Strava and Garmin store meters.
+    maybe_miles = "csv_import" in (a.get("source"), b.get("source"))
     close_distance = False
     if da and db_:
         big, small = max(da, db_), min(da, db_)
         ratio = big / small
-        close_distance = big - small <= 300 or ratio <= 1.03 or abs(ratio / MILES_TO_KM - 1) <= 0.03
+        miles_mixup = maybe_miles and abs(ratio / MILES_TO_KM - 1) <= 0.03
+        close_distance = big - small <= 300 or ratio <= 1.03 or miles_mixup
         if not close_distance and big - small > 500 and (big - small) / big > 0.10:
-            if not 0.95 <= ratio / MILES_TO_KM <= 1.05:
-                return False
+            return False
 
     # A near exact distance match is strong evidence, so allow a bigger time gap for stops.
     limit = max(600, 0.10 * max(ta | tb)) if close_distance else 300
