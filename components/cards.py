@@ -16,6 +16,8 @@ def metric_card(
     delta_label: Optional[str] = None,
     icon: Optional[str] = None,
     small_value: bool = False,
+    tone: Optional[str] = None,
+    hint: Optional[str] = None,
 ) -> None:
     """
     Render a styled metric card.
@@ -36,6 +38,10 @@ def metric_card(
         Optional emoji icon shown above the label (e.g. "⚡").
     small_value:
         Use a slightly smaller font for longer values (e.g. "280w" vs large numbers).
+    tone:
+        CSS color for the value (defaults to the accent blue).
+    hint:
+        Optional muted line under the value (e.g. "fitness").
     """
     icon_html = f'<div class="metric-icon">{icon}</div>' if icon else ""
 
@@ -61,15 +67,12 @@ def metric_card(
     else:
         delta_html = ""
 
+    tone_style = f' style="--tone:{tone}"' if tone else ""
+    hint_html = f'<div class="metric-hint">{hint}</div>' if hint else ""
     st.markdown(
-        f"""
-        <div class="metric-card">
-            {icon_html}
-            <div class="metric-label">{label}</div>
-            <div class="{value_class}">{value}</div>
-            {delta_html}
-        </div>
-        """,
+        f'<div class="metric-card"{tone_style}>{icon_html}'
+        f'<div class="metric-label">{label}</div>'
+        f'<div class="{value_class}">{value}</div>{delta_html}{hint_html}</div>',
         unsafe_allow_html=True,
     )
 
@@ -136,28 +139,25 @@ def tsb_banner(tsb: float, ctl: float) -> None:
     """
     if tsb >= 10 and ctl > 20:
         css_class = "tsb-banner tsb-banner-fresh"
-        icon = "✅"
         message = (
-            f"<strong>FRESH</strong> &nbsp;(TSB {tsb:+.1f}) — "
-            "Good day to race or go hard."
+            f"<strong>Fresh</strong> · form {tsb:+.1f}. "
+            "A good day to race or go hard."
         )
     elif tsb <= -30:
         css_class = "tsb-banner tsb-banner-fatigued"
-        icon = "⚠️"
         message = (
-            f"<strong>FATIGUED</strong> &nbsp;(TSB {tsb:+.1f}) — "
-            "Consider an easy day or rest before hard efforts."
+            f"<strong>Fatigued</strong> · form {tsb:+.1f}. "
+            "Take an easy day or rest before hard efforts."
         )
     else:
         css_class = "tsb-banner tsb-banner-building"
-        icon = "📈"
         message = (
-            f"<strong>BUILDING</strong> &nbsp;(TSB {tsb:+.1f}) — "
-            "Productive training zone. Monitor fatigue accumulation."
+            f"<strong>Building</strong> · form {tsb:+.1f}. "
+            "A productive training zone. Keep an eye on fatigue."
         )
 
     st.markdown(
-        f'<div class="{css_class}">{icon}&nbsp;&nbsp;{message}</div>',
+        f'<div class="{css_class}"><span class="tsb-dot"></span><span>{message}</span></div>',
         unsafe_allow_html=True,
     )
 
@@ -276,5 +276,16 @@ def activity_card(
         </div>
         {zone_suffix}
         """,
+        unsafe_allow_html=True,
+    )
+
+
+def page_header(title: str, subtitle: Optional[str] = None, eyebrow: Optional[str] = None) -> None:
+    """Render the page title block used at the top of every page."""
+    eyebrow_html = f'<div class="page-header-eyebrow">{eyebrow}</div>' if eyebrow else ""
+    sub_html = f'<div class="page-header-subtitle">{subtitle}</div>' if subtitle else ""
+    st.markdown(
+        f'<div class="page-header">{eyebrow_html}'
+        f'<div class="page-header-title">{title}</div>{sub_html}</div>',
         unsafe_allow_html=True,
     )

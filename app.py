@@ -7,7 +7,7 @@ from components.onboarding import is_onboarding_complete, render_onboarding
 
 st.set_page_config(
     page_title="Cycling Coach",
-    page_icon="🚴",
+    page_icon="assets/icon.svg",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -55,15 +55,29 @@ if not is_setup_complete():
 elif not is_onboarding_complete():
     pg = st.navigation([st.Page(render_onboarding, title="Welcome", icon="🚴")])
 else:
-    pg = st.navigation([
-        st.Page("pages/01_Dashboard.py",        title="Dashboard",    icon="📊"),
-        st.Page("pages/02_Training_Planner.py", title="Training",     icon="🗓️"),
-        st.Page("pages/03_Race_Prep.py",        title="Race Prep",    icon="🏁"),
-        st.Page("pages/04_Strength_Training.py",title="Strength",     icon="💪"),
-        st.Page("pages/05_AI_Coach.py",         title="AI Coach",     icon="🤖"),
-        st.Page("pages/06_Competitors.py",      title="Competitors",  icon="🔍"),
-        st.Page("pages/07_Settings.py",         title="Settings",     icon="⚙️"),
-    ])
+    st.logo("assets/logo.svg", size="large", icon_image="assets/icon.svg")
+    pg = st.navigation({
+        "Train": [
+            st.Page("pages/01_Dashboard.py", title="Today", icon=":material/today:",
+                    url_path="today", default=True),
+            st.Page("pages/02_Training_Planner.py", title="Plan", icon=":material/calendar_month:",
+                    url_path="plan"),
+            st.Page("pages/05_AI_Coach.py", title="Coach", icon=":material/forum:",
+                    url_path="coach"),
+            st.Page("pages/04_Strength_Training.py", title="Strength",
+                    icon=":material/fitness_center:", url_path="strength"),
+        ],
+        "Race": [
+            st.Page("pages/03_Race_Prep.py", title="Races", icon=":material/flag:",
+                    url_path="races"),
+            st.Page("pages/06_Competitors.py", title="Competitors", icon=":material/groups:",
+                    url_path="competitors"),
+        ],
+        "Account": [
+            st.Page("pages/07_Settings.py", title="Settings", icon=":material/settings:",
+                    url_path="settings"),
+        ],
+    })
 if is_setup_complete() and is_onboarding_complete() and not st.session_state.get("auto_synced"):
     # Pull new rides and recovery from Garmin once per visit, if it's been a few hours.
     st.session_state["auto_synced"] = True

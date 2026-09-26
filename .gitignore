@@ -14,8 +14,9 @@ data/*.db-journal
 # Garmin session tokens
 .cycling_coach_garmin/
 
-# Streamlit
-.streamlit/
+# Streamlit (keep the theme, ignore local secrets)
+.streamlit/*
+!.streamlit/config.toml
 
 # OS
 .DS_Store

@@ -31,9 +31,21 @@ all backed by a local SQLite database, no cloud account required.
 
 ## Features
 
-- **Training Load Dashboard** — CTL (fitness), ATL (fatigue), TSB (form) via a
-  Performance Management Chart, daily wellness check-ins, weekly planned vs.
-  actual TSS, and power/HR zone distribution.
+- **Today** — one screen for the day: today's planned workout, last night's
+  Garmin recovery (sleep, HRV, resting HR, readiness), a quick "how do you
+  feel" check-in, fitness/fatigue/form, and your coach's review of your latest
+  ride. Below that, the Performance Management Chart, weekly planned vs. actual
+  TSS, and power/HR zone distribution.
+- **Ride reviews** — after each synced ride, the coach writes a short review:
+  how it compared to the plan, what it did to fitness and fatigue, and what
+  tomorrow should look like.
+- **Weekly check-in** — the coach reviews the week (load, key sessions,
+  recovery trend) and drafts the next 7 days for you to confirm.
+- **Race day plan** — for any race on your calendar: a day-by-day taper, race
+  morning routine, power and heart rate pacing targets, fueling, and a
+  checklist.
+- **Coach memory** — tell the coach about an injury, your schedule or your
+  preferences once and it remembers; you can see and delete every note.
 - **Training Planner** — weekly calendar of planned workouts plus a
   periodization wizard that scales a training block from your current CTL to
   a target peak CTL ahead of a race.
@@ -83,8 +95,9 @@ all backed by a local SQLite database, no cloud account required.
 
 - **Strava** (OAuth) and **Garmin Connect** (garth-based auth) for activity
   sync, with automatic cross-source deduplication.
-- Manual **.fit / .csv** ride import as a fallback when Garmin auth is
-  rate-limited.
+- **Garmin Connect** recovery data: sleep, HRV, resting HR, training
+  readiness and body battery, synced alongside rides.
+- Manual **.fit / .csv** ride import as a fallback.
 - **OBRA** (Oregon Bicycle Racing Association) public schedule and results
   for race calendar and competitor research.
 
@@ -95,26 +108,32 @@ Python · Streamlit · SQLite · Plotly · Anthropic Claude API
 ## Setup
 
 ```bash
-cp .env.example .env   # fill in your API keys
-bash setup.sh
+bash setup.sh          # installs Python 3.12 via uv if needed, then packages
 bash start.sh
 ```
 
-See `.env.example` for required keys (Strava, Garmin, Anthropic). Garmin
-auth requires a one-time interactive login — run `scripts/garmin_setup.py`
-once if Garmin shows a bot-protection challenge.
+Add your `ANTHROPIC_API_KEY` to `.env`. Then connect **Garmin** from
+Settings → Connections: sign in once (with your 2FA code if Garmin asks) and
+rides plus recovery sync automatically whenever you open the app. Strava is
+also supported. If connecting in the app fails, `venv/bin/python
+scripts/garmin_setup.py` does the same from a terminal.
 
 ## Project layout
 
 ```
 app.py                  Entry point — setup gate, onboarding gate, navigation
-pages/                  Dashboard, Training Planner, Race Prep, Strength,
-                         AI Coach, Competitors, Settings
+pages/                  Today, Plan, Coach, Strength, Races, Competitors,
+                         Settings (grouped into Train / Race / Account)
+claude_client.py        Claude calls: streaming, tool loop, errors, fallbacks
+coach_tools.py          Tools the coach can call over your data
+coach_context.py        Coach persona + athlete snapshot shared by every AI feature
+coach_reports.py        Ride review, weekly check-in and race plan prompts
 db/                     SQLite schema + queries
 auth/                   Strava OAuth, Garmin auth, .fit/.csv import
 metrics/                Training load (CTL/ATL/TSB) and zone estimation
 research/               OBRA schedule + race results scraping
-components/             Shared UI (styles, cards, onboarding)
+components/             Shared UI (styles, cards, onboarding, coach UI)
+.streamlit/config.toml  Dark theme
 scripts/                One-off setup scripts (Garmin auth)
 ```
 

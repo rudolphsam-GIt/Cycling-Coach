@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
 from datetime import date, timedelta
-from components import inject_styles, section_header, metric_card
+from components import inject_styles, section_header, metric_card, page_header
 
 from db.schema import run_migrations
 from db.queries import (get_races, add_race, delete_race, get_setting,
@@ -14,14 +14,15 @@ from research.obra_schedule import get_upcoming_races, DISCIPLINES
 
 run_migrations()
 
-st.set_page_config(page_title="Race Prep", page_icon="🏁", layout="wide")
+st.set_page_config(page_title="Races · Cycling Coach", layout="wide")
 inject_styles()
-st.title("🏁 Race Prep & Strategy")
+page_header("Races", "Race day plans, your calendar, taper and pacing")
 
 ftp = float(get_setting("ftp_watts", 200) or 200)
 weight = float(get_setting("weight_kg", 70) or 70)
 
-tab_plan, tab1, tab2, tab3 = st.tabs(["Race Day Plan", "📅 Race Calendar", "📉 Taper Planner", "⚡ Pacing Strategy"])
+tab_plan, tab1, tab2, tab3 = st.tabs([":material/auto_awesome: Race Day Plan", ":material/event: Calendar",
+                                     ":material/trending_down: Taper", ":material/speed: Pacing"])
 
 # ── Tab 0: AI race day plan ───────────────────────────────────────────────────
 with tab_plan:
@@ -31,7 +32,7 @@ with tab_plan:
     _upcoming = sorted((r for r in get_races() if r["date"] >= date.today().isoformat()),
                        key=lambda r: r["date"])
     if not _upcoming:
-        st.info("Add a race in the Race Calendar tab and your coach will build a taper, "
+        st.info("Add a race in the Calendar tab and your coach will build a taper, "
                 "pacing, fueling and race morning plan for it.")
     else:
         _race = st.selectbox(

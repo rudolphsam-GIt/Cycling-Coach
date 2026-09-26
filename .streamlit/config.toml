@@ -1,0 +1,23 @@
+[client]
+toolbarMode = "minimal"
+
+[theme]
+base = "dark"
+primaryColor = "#4D9FFF"
+backgroundColor = "#0F1117"
+secondaryBackgroundColor = "#1A1D2B"
+textColor = "#E6EAF2"
+linkColor = "#7DB8FF"
+borderColor = "#2A2F45"
+showWidgetBorder = true
+baseRadius = "10px"
+buttonRadius = "8px"
+baseFontSize = 15
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFontSizes = ["1.75rem", "1.3rem", "1.05rem", "0.95rem", "0.9rem", "0.85rem"]
+headingFontWeights = [700, 650, 600, 600, 600, 600]
+chartCategoricalColors = ["#4D9FFF", "#FF8A4C", "#34D399", "#C084FC", "#FBBF24", "#F472B6"]
+
+[theme.sidebar]
+backgroundColor = "#12141D"
+secondaryBackgroundColor = "#1A1D2B"

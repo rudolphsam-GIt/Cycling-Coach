@@ -2,7 +2,7 @@ from __future__ import annotations
 import streamlit as st
 import pandas as pd
 from datetime import date
-from components import inject_styles, section_header
+from components import inject_styles, section_header, page_header
 
 from db.schema import run_migrations
 from db.queries import get_races
@@ -13,9 +13,9 @@ from research.public_power import search_public_power
 
 run_migrations()
 
-st.set_page_config(page_title="Competitor Research", page_icon="🔍", layout="wide")
+st.set_page_config(page_title="Competitors · Cycling Coach", layout="wide")
 inject_styles()
-st.title("🔍 Competitor Research")
+page_header("Competitors", "Scout the field from OBRA results and get a tactics brief")
 st.caption("Look up OBRA race results, estimate competitor power, and generate a race tactics brief.")
 
 if "competitor_profiles" not in st.session_state:
@@ -183,7 +183,7 @@ else:
 st.divider()
 st.subheader("Load Competitors")
 
-pull_tab, manual_tab = st.tabs(["🔄 Auto-pull from OBRA Event", "✏️ Paste Names Manually"])
+pull_tab, manual_tab = st.tabs([":material/download: Pull from an OBRA event", ":material/edit: Paste names"])
 
 with pull_tab:
     st.caption(

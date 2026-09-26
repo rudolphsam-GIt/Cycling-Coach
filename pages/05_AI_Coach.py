@@ -5,7 +5,7 @@ import streamlit as st
 from PIL import Image
 from datetime import date, timedelta
 import json
-from components import inject_styles, section_header
+from components import inject_styles, section_header, page_header
 
 from db.schema import run_migrations
 from db.queries import (get_setting, get_races, save_message, get_conversation_history,
@@ -15,9 +15,9 @@ from config import ANTHROPIC_API_KEY
 
 run_migrations()
 
-st.set_page_config(page_title="AI Coach", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="Coach · Cycling Coach", layout="wide")
 inject_styles()
-st.title("🤖 AI Cycling Coach")
+page_header("Coach", "Ask anything. Your coach sees your rides, recovery, plan and notes.")
 
 if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "paste_your_key_here":
     st.error("Claude API key not configured. Add your ANTHROPIC_API_KEY to the .env file.")

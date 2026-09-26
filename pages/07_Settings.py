@@ -10,15 +10,16 @@ from config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, GARMIN_EMAIL, GARMIN_
 import auth.strava as strava_auth
 import auth.garmin as garmin_auth
 from components.styles import inject_styles
+from components.cards import page_header
 from components.onboarding import GOALS, parse_goal_keys, goal_keys_to_labels
 
 run_migrations()
 
-st.set_page_config(page_title="Settings", page_icon="⚙️", layout="wide")
+st.set_page_config(page_title="Settings · Cycling Coach", layout="wide")
 inject_styles()
-st.title("⚙️ Settings")
+page_header("Settings", "Your profile, connected accounts and data tools")
 
-tab_profile, tab_connections, tab_data = st.tabs(["👤 Profile", "🔗 Connections", "🛠 Data Tools"])
+tab_profile, tab_connections, tab_data = st.tabs([":material/person: Profile", ":material/link: Connections", ":material/build: Data tools"])
 
 # ── Tab 1: Athlete Profile ────────────────────────────────────────────────────
 with tab_profile:

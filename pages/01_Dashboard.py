@@ -1,70 +1,32 @@
 from __future__ import annotations
 
+import html
 import json
 import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from db.schema import run_migrations
-from db.queries import (get_activities, get_setting, get_races,
-                        get_weekly_tss_summary, log_wellness, get_wellness)
+from db.queries import (get_activities, get_setting, get_races, get_workouts,
+                        get_weekly_tss_summary, log_wellness, get_wellness,
+                        get_recovery_range)
 from metrics.training_load import compute_pmc, get_current_metrics
 from metrics.zones import get_power_zones, get_hr_zones
 from components.styles import inject_styles
-from components.cards import metric_card, section_header, tsb_banner, activity_card
+from components.cards import metric_card, section_header, tsb_banner, activity_card, page_header
 
 run_migrations()
 
-st.set_page_config(page_title="Dashboard", page_icon="🚴", layout="wide")
+st.set_page_config(page_title="Today · Cycling Coach", layout="wide")
 inject_styles()
 
-# ── Sidebar: today's check-in only ───────────────────────────────────────────
-with st.sidebar:
-    st.markdown("### 📋 How do you feel today?")
-    today_str = date.today().isoformat()
-    existing_wellness = get_wellness(today_str)
-
-    legs_default   = existing_wellness["legs_feel"] if existing_wellness else 3
-    energy_default = existing_wellness["energy"]    if existing_wellness else 3
-
-    legs = st.select_slider(
-        "Legs", options=[1, 2, 3, 4, 5], value=legs_default,
-        format_func=lambda v: ["💀 Dead", "😓 Heavy", "😐 OK", "😊 Good", "🔥 Fresh"][v - 1],
-    )
-    energy = st.select_slider(
-        "Energy", options=[1, 2, 3, 4, 5], value=energy_default,
-        format_func=lambda v: ["😴 Crashed", "😩 Low", "😐 OK", "😊 Good", "⚡ High"][v - 1],
-    )
-    btn_label = "Update" if existing_wellness else "Log"
-    if st.button(btn_label, width="stretch"):
-        log_wellness({"date": today_str, "legs_feel": legs, "energy": energy,
-                      "sleep_hours": None, "notes": ""})
-        st.success("Logged!")
-        st.rerun()
-
-# ── Page title ────────────────────────────────────────────────────────────────
-st.markdown(
-    "<h1 style='font-size:1.7rem;font-weight:700;color:#111827;"
-    "margin-bottom:0.1rem;'>Training Dashboard</h1>",
-    unsafe_allow_html=True,
-)
-st.markdown(
-    f"<p style='font-size:0.82rem;color:#9CA3AF;margin-top:0;margin-bottom:1.2rem;'>"
-    f"{date.today().strftime('%A, %B %-d, %Y')}</p>",
-    unsafe_allow_html=True,
-)
-
-from components.onboarding import render_onboarding_welcome_banner
-render_onboarding_welcome_banner()
-
-# ── Load settings ────────────────────────────────────────────────────────────
+# ── Load settings and metrics ─────────────────────────────────────────────────
 ftp    = float(get_setting("ftp_watts", 200) or 200)
 weight = float(get_setting("weight_kg", 70) or 70)
 lthr   = float(get_setting("lthr", 155) or 155)
 
-# ── Compute metrics ───────────────────────────────────────────────────────────
 metrics = get_current_metrics()
 ctl = metrics["ctl"]
 atl = metrics["atl"]
@@ -72,72 +34,111 @@ tsb = metrics["tsb"]
 ramp = metrics["ramp_rate"]
 w_per_kg = round(ftp / weight, 2) if weight else 0.0
 
-# ── Metric cards row ──────────────────────────────────────────────────────────
-col1, col2, col3, col4, col5 = st.columns(5)
+# ── Header ────────────────────────────────────────────────────────────────────
+_hour = datetime.now().hour
+_greeting = "Good morning" if _hour < 12 else "Good afternoon" if _hour < 18 else "Good evening"
+_first_name = (get_setting("strava_athlete_name", "") or "").split(" ")[0]
+page_header(f"{_greeting}{', ' + _first_name if _first_name else ''}",
+            date.today().strftime("%A, %B %-d"), eyebrow="Today")
 
-with col1:
-    delta_label = f"{ramp:+.1f} /wk" if ramp is not None else None
-    metric_card(
-        label="CTL — Fitness",
-        value=f"{ctl:.1f}",
-        delta=delta_label,
-        icon="📈",
-    )
+from components.onboarding import render_onboarding_welcome_banner
+render_onboarding_welcome_banner()
 
-with col2:
-    metric_card(
-        label="ATL — Fatigue",
-        value=f"{atl:.1f}",
-        icon="🔥",
-    )
-
-with col3:
-    tsb_delta_class = "metric-delta-up" if tsb >= 0 else "metric-delta-down"
-    metric_card(
-        label="TSB — Form",
-        value=f"{tsb:+.1f}",
-        icon="⚖️",
-    )
-
-with col4:
-    metric_card(
-        label="FTP",
-        value=f"{ftp}w",
-        icon="⚡",
-        small_value=True,
-    )
-
-with col5:
-    metric_card(
-        label="W / kg",
-        value=f"{w_per_kg:.2f}",
-        icon="🏋️",
-        small_value=True,
-    )
-
-st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-
-# ── TSB Status banner ─────────────────────────────────────────────────────────
 tsb_banner(tsb, ctl)
 
-st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
+# ── Today: planned workout · recovery · how you feel ──────────────────────────
+today_str = date.today().isoformat()
+col_plan, col_recovery, col_feel = st.columns([1.2, 1.2, 1])
 
-# ── Today's wellness strip ────────────────────────────────────────────────────
-_today_w = get_wellness(date.today().isoformat())
-if _today_w:
-    _leg_labels  = ["💀 Dead", "😓 Heavy", "😐 OK", "😊 Good", "🔥 Fresh"]
-    _eng_labels  = ["😴 Crashed", "😩 Low", "😐 OK", "😊 Good", "⚡ High"]
-    _leg_str = _leg_labels[(_today_w["legs_feel"] or 3) - 1]
-    _eng_str = _eng_labels[(_today_w["energy"]    or 3) - 1]
-    _note_part = f" · {_today_w['notes']}" if _today_w.get("notes") else ""
-    st.markdown(
-        f"<div style='background:#1C1F2E;border:1px solid #2E3250;border-radius:8px;"
-        f"padding:8px 16px;font-size:0.82rem;color:#94A3B8;margin-bottom:12px;'>"
-        f"<b style='color:#E8ECF4'>Today</b> &nbsp;·&nbsp; "
-        f"Legs: <b style='color:#CBD5E1'>{_leg_str}</b> &nbsp;·&nbsp; "
-        f"Energy: <b style='color:#CBD5E1'>{_eng_str}</b>{_note_part}</div>",
-        unsafe_allow_html=True,
-    )
+with col_plan:
+    _todays = get_workouts(today_str, today_str)
+    if _todays:
+        _w = _todays[0]
+        _more = f" · +{len(_todays) - 1} more" if len(_todays) > 1 else ""
+        _tss = f"{_w['tss_planned']:.0f} TSS planned" if _w.get("tss_planned") else ""
+        _body = html.escape((_w.get("description") or "")[:220])
+        st.markdown(
+            f"<div class='today-card'><div class='today-card-label'>Today's workout{_more}</div>"
+            f"<div class='today-card-title'>{html.escape(_w['name'])}</div>"
+            f"<div class='today-card-body'>{html.escape(_w.get('workout_type') or '')}"
+            f"{' · ' + _tss if _tss else ''}<br>{_body}</div></div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            "<div class='today-card'><div class='today-card-label'>Today's workout</div>"
+            "<div class='today-card-title'>Nothing planned</div>"
+            "<div class='today-card-body'>Rest, ride by feel, or ask your coach for a workout. "
+            "Your weekly check in on the Plan page can fill the week for you.</div></div>",
+            unsafe_allow_html=True,
+        )
+
+with col_recovery:
+    _rec = get_recovery_range((date.today() - timedelta(days=1)).isoformat(), today_str)
+    _r = _rec[-1] if _rec else None
+    if _r:
+        _stats = []
+        if _r.get("sleep_hours"):
+            _stats.append((f"{_r['sleep_hours']:.1f}h", "sleep"))
+        if _r.get("hrv_ms"):
+            _stats.append((f"{_r['hrv_ms']:.0f}", "HRV ms"))
+        if _r.get("resting_hr"):
+            _stats.append((f"{_r['resting_hr']}", "resting HR"))
+        if _r.get("readiness") is not None:
+            _stats.append((f"{_r['readiness']}", "readiness"))
+        _stats_html = "".join(
+            f"<div><div class='today-stat-value'>{v}</div><div class='today-stat-label'>{l}</div></div>"
+            for v, l in _stats)
+        _status = f" · HRV {_r['hrv_status'].lower()}" if _r.get("hrv_status") else ""
+        st.markdown(
+            f"<div class='today-card'><div class='today-card-label'>Recovery · Garmin{_status}</div>"
+            f"<div class='today-stats'>{_stats_html}</div></div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            "<div class='today-card'><div class='today-card-label'>Recovery</div>"
+            "<div class='today-card-title'>No recovery data yet</div>"
+            "<div class='today-card-body'>Connect Garmin in Settings to see sleep, HRV, "
+            "resting heart rate and readiness here.</div></div>",
+            unsafe_allow_html=True,
+        )
+
+with col_feel:
+    with st.container(border=True):
+        st.markdown("<div class='today-card-label'>How do you feel?</div>", unsafe_allow_html=True)
+        existing_wellness = get_wellness(today_str)
+        legs = st.select_slider(
+            "Legs", options=[1, 2, 3, 4, 5],
+            value=existing_wellness["legs_feel"] if existing_wellness else 3,
+            format_func=lambda v: ["Dead", "Heavy", "OK", "Good", "Fresh"][v - 1],
+        )
+        energy = st.select_slider(
+            "Energy", options=[1, 2, 3, 4, 5],
+            value=existing_wellness["energy"] if existing_wellness else 3,
+            format_func=lambda v: ["Crashed", "Low", "OK", "Good", "High"][v - 1],
+        )
+        if st.button("Update" if existing_wellness else "Log how I feel", width="stretch"):
+            log_wellness({"date": today_str, "legs_feel": legs, "energy": energy,
+                          "sleep_hours": None, "notes": ""})
+            st.toast("Logged.")
+            st.rerun()
+
+# ── Key numbers ───────────────────────────────────────────────────────────────
+col1, col2, col3, col4, col5 = st.columns(5)
+with col1:
+    metric_card("Fitness", f"{ctl:.1f}", delta=f"{ramp:+.1f} /wk" if ramp is not None else None,
+                tone="var(--fitness)", hint="CTL")
+with col2:
+    metric_card("Fatigue", f"{atl:.1f}", tone="var(--fatigue)", hint="ATL")
+with col3:
+    metric_card("Form", f"{tsb:+.1f}",
+                tone="var(--good)" if tsb >= 5 else "var(--bad)" if tsb <= -20 else "var(--warn)",
+                hint="TSB")
+with col4:
+    metric_card("FTP", f"{ftp:.0f} W", small_value=True, tone="var(--text-1)")
+with col5:
+    metric_card("W / kg", f"{w_per_kg:.2f}", small_value=True, tone="var(--text-1)")
 
 # ── Coach: latest ride review and weekly check in ────────────────────────────
 import coach_reports

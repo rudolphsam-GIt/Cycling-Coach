@@ -3,7 +3,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import json
 from datetime import date, timedelta
-from components import inject_styles, section_header
+from components import inject_styles, section_header, page_header
 
 from db.schema import run_migrations
 from db.queries import (get_workouts, add_workout, update_workout, delete_workout,
@@ -12,9 +12,9 @@ from metrics.training_load import get_current_metrics
 
 run_migrations()
 
-st.set_page_config(page_title="Training Planner", page_icon="🗓️", layout="wide")
+st.set_page_config(page_title="Plan · Cycling Coach", layout="wide")
 inject_styles()
-st.title("🗓️ Training Planner")
+page_header("Plan", "Your weekly check in, calendar and training blocks")
 
 ftp = float(get_setting("ftp_watts", 200) or 200)
 

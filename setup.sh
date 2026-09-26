@@ -7,25 +7,24 @@ echo "  Cycling Coach — Setup"
 echo "======================================"
 echo ""
 
-# Check Python
-if ! command -v python3 &> /dev/null; then
-    echo "❌ Python 3 not found."
-    echo "   Install it from https://www.python.org/downloads/"
-    exit 1
+# The Garmin library needs Python 3.12+. uv installs it without touching the system Python.
+UV="$(command -v uv || echo "$HOME/.local/bin/uv")"
+if [ ! -x "$UV" ]; then
+    echo "📦 Installing uv (Python manager, no admin password needed)..."
+    curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh
+    UV="$HOME/.local/bin/uv"
 fi
 
-PYTHON_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-echo "✅ Python $PYTHON_VER found"
-
-# Create virtualenv
-if [ ! -d "venv" ]; then
-    echo "📦 Creating virtual environment..."
-    python3 -m venv venv
+# Create virtualenv on Python 3.12
+if [ ! -x "venv/bin/python" ] || ! venv/bin/python -c "import sys; sys.exit(sys.version_info < (3, 12))"; then
+    echo "📦 Creating a Python 3.12 environment..."
+    rm -rf venv
+    "$UV" venv --python 3.12 venv
 fi
+echo "✅ $(venv/bin/python --version) ready"
 
 echo "📦 Installing packages (this takes ~1 minute)..."
-./venv/bin/pip install --quiet --upgrade pip
-./venv/bin/pip install --quiet -r requirements.txt
+"$UV" pip install --quiet --python venv/bin/python -r requirements.txt
 echo "✅ Packages installed"
 
 # Copy .env
@@ -45,7 +44,7 @@ echo ""
 echo "Next steps:"
 echo ""
 echo "  1. Open the file '.env' in a text editor"
-echo "     and fill in your Strava, Garmin, and Claude API keys."
+echo "     and add your Claude API key. (Connect Garmin later from Settings.)"
 echo "     (Instructions are in the file itself)"
 echo ""
 echo "  2. Start the app:"

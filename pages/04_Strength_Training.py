@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import json
 from datetime import date, timedelta
-from components import inject_styles, section_header
+from components import inject_styles, section_header, page_header
 
 from db.schema import run_migrations
 from db.queries import (add_strength_session, get_strength_sessions,
@@ -12,9 +12,9 @@ from db.queries import (add_strength_session, get_strength_sessions,
 
 run_migrations()
 
-st.set_page_config(page_title="Strength Training", page_icon="💪", layout="wide")
+st.set_page_config(page_title="Strength · Cycling Coach", layout="wide")
 inject_styles()
-st.title("💪 Strength Training")
+page_header("Strength", "Phase based gym work that supports your riding")
 
 # ── Cycling-specific strength plans ──────────────────────────────────────────
 
