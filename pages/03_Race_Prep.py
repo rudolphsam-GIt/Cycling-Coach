@@ -21,7 +21,26 @@ st.title("🏁 Race Prep & Strategy")
 ftp = float(get_setting("ftp_watts", 200) or 200)
 weight = float(get_setting("weight_kg", 70) or 70)
 
-tab1, tab2, tab3 = st.tabs(["📅 Race Calendar", "📉 Taper Planner", "⚡ Pacing Strategy"])
+tab_plan, tab1, tab2, tab3 = st.tabs(["Race Day Plan", "📅 Race Calendar", "📉 Taper Planner", "⚡ Pacing Strategy"])
+
+# ── Tab 0: AI race day plan ───────────────────────────────────────────────────
+with tab_plan:
+    import coach_reports
+    from components.coach_ui import report_block
+
+    _upcoming = sorted((r for r in get_races() if r["date"] >= date.today().isoformat()),
+                       key=lambda r: r["date"])
+    if not _upcoming:
+        st.info("Add a race in the Race Calendar tab and your coach will build a taper, "
+                "pacing, fueling and race morning plan for it.")
+    else:
+        _race = st.selectbox(
+            "Race", _upcoming, key="plan_race",
+            format_func=lambda r: f"{r['name']} · {r['date']} "
+                                  f"({(date.fromisoformat(r['date']) - date.today()).days} days away)",
+        )
+        _key, _title, _prompt = coach_reports.race_plan(_race)
+        report_block("race_plan", _key, _title, _prompt, button_label="Build my race day plan")
 
 # ── Tab 1: Race Calendar ──────────────────────────────────────────────────────
 with tab1:

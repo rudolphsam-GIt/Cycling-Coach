@@ -25,6 +25,23 @@ TSS_DEFAULTS = {
     "Long Ride": 150, "Race": 120, "Other": 60,
 }
 
+# ── Weekly check in ───────────────────────────────────────────────────────────
+import coach_reports
+from components.coach_ui import report_block
+from db.queries import get_reports
+
+section_header("Weekly Check In", "Your coach reviews the week and drafts the next one")
+_checkin_start = coach_reports.checkin_week()
+_key, _title, _prompt = coach_reports.weekly_checkin(_checkin_start)
+report_block("weekly", _key, _title, _prompt, button_label="Run my weekly check in")
+_past = [r for r in get_reports("weekly", limit=7) if r["ref_key"] != _key]
+if _past:
+    with st.expander("Past check ins"):
+        for r in _past:
+            st.markdown(f"**{r['title']}**")
+            st.markdown(r["content"])
+            st.divider()
+
 # ── Week navigation ───────────────────────────────────────────────────────────
 today = date.today()
 monday = today - timedelta(days=today.weekday())

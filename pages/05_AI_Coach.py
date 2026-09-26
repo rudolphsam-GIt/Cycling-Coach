@@ -2,18 +2,16 @@ from __future__ import annotations
 import base64
 import io
 import streamlit as st
-import pandas as pd
 from PIL import Image
 from datetime import date, timedelta
 import json
 from components import inject_styles, section_header
 
 from db.schema import run_migrations
-from db.queries import (get_setting, get_activities, get_races, add_workout,
-                         save_message, get_conversation_history)
+from db.queries import (get_setting, get_races, save_message, get_conversation_history,
+                         get_memories, forget_memory)
 from metrics.training_load import get_current_metrics
 from config import ANTHROPIC_API_KEY
-from components.onboarding import parse_goal_keys
 
 run_migrations()
 
@@ -26,108 +24,11 @@ if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "paste_your_key_here":
     st.stop()
 
 try:
-    import claude_client
-    import coach_tools
+    import coach_context
+    from components import coach_ui
 except ImportError:
     st.error("anthropic package not installed. Run: pip install -r requirements.txt")
     st.stop()
-
-SYSTEM_PROMPT = """You are an expert road cycling coach with deep knowledge of:
-- Periodization and training load management (CTL/ATL/TSB/PMC)
-- FTP-based training zones and structured interval work
-- Race strategy and tactics for road cycling
-- Recovery, nutrition timing, and performance optimization
-- Strength training for cyclists
-- OBRA (Oregon Bicycle Racing Association) racing context
-
-Your coaching style:
-- Specific and data-driven — always reference the athlete's actual numbers when available
-- Direct but supportive — give honest assessments without being harsh
-- Practical — suggest workouts and tactics the athlete can actually execute
-- Evidence-based — cite reasoning for recommendations
-
-When prescribing workouts, be specific:
-- Duration, intervals, power targets (% FTP or watts), rest periods
-- Give alternatives if they don't have a power meter (use RPE or % of LTHR)
-
-Keep responses focused and actionable. If the athlete's data suggests a specific issue, address it directly.
-
-Using the athlete's data:
-- The snapshot below covers the basics. Use your tools to look up anything beyond it, such as
-  longer ride history, weekly zone totals, wellness check ins, FTP history or planned workouts.
-- Only quote numbers that appear in the snapshot or a tool result. If the data you need isn't
-  there, say what's missing instead of estimating it.
-- When the athlete asks you to plan, schedule or import workouts, call propose_workouts. They
-  confirm before anything is saved, so tell them to review the proposal below the chat.
-- The athlete may attach screenshots, such as a workout from TrainingPeaks or Zwift, or a chart.
-  Read them carefully, and if a workout screenshot should go on the planner, propose it."""
-
-
-GOAL_COACHING_NOTES = {
-    "speed": "Athlete's primary goal is GETTING FASTER — emphasize threshold/VO2max work and track FTP progress closely.",
-    "endurance": "Athlete's primary goal is BUILDING ENDURANCE — prioritize long Z2 rides and steady weekly volume growth.",
-    "weight_loss": "Athlete's primary goal is WEIGHT LOSS — favor consistent, sustainable training volume over extreme intensity; mention nutrition timing where relevant.",
-    "race": "Athlete's primary goal is RACE PREP — tie recommendations back to their upcoming race and periodization.",
-    "general_fitness": "Athlete's primary goal is GENERAL FITNESS — keep things low-pressure, ramp fitness gradually, avoid overtraining.",
-}
-
-
-def build_context() -> str:
-    ftp = get_setting("ftp_watts", "unknown")
-    weight = get_setting("weight_kg", "unknown")
-    lthr = get_setting("lthr", "unknown")
-    w_per_kg = round(float(ftp) / float(weight), 2) if (ftp and weight and ftp != "unknown" and weight != "unknown") else "unknown"
-    goal_keys = parse_goal_keys(get_setting("primary_goal", ""))
-    weekly_hours = get_setting("weekly_hours_target", "")
-
-    metrics = get_current_metrics()
-    activities = get_activities(days_back=14)
-    races = get_races(upcoming_only=True)
-
-    recent_rides = []
-    for a in activities[:7]:
-        dur = f"{int(a['duration_seconds']//3600)}h{int((a['duration_seconds']%3600)//60)}m" if a.get("duration_seconds") else "?"
-        tss_str = f"TSS:{a['tss']:.0f}" if a.get("tss") else "no TSS"
-        pwr_str = f"{a['avg_power_watts']:.0f}W" if a.get("avg_power_watts") else ""
-        recent_rides.append(f"  - {a['date']} | {a.get('name','?')} | {dur} | {tss_str} {pwr_str}")
-
-    next_race = races[0] if races else None
-    race_str = "None scheduled"
-    if next_race:
-        days_out = (date.fromisoformat(next_race["date"]) - date.today()).days
-        race_str = f"{next_race['name']} on {next_race['date']} ({days_out} days away)"
-
-    newline = "\n"
-    rides_str = newline.join(recent_rides) if recent_rides else "  No recent activities synced"
-    tsb_label = "fresh and ready" if metrics["tsb"] > 5 else "fatigued" if metrics["tsb"] < -10 else "neutral"
-
-    goal_notes = [GOAL_COACHING_NOTES[k] for k in goal_keys if k in GOAL_COACHING_NOTES]
-    goal_note = "\n  ".join(goal_notes)
-    hours_str = f"{weekly_hours} hrs/week" if weekly_hours else "unknown"
-
-    context = f"""
-ATHLETE DATA (use this to give specific coaching advice):
-{f"  {goal_note}" if goal_note else ""}
-  Weekly training time available: {hours_str}
-
-Physiology:
-  FTP: {ftp}W | Weight: {weight}kg | W/kg: {w_per_kg} | LTHR: {lthr}bpm
-
-Current Training Load:
-  CTL (Fitness): {metrics['ctl']:.1f}
-  ATL (Fatigue): {metrics['atl']:.1f}
-  TSB (Form): {metrics['tsb']:.1f} ({tsb_label})
-  7-day ramp rate: {metrics['ramp_rate']:+.1f}
-
-Recent Activities (last 14 days):
-{rides_str}
-
-Next Race: {race_str}
-
-Today's date: {date.today().isoformat()}
-"""
-    return context
-
 
 def get_quick_questions(next_race=None) -> list[str]:
     qs = [
@@ -181,42 +82,13 @@ def respond(text: str, images: list) -> None:
 
     content = [image_block(img) for img in images]
     content.append({"type": "text", "text": text or "Take a look at this."})
-    system = [
-        {"type": "text", "text": SYSTEM_PROMPT},
-        {"type": "text", "text": build_context()},
-    ]
     proposals: list[dict] = []
-    reply, error, looked_up = "", None, []
-
     with st.chat_message("assistant"):
-        status = st.empty()
-        status.caption("Thinking…")
-        body = st.empty()
-        events = claude_client.stream_chat(
-            system,
+        reply, error = coach_ui.stream_reply(
+            coach_context.system_blocks(),
             recent_history() + [{"role": "user", "content": content}],
-            coach_tools.TOOLS,
-            lambda name, args: coach_tools.run_tool(name, args, proposals),
-            effort="medium",
+            "medium", proposals,
         )
-        for kind, value in events:
-            if kind == "text":
-                reply += value
-                body.markdown(reply + "▌")
-            elif kind == "tool":
-                label = coach_tools.STATUS_LABELS.get(value, value)
-                if label not in looked_up:
-                    looked_up.append(label)
-                status.caption(f"{label}…")
-            elif kind == "error":
-                error = value
-        body.markdown(reply)
-        if looked_up:
-            status.caption("Looked at your data: " + ", ".join(l.replace("Checking your ", "") for l in looked_up))
-        else:
-            status.empty()
-        if error:
-            st.error(error)
 
     # Keep failed replies out of the saved history so they don't confuse later answers.
     if error or not reply.strip():
@@ -274,29 +146,7 @@ for msg in history:
         st.markdown(msg["content"])
 
 # Workouts the coach proposed, waiting for the athlete to confirm
-if added := st.session_state.pop("workouts_added", None):
-    st.success(f"Added {added} workout{'s' if added > 1 else ''} to your Training Planner.")
-
-proposed = st.session_state.get("proposed_workouts")
-if proposed:
-    with st.container(border=True):
-        st.markdown("**Proposed workouts** — review before adding to your planner")
-        st.dataframe(
-            pd.DataFrame(proposed).rename(columns={
-                "date": "Date", "name": "Workout", "workout_type": "Type",
-                "description": "Details", "tss_planned": "TSS"}),
-            hide_index=True, width="stretch",
-        )
-        c1, c2 = st.columns(2)
-        if c1.button("Add to Training Planner", type="primary", width="stretch"):
-            for w in proposed:
-                add_workout({**w, "structured_json": None, "notes": "Planned by AI Coach"})
-            st.session_state.pop("proposed_workouts")
-            st.session_state["workouts_added"] = len(proposed)
-            st.rerun()
-        if c2.button("Discard", width="stretch"):
-            st.session_state.pop("proposed_workouts")
-            st.rerun()
+coach_ui.proposal_card("proposed_workouts")
 
 # Handle quick question clicks
 if "pending_message" in st.session_state:
@@ -319,3 +169,15 @@ with st.sidebar:
         st.success("Cleared.")
         st.rerun()
     st.caption("History is saved locally and used to give the coach context between questions.")
+
+    st.subheader("What the coach remembers")
+    notes = get_memories()
+    if not notes:
+        st.caption("Nothing yet. Tell the coach about injuries, your schedule or preferences "
+                   "and it will remember them.")
+    for m in notes:
+        c1, c2 = st.columns([5, 1])
+        c1.caption(f"**{m['category'].replace('_', ' ').title()}** · {m['note']}")
+        if c2.button("✕", key=f"forget_{m['id']}", help="Forget this"):
+            forget_memory(m["id"])
+            st.rerun()

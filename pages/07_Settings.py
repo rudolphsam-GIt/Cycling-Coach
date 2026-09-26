@@ -127,7 +127,8 @@ with tab_connections:
         if garmin_auth.is_connected():
             last_garmin = get_setting("garmin_last_sync", "") or "Never"
             if last_garmin != "Never":
-                last_garmin = last_garmin[:16].replace("T", " ") + " UTC"
+                from components.coach_ui import local_time
+                last_garmin = local_time(last_garmin)
             st.success(f"Connected · Last sync: {last_garmin}")
             st.caption("Rides, sleep, HRV, resting heart rate and readiness sync on their own "
                        "when you open the app.")

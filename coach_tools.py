@@ -13,8 +13,12 @@ from datetime import date, timedelta
 
 from db.queries import (get_activities, get_workouts, get_races, get_wellness_range,
                         get_ftp_history, get_weekly_tss_summary, get_setting, get_recovery_range,
+                        add_memory,
                         WORKOUT_TYPES)
 from metrics.training_load import compute_pmc
+
+
+MEMORY_CATEGORIES = ["health", "schedule", "preferences", "goals", "training_response", "other"]
 
 
 def _int_prop(description: str, minimum: int, maximum: int) -> dict:
@@ -94,6 +98,20 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "remember",
+        "description": "Save a short note about the athlete that will matter in future sessions, "
+                       "such as an injury, schedule limit, preference, goal or how they respond "
+                       "to training. The athlete can see and delete these notes.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "note": {"type": "string", "description": "One sentence, under 200 characters"},
+                "category": {"type": "string", "enum": MEMORY_CATEGORIES},
+            },
+            "required": ["note", "category"],
+        },
+    },
+    {
         "name": "propose_workouts",
         "description": "Propose workouts to add to the athlete's Training Planner. Nothing is saved "
                        "until the athlete confirms, so call this whenever they ask you to plan, "
@@ -131,6 +149,7 @@ STATUS_LABELS = {
     "get_wellness": "Checking your check ins",
     "get_recovery": "Checking your sleep and recovery",
     "get_ftp_history": "Checking your FTP history",
+    "remember": "Saving a note about you",
     "propose_workouts": "Drafting workouts",
 }
 
@@ -224,6 +243,14 @@ def run_tool(name: str, args: dict, proposals: list[dict]) -> str:
         ]
     elif name == "get_ftp_history":
         result = [{"date": f["date"], "ftp_watts": f["ftp_watts"]} for f in get_ftp_history()]
+    elif name == "remember":
+        note, category = args.get("note"), args.get("category")
+        if not isinstance(note, str) or not 0 < len(note.strip()) <= 300:
+            raise ToolInputError("note must be a sentence under 300 characters")
+        if category not in MEMORY_CATEGORIES:
+            raise ToolInputError(f"category must be one of {MEMORY_CATEGORIES}")
+        add_memory(category, note.strip())
+        return "Saved."
     elif name == "propose_workouts":
         result = _propose(args, proposals)
     else:

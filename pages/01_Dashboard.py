@@ -139,6 +139,33 @@ if _today_w:
         unsafe_allow_html=True,
     )
 
+# ── Coach: latest ride review and weekly check in ────────────────────────────
+import coach_reports
+from components.coach_ui import report_block
+from db.queries import get_report
+
+_recent_rides = get_activities(days_back=90)
+if _recent_rides:
+    section_header("Latest Ride", "Your coach's review")
+    _latest = _recent_rides[0]
+    _fresh = (date.today() - date.fromisoformat(_latest["date"])).days <= 3
+    _key, _title, _prompt = coach_reports.ride_review(_latest)
+    report_block("ride_review", _key, _title, _prompt,
+                 button_label="Review this ride", auto=_fresh)
+    if len(_recent_rides) > 1:
+        with st.expander("Review another ride"):
+            _pick = st.selectbox(
+                "Ride", _recent_rides[1:15], key="review_pick",
+                format_func=lambda a: f"{a['date']} · {a.get('name') or 'Ride'}",
+            )
+            _k, _t, _p = coach_reports.ride_review(_pick)
+            report_block("ride_review", _k, _t, _p, button_label="Review this ride")
+
+_week = coach_reports.checkin_week()
+if date.today().weekday() in (5, 6, 0) and not get_report("weekly", _week.isoformat()):
+    st.info(f"Your weekly check in for the week of {_week:%b %d} is ready. "
+            "Open **Plan** to run it.")
+
 # ── PMC Chart ────────────────────────────────────────────────────────────────
 section_header("Performance Management Chart", "120-day CTL · ATL · TSB · Daily TSS")
 
