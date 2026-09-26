@@ -5,6 +5,21 @@ from datetime import datetime, date, timedelta
 from db.schema import get_conn
 
 
+# Every sport_type a ride can be stored as, lowercased: Strava names, Garmin type
+# keys, and the labels written by .fit/.csv imports.
+CYCLING_SPORT_TYPES = (
+    "ride", "virtualride", "gravelride", "mountainbikeride", "cycling",
+    "road_biking", "gravel_cycling", "virtual_ride", "indoor_cycling",
+    "cycling_training", "mountain_biking",
+    "road cycling", "gravel cycling", "mountain biking", "virtual cycling", "indoor cycling",
+)
+_CYCLING_PLACEHOLDERS = ",".join("?" * len(CYCLING_SPORT_TYPES))
+
+
+def is_ride(activity: dict) -> bool:
+    return (activity.get("sport_type") or "").lower() in CYCLING_SPORT_TYPES
+
+
 # ── Athlete Settings ──────────────────────────────────────────────────────────
 
 def get_setting(key: str, default=None):
@@ -189,12 +204,12 @@ def get_daily_tss(start: str, end: str) -> dict:
     """Return {date_str: total_tss} for the given date range."""
     conn = get_conn()
     rows = conn.execute(
-        """SELECT date, SUM(COALESCE(tss,0)) as total_tss
+        f"""SELECT date, SUM(COALESCE(tss,0)) as total_tss
            FROM activities
            WHERE date BETWEEN ? AND ?
-             AND sport_type IN ('Ride','VirtualRide','GravelRide','MountainBikeRide','Cycling')
+             AND LOWER(sport_type) IN ({_CYCLING_PLACEHOLDERS})
            GROUP BY date""",
-        (start, end),
+        (start, end, *CYCLING_SPORT_TYPES),
     ).fetchall()
     conn.close()
     return {r["date"]: r["total_tss"] for r in rows}
@@ -286,14 +301,6 @@ def delete_race(rid: int):
     conn.close()
 
 
-_CYCLING_SPORT_TYPES = (
-    "'Ride'", "'VirtualRide'", "'GravelRide'", "'MountainBikeRide'",
-    "'cycling'", "'road_biking'", "'gravel_cycling'", "'virtual_ride'",
-    "'indoor_cycling'", "'cycling_training'", "'mountain_biking'",
-)
-_CYCLING_IN = f"({','.join(_CYCLING_SPORT_TYPES)})"
-
-
 def get_weekly_tss_summary(weeks: int = 5) -> list[dict]:
     """
     Return one row per week for the past `weeks` weeks (oldest first).
@@ -325,11 +332,8 @@ def get_weekly_tss_summary(weeks: int = 5) -> list[dict]:
             f"""SELECT tss, duration_seconds, zone_time_json
                 FROM activities
                 WHERE date BETWEEN ? AND ?
-                  AND LOWER(sport_type) IN
-                      ('ride','virtualride','gravelride','mountainbikeride',
-                       'cycling','road_biking','gravel_cycling','virtual_ride',
-                       'indoor_cycling','cycling_training','mountain_biking')""",
-            (ws_iso, we_iso),
+                  AND LOWER(sport_type) IN ({_CYCLING_PLACEHOLDERS})""",
+            (ws_iso, we_iso, *CYCLING_SPORT_TYPES),
         ).fetchall()
 
         actual = sum(r["tss"] or 0 for r in act_rows)

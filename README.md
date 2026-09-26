@@ -5,30 +5,6 @@ rides from Strava and Garmin Connect, computes training load (CTL/ATL/TSB),
 plans workouts, preps for races, and gives Claude-powered coaching advice —
 all backed by a local SQLite database, no cloud account required.
 
-## Demo
-
-![Cycling Coach demo](screenshots/demo.gif)
-
-## Screenshots
-
-> _Screenshots and demo use sample data._
-
-**Training Dashboard** — CTL/ATL/TSB at a glance with a Performance Management Chart and daily check-in:
-
-![Training Dashboard](screenshots/01-dashboard.png)
-
-**Training Planner** — weekly plan plus a periodization wizard that scales a block toward a target peak CTL for your race:
-
-![Training Planner](screenshots/02-training.png)
-
-**Race Prep** — race calendar, taper planner, and pacing strategy:
-
-![Race Prep](screenshots/03-race-prep.png)
-
-**AI Coach** — chat with Claude using your actual training data as context:
-
-![AI Coach](screenshots/04-ai-coach.png)
-
 ## Features
 
 - **Today** — one screen for the day: today's planned workout, last night's

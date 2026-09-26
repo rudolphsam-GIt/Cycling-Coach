@@ -11,7 +11,7 @@ from datetime import date, datetime, timedelta
 from db.schema import run_migrations
 from db.queries import (get_activities, get_setting, get_races, get_workouts,
                         get_weekly_tss_summary, log_wellness, get_wellness,
-                        get_recovery_range)
+                        get_recovery_range, is_ride)
 from metrics.training_load import compute_pmc, get_current_metrics
 from metrics.zones import get_power_zones, get_hr_zones
 from components.styles import inject_styles
@@ -145,7 +145,7 @@ import coach_reports
 from components.coach_ui import report_block
 from db.queries import get_report
 
-_recent_rides = get_activities(days_back=90)
+_recent_rides = [a for a in get_activities(days_back=90) if is_ride(a)]
 if _recent_rides:
     section_header("Latest Ride", "Your coach's review")
     _latest = _recent_rides[0]

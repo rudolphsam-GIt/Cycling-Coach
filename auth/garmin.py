@@ -71,12 +71,17 @@ def disconnect() -> None:
 
 def _client():
     """Return a logged in client using the saved tokens (no password needed)."""
-    from garminconnect import Garmin
+    from garminconnect import Garmin, GarminConnectAuthenticationError
 
     if not is_connected():
         raise GarminNotConnected("Garmin isn't connected yet. Connect it in Settings.")
     api = Garmin()
-    api.login(TOKEN_DIR)
+    try:
+        api.login(TOKEN_DIR)
+    except GarminConnectAuthenticationError:
+        # The saved login was revoked or expired. Clear it so Settings offers to connect again.
+        disconnect()
+        raise GarminNotConnected("Garmin signed you out. Connect it again in Settings.")
     return api
 
 
