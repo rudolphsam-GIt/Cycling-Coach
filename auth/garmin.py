@@ -127,7 +127,8 @@ def activity_row(act: dict, ftp: float, lthr: float) -> dict | None:
     if activity_type not in CYCLING_TYPES:
         return None
 
-    duration_s = float(act.get("duration") or 0)
+    duration_s = float(act.get("duration") or 0)          # timer time, used for TSS
+    elapsed_s = float(act.get("elapsedDuration") or duration_s)  # includes stops, like Strava
     moving_s = float(act.get("movingDuration") or duration_s)
     avg_hr = act.get("averageHR")
     max_hr = act.get("maxHR")
@@ -147,7 +148,7 @@ def activity_row(act: dict, ftp: float, lthr: float) -> dict | None:
         "name": act.get("activityName") or "Garmin Ride",
         "sport_type": activity_type,
         "duration_seconds": int(moving_s),
-        "elapsed_seconds": int(duration_s),
+        "elapsed_seconds": int(elapsed_s),
         "distance_meters": act.get("distance") or 0,
         "elevation_gain_meters": act.get("elevationGain") or 0,
         "avg_power_watts": avg_power,

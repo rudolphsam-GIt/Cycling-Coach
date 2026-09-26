@@ -59,31 +59,54 @@ def _activity_score(row: dict) -> int:
     return score
 
 
+MILES_TO_KM = 1.609344
+
+
+def _times(row: dict) -> set:
+    return {t for t in (row.get("elapsed_seconds"), row.get("duration_seconds")) if t}
+
+
+def _same_ride(a: dict, b: dict) -> bool:
+    """
+    True when two records from different sources look like the same ride.
+
+    Sources measure time differently (Strava's elapsed time includes stops,
+    Garmin's timer time doesn't), so the closest pairing of elapsed or moving
+    time is compared: within 5 minutes, or within 10 minutes / 10% when the
+    distances agree within 3%. Distances must agree within 10% (or 500 m),
+    allowing for older .csv imports that stored miles as kilometers.
+    """
+    ta, tb = _times(a), _times(b)
+    if not ta or not tb:
+        return False
+    time_gap = min(abs(x - y) for x in ta for y in tb)
+
+    da, db_ = a.get("distance_meters") or 0, b.get("distance_meters") or 0
+    close_distance = False
+    if da and db_:
+        big, small = max(da, db_), min(da, db_)
+        ratio = big / small
+        close_distance = big - small <= 300 or ratio <= 1.03 or abs(ratio / MILES_TO_KM - 1) <= 0.03
+        if not close_distance and big - small > 500 and (big - small) / big > 0.10:
+            if not 0.95 <= ratio / MILES_TO_KM <= 1.05:
+                return False
+
+    # A near exact distance match is strong evidence, so allow a bigger time gap for stops.
+    limit = max(600, 0.10 * max(ta | tb)) if close_distance else 300
+    return time_gap <= limit
+
+
 def _find_cross_source_duplicate(conn, data: dict):
-    """
-    Return an existing activity row from a different source that matches
-    on date + duration within 5 min + distance within 10% (or 500 m).
-    Returns None if no duplicate found.
-    """
-    duration = data.get("elapsed_seconds") or data.get("duration_seconds") or 0
-    if not duration:
+    """Return an existing row from a different source that is the same ride, or None."""
+    if not _times(data):
         return None
-
     rows = conn.execute(
-        """SELECT * FROM activities
-           WHERE date = ? AND source != ?
-             AND ABS(COALESCE(elapsed_seconds, duration_seconds, 0) - ?) <= 300""",
-        (data["date"], data["source"], duration),
+        "SELECT * FROM activities WHERE date = ? AND source != ?",
+        (data["date"], data["source"]),
     ).fetchall()
-
-    dist_new = data.get("distance_meters") or 0
     for row in rows:
-        dist_old = row["distance_meters"] or 0
-        if dist_new and dist_old:
-            pct = abs(dist_new - dist_old) / max(dist_old, 1)
-            if pct > 0.10 and abs(dist_new - dist_old) > 500:
-                continue
-        return row
+        if _same_ride(data, dict(row)):
+            return row
     return None
 
 
@@ -150,35 +173,24 @@ def deduplicate_activities() -> int:
     Returns number of rows deleted.
     """
     conn = get_conn()
-    rows = conn.execute(
-        """SELECT * FROM activities ORDER BY date, elapsed_seconds"""
-    ).fetchall()
+    rows = conn.execute("SELECT * FROM activities ORDER BY date, id").fetchall()
     rows = [dict(r) for r in rows]
 
     to_delete = set()
     for i, a in enumerate(rows):
         if a["id"] in to_delete:
             continue
-        dur_a = a.get("elapsed_seconds") or a.get("duration_seconds") or 0
         for b in rows[i + 1:]:
-            if b["id"] in to_delete:
-                continue
             if b["date"] != a["date"]:
                 break
-            if b["source"] == a["source"]:
+            if b["id"] in to_delete or b["source"] == a["source"]:
                 continue
-            dur_b = b.get("elapsed_seconds") or b.get("duration_seconds") or 0
-            if abs(dur_a - dur_b) > 300:
-                continue
-            dist_a = a.get("distance_meters") or 0
-            dist_b = b.get("distance_meters") or 0
-            if dist_a and dist_b:
-                pct = abs(dist_a - dist_b) / max(dist_a, 1)
-                if pct > 0.10 and abs(dist_a - dist_b) > 500:
-                    continue
-            # Duplicate found — delete the lower-scoring one
-            keep, drop = (a, b) if _activity_score(a) >= _activity_score(b) else (b, a)
-            to_delete.add(drop["id"])
+            if _same_ride(a, b):
+                # Duplicate found — delete the lower-scoring one
+                keep, drop = (a, b) if _activity_score(a) >= _activity_score(b) else (b, a)
+                to_delete.add(drop["id"])
+                if drop is a:
+                    break
 
     if to_delete:
         conn.execute(

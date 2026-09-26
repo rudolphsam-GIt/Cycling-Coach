@@ -190,6 +190,8 @@ with tab_connections:
                 "Upload .fit or .csv from Garmin Connect",
                 type=["fit", "csv"], accept_multiple_files=True, key="garmin_import",
             )
+            imperial = st.radio("Units in the file", ["Miles and feet", "Kilometers and meters"],
+                                horizontal=True, key="import_units") == "Miles and feet"
             if import_files and st.button("Import", width="stretch"):
                 from auth.fit_import import import_fit_files, import_csv_files
                 fit = [f for f in import_files if f.name.lower().endswith(".fit")]
@@ -198,7 +200,7 @@ with tab_connections:
                 if fit:
                     n, m = import_fit_files(fit); total += n; msgs.append(m)
                 if csv:
-                    n, m = import_csv_files(csv); total += n; msgs.append(m)
+                    n, m = import_csv_files(csv, imperial=imperial); total += n; msgs.append(m)
                 (st.success if total else st.error)(" · ".join(msgs))
                 if total:
                     st.rerun()

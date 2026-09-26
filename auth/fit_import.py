@@ -186,7 +186,8 @@ def _parse_float(s) -> float | None:
         return None
 
 
-def import_csv_files(uploaded_files) -> tuple[int, str]:
+def import_csv_files(uploaded_files, imperial: bool = False) -> tuple[int, str]:
+    """Import a Garmin Connect CSV export. Set imperial=True if it's in miles and feet."""
     ftp = float(get_setting("ftp_watts", 0) or 0)
     lthr = float(get_setting("lthr", 0) or 0)
 
@@ -219,9 +220,10 @@ def import_csv_files(uploaded_files) -> tuple[int, str]:
 
                 elapsed_s = _parse_duration(_csv_val(row, "time")) or 0
                 dist_raw = _parse_float(_csv_val(row, "distance"))
-                # Garmin CSV distance is in km — convert to meters
-                distance_m = dist_raw * 1000 if dist_raw else None
-                elevation_m = _parse_float(_csv_val(row, "elevation"))
+                # Garmin CSV distance is in miles or km, depending on the account's units
+                distance_m = dist_raw * (1609.344 if imperial else 1000) if dist_raw else None
+                elevation_raw = _parse_float(_csv_val(row, "elevation"))
+                elevation_m = (elevation_raw * 0.3048 if imperial else elevation_raw) if elevation_raw else elevation_raw
                 avg_hr = _parse_float(_csv_val(row, "avg_hr"))
                 max_hr = _parse_float(_csv_val(row, "max_hr"))
                 avg_power = _parse_float(_csv_val(row, "avg_power"))
