@@ -7,7 +7,10 @@ from components import inject_styles, section_header, page_header
 
 from db.schema import run_migrations
 from db.queries import (get_workouts, add_workout, update_workout, delete_workout,
-                         get_activities, get_setting, get_races, WORKOUT_TYPES)
+                         get_activities, get_setting, get_races, WORKOUT_TYPES,
+                         get_workout, garmin_status)
+import auth.garmin as garmin_auth
+import garmin_workouts
 from metrics.training_load import get_current_metrics
 
 run_migrations()
@@ -24,6 +27,103 @@ TSS_DEFAULTS = {
     "VO2 Max": 85, "Sprint/Anaerobic": 70, "Recovery": 30,
     "Long Ride": 150, "Race": 120, "Other": 60,
 }
+
+GARMIN_BADGE = {"sent": "On Garmin", "changed": "Edited, resend to Garmin"}
+
+
+def remove_workout(w: dict) -> None:
+    """Delete a planned workout, and the copy we sent to Garmin if there is one."""
+    garmin_workouts.remove_from_garmin(w)
+    delete_workout(w["id"])
+
+
+def queue_garmin_send(ws: list) -> None:
+    st.session_state["garmin_queue"] = [w["id"] for w in ws]
+    st.session_state["garmin_steps"] = {}
+    st.rerun()
+
+
+def can_send(w: dict) -> bool:
+    return garmin_auth.is_connected() and w["date"] >= date.today().isoformat()
+
+
+def garmin_button(w: dict, container, key: str) -> None:
+    if not can_send(w):
+        return
+    status = garmin_status(w)
+    label = {"not_sent": "Send to Garmin", "sent": "Resend", "changed": "Resend"}[status]
+    if container.button(label, key=key, icon=":material/watch:",
+                        help="Upload to Garmin Connect and schedule it on this date"):
+        queue_garmin_send([w])
+
+
+def _saved_steps(w: dict):
+    try:
+        return garmin_workouts.check_steps(json.loads(w["structured_json"]))
+    except Exception:
+        return None
+
+
+def garmin_send_panel() -> None:
+    """Preview the Garmin steps for queued workouts, then send them on confirm."""
+    if msg := st.session_state.pop("garmin_send_msg", None):
+        (st.success if msg[0] == "ok" else st.warning)(msg[1])
+
+    queue = st.session_state.get("garmin_queue")
+    if not queue:
+        return
+    cache = st.session_state.setdefault("garmin_steps", {})
+    with st.container(border=True):
+        st.markdown("**Send to Garmin** · check the steps, then send")
+        ready = []
+        for wid in queue:
+            w = get_workout(wid)
+            if not w:
+                continue
+            if wid not in cache:
+                steps = _saved_steps(w) if w.get("structured_json") else None
+                if steps is None:
+                    with st.spinner(f"Turning {w['name']} into Garmin steps…"):
+                        try:
+                            steps = garmin_workouts.build_steps(w)
+                        except garmin_workouts.WorkoutError as e:
+                            steps = str(e)
+                cache[wid] = steps
+            steps = cache[wid]
+            if isinstance(steps, str):
+                st.markdown(f"**{w['date']} · {w['name']}**")
+                st.error(steps)
+                continue
+            st.markdown(f"**{w['date']} · {w['name']}** · "
+                        f"{garmin_workouts.total_minutes(steps):.0f} min")
+            st.dataframe(garmin_workouts.preview_rows(steps), hide_index=True, width="stretch")
+            ready.append((w, steps))
+
+        c1, c2 = st.columns(2)
+        send_label = f"Send {len(ready)} workout{'s' if len(ready) != 1 else ''} to Garmin"
+        if c1.button(send_label, type="primary", width="stretch", disabled=not ready,
+                     key="garmin_confirm"):
+            sent, failed = 0, []
+            with st.spinner("Sending to Garmin…"):
+                for w, steps in ready:
+                    try:
+                        garmin_workouts.send(w, steps)
+                        sent += 1
+                    except garmin_workouts.WorkoutError as e:
+                        failed.append(f"{w['name']}: {e}")
+            st.session_state.pop("garmin_queue", None)
+            st.session_state.pop("garmin_steps", None)
+            text = f"Sent {sent} workout{'s' if sent != 1 else ''} to Garmin. Sync your Edge or watch to load them."
+            if failed:
+                st.session_state["garmin_send_msg"] = ("warn", text + " Couldn't send: " + "; ".join(failed))
+            else:
+                st.session_state["garmin_send_msg"] = ("ok", text)
+            st.rerun()
+        if c2.button("Cancel", width="stretch", key="garmin_cancel"):
+            st.session_state.pop("garmin_queue", None)
+            st.session_state.pop("garmin_steps", None)
+            st.rerun()
+
 
 # ── Weekly check in ───────────────────────────────────────────────────────────
 import coach_reports
@@ -94,13 +194,15 @@ for i, col in enumerate(cols):
                 done = "✅ " if w.get("completed") else ""
                 st.markdown(f"{done}**{w['name']}**{tss_str}")
                 st.caption(w.get("workout_type", ""))
+                if garmin_status(w) in GARMIN_BADGE:
+                    st.caption(GARMIN_BADGE[garmin_status(w)])
                 ec1, ec2 = st.columns(2)
                 if ec1.button("✏️", key=f"edit_cal_{w['id']}", width="stretch",
                               help="Edit"):
                     st.session_state["editing_workout_id"] = w["id"]
                 if ec2.button("✕", key=f"del_cal_{w['id']}", width="stretch",
                               help=f"Remove {w['name']}"):
-                    delete_workout(w["id"])
+                    remove_workout(w)
                     st.rerun()
         elif has_activity:
             act = next((a for a in activities if a["date"] == day_str), None)
@@ -115,6 +217,15 @@ for i, col in enumerate(cols):
             st.session_state.pop("editing_workout_id", None)
 
 st.caption(f"Week total — Planned: **{week_tss_planned:.0f} TSS** · Actual: **{week_tss_actual:.0f} TSS**")
+
+_to_send = [w for w in workouts if can_send(w) and garmin_status(w) != "sent"]
+if garmin_auth.is_connected():
+    if st.button(f"Send this week to Garmin ({len(_to_send)})" if _to_send else "This week is on Garmin",
+                 icon=":material/watch:", disabled=not _to_send, key="garmin_week"):
+        queue_garmin_send(_to_send)
+elif workouts:
+    st.caption("Connect Garmin in Settings to send these workouts to your Edge or watch.")
+garmin_send_panel()
 st.divider()
 
 # ── Add / Edit workout form ───────────────────────────────────────────────────
@@ -326,10 +437,12 @@ tab_week, tab_all = st.tabs(["This Week", "All Upcoming"])
 with tab_week:
     if workouts:
         for w in workouts:
-            c1, c2, c3, c4 = st.columns([4, 1, 1, 1])
+            c1, c5, c2, c3, c4 = st.columns([4, 1.6, 1, 1, 1])
             done_icon = "✅ " if w.get("completed") else ""
+            badge = f" · _{GARMIN_BADGE[garmin_status(w)]}_" if garmin_status(w) in GARMIN_BADGE else ""
             c1.markdown(f"{done_icon}**{w['date']} · {w['name']}** — "
-                        f"{w['workout_type']} · {w.get('tss_planned', '—')} TSS")
+                        f"{w['workout_type']} · {w.get('tss_planned', '—')} TSS{badge}")
+            garmin_button(w, c5, f"garmin_week_{w['id']}")
             if c2.button("✏️", key=f"edit_week_{w['id']}", help="Edit"):
                 st.session_state["editing_workout_id"] = w["id"]
                 st.rerun()
@@ -338,7 +451,7 @@ with tab_week:
                     update_workout(w["id"], {**w, "completed": 1})
                     st.rerun()
             if c4.button("🗑", key=f"del_week_{w['id']}", help="Delete"):
-                delete_workout(w["id"])
+                remove_workout(w)
                 st.rerun()
     else:
         st.info("No workouts planned for this week.")
@@ -360,15 +473,17 @@ with tab_all:
                      f"  ·  {wk_tss:.0f} TSS planned")
             with st.expander(label, expanded=(wk_start_str == week_start.isoformat())):
                 for w in by_week[wk_start_str]:
-                    c1, c2, c3 = st.columns([5, 1, 1])
+                    c1, c4, c2, c3 = st.columns([5, 1.6, 1, 1])
                     done_icon = "✅ " if w.get("completed") else ""
+                    badge = f" · _{GARMIN_BADGE[garmin_status(w)]}_" if garmin_status(w) in GARMIN_BADGE else ""
                     c1.markdown(f"{done_icon}**{w['date']} · {w['name']}** — "
-                                f"{w['workout_type']} · {w.get('tss_planned', '—')} TSS")
+                                f"{w['workout_type']} · {w.get('tss_planned', '—')} TSS{badge}")
+                    garmin_button(w, c4, f"garmin_all_{w['id']}")
                     if c2.button("✏️", key=f"edit_all_{w['id']}", help="Edit"):
                         st.session_state["editing_workout_id"] = w["id"]
                         st.rerun()
                     if c3.button("🗑", key=f"del_all_{w['id']}", help="Delete"):
-                        delete_workout(w["id"])
+                        remove_workout(w)
                         st.rerun()
     else:
         st.info("No upcoming workouts in the next 90 days.")

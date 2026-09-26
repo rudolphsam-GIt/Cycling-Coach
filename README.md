@@ -20,6 +20,11 @@ all backed by a local SQLite database, no cloud account required.
 - **Race day plan** — for any race on your calendar: a day-by-day taper, race
   morning routine, power and heart rate pacing targets, fueling, and a
   checklist.
+- **Send workouts to Garmin** — a "Send to Garmin" button on any planned
+  workout (or "Send this week to Garmin"). The coach turns the written
+  workout into structured steps with power targets from your FTP, shows a
+  preview, then uploads and schedules it in Garmin Connect so it syncs to
+  your Edge or watch. Editing or deleting a workout keeps Garmin in step.
 - **Coach memory** — tell the coach about an injury, your schedule or your
   preferences once and it remembers; you can see and delete every note.
 - **Training Planner** — weekly calendar of planned workouts plus a

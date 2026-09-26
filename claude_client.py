@@ -148,3 +148,30 @@ def stream_chat(
         rounds += 1
 
     yield ("error", "The coach needed too many lookups for one question. Try asking something narrower.")
+
+
+class ClaudeError(Exception):
+    """A readable error from a Claude call that couldn't produce a result."""
+
+
+def structured(system: str, prompt: str, schema: dict, effort: str = "low") -> dict:
+    """Ask for JSON that matches `schema` and return it parsed. Raises ClaudeError."""
+    import json
+
+    request = _request([{"type": "text", "text": system}],
+                       [{"role": "user", "content": prompt}], effort, MAX_TOKENS)
+    request["output_config"] = {**request["output_config"],
+                                "format": {"type": "json_schema", "schema": schema}}
+    try:
+        response = _client().beta.messages.create(**request)
+    except anthropic.APIError as e:
+        raise ClaudeError(_error_message(e)) from e
+    if response.stop_reason == "refusal":
+        raise ClaudeError(REFUSAL_MESSAGE)
+    if response.stop_reason == "max_tokens":
+        raise ClaudeError("Claude's answer was cut off. Try again.")
+    text = next((b.text for b in response.content if b.type == "text"), "")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ClaudeError("Claude returned something that wasn't valid JSON. Try again.") from e

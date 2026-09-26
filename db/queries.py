@@ -265,11 +265,41 @@ def update_workout(wid: int, data: dict):
     conn.execute(
         """UPDATE workouts SET name=:name, workout_type=:workout_type,
            description=:description, tss_planned=:tss_planned,
-           completed=:completed, notes=:notes WHERE id=:id""",
+           completed=:completed, notes=:notes,
+           -- Garmin steps are rebuilt from the new description on the next send
+           structured_json=CASE WHEN description IS :description AND name IS :name
+                                THEN structured_json ELSE NULL END
+           WHERE id=:id""",
         {**data, "id": wid},
     )
     conn.commit()
     conn.close()
+
+
+def get_workout(wid: int) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM workouts WHERE id=?", (wid,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def set_workout_garmin(wid: int, garmin_workout_id: str, garmin_schedule_id: str | None,
+                       steps_json: str, sent_at: str) -> None:
+    conn = get_conn()
+    conn.execute(
+        """UPDATE workouts SET garmin_workout_id=?, garmin_schedule_id=?,
+           structured_json=?, garmin_sent_at=? WHERE id=?""",
+        (garmin_workout_id, garmin_schedule_id, steps_json, sent_at, wid),
+    )
+    conn.commit()
+    conn.close()
+
+
+def garmin_status(workout: dict) -> str:
+    """'not_sent', 'sent', or 'changed' (edited since it was sent)."""
+    if not workout.get("garmin_workout_id"):
+        return "not_sent"
+    return "sent" if workout.get("structured_json") else "changed"
 
 
 def delete_workout(wid: int):

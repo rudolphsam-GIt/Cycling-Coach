@@ -143,6 +143,9 @@ def run_migrations():
         "ALTER TABLE races ADD COLUMN legs_feel INTEGER",
         "ALTER TABLE races ADD COLUMN result_notes TEXT",
         "ALTER TABLE races ADD COLUMN result_logged INTEGER DEFAULT 0",
+        "ALTER TABLE workouts ADD COLUMN garmin_workout_id TEXT",
+        "ALTER TABLE workouts ADD COLUMN garmin_schedule_id TEXT",
+        "ALTER TABLE workouts ADD COLUMN garmin_sent_at TEXT",
     ]:
         try:
             conn.execute(col_sql)
