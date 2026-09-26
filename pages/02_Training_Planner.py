@@ -78,10 +78,10 @@ for i, col in enumerate(cols):
                 st.markdown(f"{done}**{w['name']}**{tss_str}")
                 st.caption(w.get("workout_type", ""))
                 ec1, ec2 = st.columns(2)
-                if ec1.button("✏️", key=f"edit_cal_{w['id']}", use_container_width=True,
+                if ec1.button("✏️", key=f"edit_cal_{w['id']}", width="stretch",
                               help="Edit"):
                     st.session_state["editing_workout_id"] = w["id"]
-                if ec2.button("✕", key=f"del_cal_{w['id']}", use_container_width=True,
+                if ec2.button("✕", key=f"del_cal_{w['id']}", width="stretch",
                               help=f"Remove {w['name']}"):
                     delete_workout(w["id"])
                     st.rerun()
@@ -93,7 +93,7 @@ for i, col in enumerate(cols):
         else:
             st.markdown("—")
 
-        if st.button("+ Add", key=f"add_{day_str}", use_container_width=True):
+        if st.button("+ Add", key=f"add_{day_str}", width="stretch"):
             st.session_state["add_workout_date"] = day_str
             st.session_state.pop("editing_workout_id", None)
 
@@ -138,7 +138,7 @@ with left:
                               placeholder="3x10 min @ 95% FTP, 5 min rest")
 
         if editing_w:
-            submitted = st.form_submit_button("Save Changes", use_container_width=True,
+            submitted = st.form_submit_button("Save Changes", width="stretch",
                                               type="primary")
             if submitted and w_name:
                 update_workout(editing_w["id"], {
@@ -152,7 +152,7 @@ with left:
                 st.success(f"Updated: {w_name}")
                 st.rerun()
         else:
-            submitted = st.form_submit_button("Add to Planner", use_container_width=True)
+            submitted = st.form_submit_button("Add to Planner", width="stretch")
             if submitted and w_name:
                 add_workout({
                     "date": w_date.isoformat(), "name": w_name,
@@ -249,7 +249,7 @@ with right:
     phase_label = st.selectbox("Phase focus", list(phase_map.keys()))
     phase_key   = phase_map[phase_label]
 
-    if st.button("Generate Training Block", use_container_width=True,
+    if st.button("Generate Training Block", width="stretch",
                  type="primary", disabled=chosen_race is None):
         count = 0
         for wk in range(weeks_out):

@@ -130,7 +130,7 @@ with col_plan:
         st.dataframe(
             df.rename(columns={"name": "Exercise", "sets": "Sets", "reps": "Reps",
                                 "intensity": "Intensity", "notes": "Notes"}),
-            hide_index=True, use_container_width=True,
+            hide_index=True, width="stretch",
         )
 
         if st.button(f"Log: {session['name']}", key=f"log_{session['name']}"):
@@ -230,7 +230,7 @@ if lift_data:
     fig.update_layout(height=280, plot_bgcolor="#1C1F2E",
                        yaxis_title="Weight (kg)", xaxis_title="Date",
                        margin=dict(l=10, r=10, t=10, b=10))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 else:
     st.info("Log sessions with weights to see your strength progress over time.")
 

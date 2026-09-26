@@ -256,7 +256,7 @@ st.subheader("Quick Questions")
 quick_qs = get_quick_questions(next_race)
 cols = st.columns(3)
 for i, q in enumerate(quick_qs[:6]):
-    if cols[i % 3].button(q, use_container_width=True, key=f"qq_{i}"):
+    if cols[i % 3].button(q, width="stretch", key=f"qq_{i}"):
         st.session_state["pending_message"] = q
 
 st.divider()
@@ -285,16 +285,16 @@ if proposed:
             pd.DataFrame(proposed).rename(columns={
                 "date": "Date", "name": "Workout", "workout_type": "Type",
                 "description": "Details", "tss_planned": "TSS"}),
-            hide_index=True, use_container_width=True,
+            hide_index=True, width="stretch",
         )
         c1, c2 = st.columns(2)
-        if c1.button("Add to Training Planner", type="primary", use_container_width=True):
+        if c1.button("Add to Training Planner", type="primary", width="stretch"):
             for w in proposed:
                 add_workout({**w, "structured_json": None, "notes": "Planned by AI Coach"})
             st.session_state.pop("proposed_workouts")
             st.session_state["workouts_added"] = len(proposed)
             st.rerun()
-        if c2.button("Discard", use_container_width=True):
+        if c2.button("Discard", width="stretch"):
             st.session_state.pop("proposed_workouts")
             st.rerun()
 
@@ -310,7 +310,7 @@ if prompt := st.chat_input("Ask your coach, or attach a screenshot...",
 # Clear conversation
 with st.sidebar:
     st.subheader("Conversation")
-    if st.button("Clear conversation history", use_container_width=True):
+    if st.button("Clear conversation history", width="stretch"):
         from db.schema import get_conn
         conn = get_conn()
         conn.execute("DELETE FROM ai_conversations")

@@ -80,17 +80,17 @@ with tab_connections:
             if last_sync and last_sync != "Never":
                 last_sync = last_sync[:16].replace("T", " ")
             st.success(f"Connected · Last sync: {last_sync}")
-            if st.button("Sync Strava (60 days)", use_container_width=True):
+            if st.button("Sync Strava (60 days)", width="stretch"):
                 with st.spinner("Syncing from Strava..."):
                     count, msg = strava_auth.sync_activities(STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET)
                 st.success(msg) if "synced" in msg.lower() else st.error(msg)
                 st.rerun()
-            if st.button("Disconnect Strava", use_container_width=True):
+            if st.button("Disconnect Strava", width="stretch"):
                 strava_auth.clear_tokens()
                 st.rerun()
         else:
             st.info("Not connected")
-            if st.button("Connect Strava", use_container_width=True, type="primary"):
+            if st.button("Connect Strava", width="stretch", type="primary"):
                 st.session_state["strava_connecting"] = True
 
         if st.session_state.get("strava_connecting"):
@@ -116,51 +116,79 @@ with tab_connections:
     # ── Garmin ────────────────────────────────────────────────────────────────
     with col_garmin:
         st.subheader("Garmin")
-        garmin_configured = bool(GARMIN_EMAIL and GARMIN_EMAIL != "your@email.com")
 
-        if not garmin_configured:
-            st.warning("Add `GARMIN_EMAIL` and `GARMIN_PASSWORD` to your `.env` file.")
+        def _garmin_first_sync():
+            st.session_state.pop("garmin_login_state", None)
+            with st.spinner("Connected! Pulling your last 90 days of rides and recovery…"):
+                _, msg = garmin_auth.sync(days_back=90)
+            st.session_state["garmin_sync_msg"] = msg
+            st.rerun()
+
+        if garmin_auth.is_connected():
+            last_garmin = get_setting("garmin_last_sync", "") or "Never"
+            if last_garmin != "Never":
+                last_garmin = last_garmin[:16].replace("T", " ") + " UTC"
+            st.success(f"Connected · Last sync: {last_garmin}")
+            st.caption("Rides, sleep, HRV, resting heart rate and readiness sync on their own "
+                       "when you open the app.")
+            if st.button("Sync Garmin now (30 days)", width="stretch"):
+                with st.spinner("Syncing from Garmin…"):
+                    _, msg = garmin_auth.sync(days_back=30)
+                st.session_state["garmin_sync_msg"] = msg
+                st.rerun()
+            if st.button("Disconnect Garmin", width="stretch"):
+                garmin_auth.disconnect()
+                st.rerun()
+        elif st.session_state.get("garmin_login_state") is None:
+            st.info("Connect once and your rides and recovery data sync automatically from then on.")
+            env_email = GARMIN_EMAIL if GARMIN_EMAIL and GARMIN_EMAIL != "your@email.com" else ""
+            env_password = GARMIN_PASSWORD if GARMIN_PASSWORD and GARMIN_PASSWORD != "your_password" else ""
+            with st.form("garmin_login"):
+                email = st.text_input("Garmin email", value=env_email)
+                password = st.text_input(
+                    "Garmin password", type="password",
+                    placeholder="Leave blank to use the password in your .env file" if env_password else "",
+                )
+                submitted = st.form_submit_button("Connect Garmin", type="primary",
+                                                  width="stretch")
+            if submitted:
+                try:
+                    with st.spinner("Logging in to Garmin…"):
+                        status, state = garmin_auth.start_login(email, password or env_password)
+                except Exception as e:
+                    st.error(garmin_auth.friendly_error(e))
+                else:
+                    if status == "needs_code":
+                        st.session_state["garmin_login_state"] = state
+                        st.rerun()
+                    _garmin_first_sync()
         else:
-            has_tokens = garmin_auth._has_saved_tokens()
-            last_garmin = get_setting("garmin_last_sync", "Never")
-            if last_garmin and last_garmin != "Never":
-                last_garmin = last_garmin[:16].replace("T", " ")
+            st.info("Garmin sent you a verification code by email or text. Enter it below.")
+            with st.form("garmin_code"):
+                code = st.text_input("Verification code", max_chars=10)
+                verified = st.form_submit_button("Verify", type="primary", width="stretch")
+            if st.button("Cancel", width="stretch"):
+                st.session_state.pop("garmin_login_state", None)
+                st.rerun()
+            if verified and code.strip():
+                try:
+                    with st.spinner("Verifying…"):
+                        garmin_auth.finish_login(st.session_state["garmin_login_state"], code)
+                except Exception as e:
+                    st.error(garmin_auth.friendly_error(e) + " If the code expired, cancel and start again.")
+                else:
+                    _garmin_first_sync()
 
-            if has_tokens:
-                st.success(f"Connected · Last sync: {last_garmin}")
-                if st.button("Sync Garmin (30 days)", use_container_width=True):
-                    with st.spinner("Syncing from Garmin…"):
-                        count, msg = garmin_auth.sync_activities(GARMIN_EMAIL, GARMIN_PASSWORD)
-                    st.session_state["garmin_sync_msg"] = msg
-                    st.rerun()
-                if "garmin_sync_msg" in st.session_state:
-                    msg = st.session_state.pop("garmin_sync_msg")
-                    if any(w in msg.lower() for w in ("failed", "error", "rate", "unexpected")):
-                        st.error(msg)
-                    else:
-                        st.success(msg)
-                if st.button("Re-authenticate", use_container_width=True):
-                    garmin_auth.clear_session()
-                    st.info("Tokens cleared. Run `venv/bin/python scripts/garmin_setup.py` to re-authenticate.")
-            else:
-                st.warning("Not yet authenticated")
-                st.markdown("""
-Run this once in a terminal to set up Garmin auth
-(handles two-factor login interactively):
+        if "garmin_sync_msg" in st.session_state:
+            msg = st.session_state.pop("garmin_sync_msg")
+            (st.success if msg.startswith("Synced") else st.error)(msg)
 
-```
-cd /Users/sam/cycling-coach
-venv/bin/python scripts/garmin_setup.py
-```
-""")
-
-            st.divider()
-            st.caption("Import rides manually while Garmin auth is being set up:")
+        with st.expander("Import .fit or .csv files by hand"):
             import_files = st.file_uploader(
                 "Upload .fit or .csv from Garmin Connect",
                 type=["fit", "csv"], accept_multiple_files=True, key="garmin_import",
             )
-            if import_files and st.button("Import", use_container_width=True):
+            if import_files and st.button("Import", width="stretch"):
                 from auth.fit_import import import_fit_files, import_csv_files
                 fit = [f for f in import_files if f.name.lower().endswith(".fit")]
                 csv = [f for f in import_files if f.name.lower().endswith(".csv")]
@@ -181,13 +209,13 @@ with tab_data:
     with col_a:
         st.markdown("**Recalculate TSS**")
         st.caption("Recomputes TSS and zone estimates for every ride using your current FTP and LTHR.")
-        if st.button("Recalculate TSS", use_container_width=True):
+        if st.button("Recalculate TSS", width="stretch"):
             n = recalculate_all_tss()
             st.success(f"Recalculated TSS for {n} activities.")
 
     with col_b:
         st.markdown("**Remove Duplicate Rides**")
         st.caption("Removes rides logged on both Strava and Garmin — keeps the one with more data.")
-        if st.button("Remove Duplicates", use_container_width=True):
+        if st.button("Remove Duplicates", width="stretch"):
             n = deduplicate_activities()
             st.success(f"Removed {n} duplicate ride{'s' if n != 1 else ''}." if n else "No duplicates found.")

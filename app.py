@@ -64,4 +64,14 @@ else:
         st.Page("pages/06_Competitors.py",      title="Competitors",  icon="🔍"),
         st.Page("pages/07_Settings.py",         title="Settings",     icon="⚙️"),
     ])
+if is_setup_complete() and is_onboarding_complete() and not st.session_state.get("auto_synced"):
+    # Pull new rides and recovery from Garmin once per visit, if it's been a few hours.
+    st.session_state["auto_synced"] = True
+    import auth.garmin as garmin_auth
+    if garmin_auth.needs_auto_sync():
+        with st.spinner("Syncing new rides from Garmin…"):
+            result = garmin_auth.auto_sync()
+        if result:
+            st.toast(result[1])
+
 pg.run()

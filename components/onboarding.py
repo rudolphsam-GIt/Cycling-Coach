@@ -94,7 +94,7 @@ def render_onboarding():
                 race_name = st.text_input("Race name", placeholder="e.g. OBRA Road Race #3")
                 race_date = st.date_input("Race date", value=date.today())
 
-            submitted = st.form_submit_button("Get Started", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("Get Started", type="primary", width="stretch")
 
         if submitted and not goal_labels:
             st.error("Pick at least one goal before continuing.")

@@ -81,6 +81,36 @@ CREATE TABLE IF NOT EXISTS strength_sessions (
     notes TEXT
 );
 
+CREATE TABLE IF NOT EXISTS recovery_daily (
+    date TEXT PRIMARY KEY,
+    sleep_hours REAL,
+    sleep_score INTEGER,
+    hrv_ms REAL,
+    hrv_status TEXT,
+    resting_hr INTEGER,
+    readiness INTEGER,
+    body_battery INTEGER,
+    synced_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS coach_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,
+    ref_key TEXT NOT NULL,
+    title TEXT,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(kind, ref_key)
+);
+
+CREATE TABLE IF NOT EXISTS coach_memory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category TEXT NOT NULL,
+    note TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    active INTEGER DEFAULT 1
+);
+
 CREATE TABLE IF NOT EXISTS ai_conversations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp TEXT NOT NULL,

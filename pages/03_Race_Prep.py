@@ -40,7 +40,7 @@ with tab1:
             with col_past:
                 include_past = st.checkbox("Include past races this year", value=False)
             with col_fetch:
-                fetch_btn = st.button("Load OBRA Races", use_container_width=True)
+                fetch_btn = st.button("Load OBRA Races", width="stretch")
             with col_refresh:
                 refresh_btn = st.button("↺", help="Force refresh from OBRA")
 
@@ -71,7 +71,7 @@ with tab1:
                     )
                     if chosen_label != "— select a race —":
                         obra_r = race_labels[chosen_label]
-                        if st.button("Add this race to my calendar ➕", use_container_width=True):
+                        if st.button("Add this race to my calendar ➕", width="stretch"):
                             add_race({
                                 "name": obra_r["name"],
                                 "date": obra_r["date"],
@@ -98,7 +98,7 @@ with tab1:
             r_target_m = st.number_input("Target finish time (minutes)", 0, 59, 30)
             r_notes = st.text_area("Notes", placeholder="Hilly circuit race, aggressive start expected")
 
-            if st.form_submit_button("Add Race", use_container_width=True) and r_name:
+            if st.form_submit_button("Add Race", width="stretch") and r_name:
                 target_s = (r_target_h * 3600 + r_target_m * 60) if (r_target_h or r_target_m) else None
                 add_race({
                     "name": r_name,
@@ -188,7 +188,7 @@ with tab1:
                                 format_func=lambda v: {1: "💀 Dead", 2: "😓 Heavy", 3: "😐 OK", 4: "😊 Good", 5: "🔥 Great"}[v],
                             )
                             notes = st.text_area("Notes", placeholder="What went well, what to improve...")
-                            submitted = st.form_submit_button("Save Result", use_container_width=True)
+                            submitted = st.form_submit_button("Save Result", width="stretch")
                             if submitted:
                                 finish_s = finish_h * 3600 + finish_m * 60
                                 log_race_result(r["id"], {
@@ -283,7 +283,7 @@ with tab2:
                       annotation_text="Target form zone", secondary_y=True)
         fig.update_layout(height=350, hovermode="x unified",
                           plot_bgcolor="#1C1F2E", margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         if st.button("Generate Taper Workouts in Planner"):
             count = 0
@@ -324,7 +324,7 @@ with tab3:
                                  help="Defaults to your saved FTP")
         p_weight = st.number_input("Weight (kg)", 30.0, 150.0, float(weight), 0.5)
 
-    if st.button("Calculate Pacing Plan", use_container_width=True):
+    if st.button("Calculate Pacing Plan", width="stretch"):
         target_s = p_target_h * 3600 + p_target_m * 60
         if target_s <= 0:
             st.error("Please enter a target time.")
@@ -363,7 +363,7 @@ with tab3:
                     nutrition_rows.append({"Time": f"{int(t*60)} min", "Action": f"Gel/chew/bar ({carbs_per_hr}g carbs) + water"})
                 t += 0.75 if t == 0 else 0.75
             nutrition_rows.append({"Time": "Finish line", "Action": "Recovery drink within 30 min (carbs + protein)"})
-            st.dataframe(pd.DataFrame(nutrition_rows), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame(nutrition_rows), hide_index=True, width="stretch")
             st.caption(f"Total carbs: ~{total_carbs}g | Rule of thumb: 60g/hr for rides under 2.5 hrs, 90g/hr for longer rides with mixed carb sources")
 
             # Pacing strategy

@@ -19,3 +19,4 @@ data/*.db-journal
 
 # OS
 .DS_Store
+venv-py39/

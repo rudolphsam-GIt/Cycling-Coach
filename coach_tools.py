@@ -12,7 +12,8 @@ import json
 from datetime import date, timedelta
 
 from db.queries import (get_activities, get_workouts, get_races, get_wellness_range,
-                        get_ftp_history, get_weekly_tss_summary, get_setting, WORKOUT_TYPES)
+                        get_ftp_history, get_weekly_tss_summary, get_setting, get_recovery_range,
+                        WORKOUT_TYPES)
 from metrics.training_load import compute_pmc
 
 
@@ -77,6 +78,17 @@ TOOLS = [
         },
     },
     {
+        "name": "get_recovery",
+        "description": "Daily recovery from the athlete's Garmin: sleep hours and score, overnight "
+                       "HRV (ms) and status, resting heart rate, training readiness (0 to 100) "
+                       "and peak body battery.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"days_back": _int_prop("How many days of history to include.", 1, 90)},
+            "required": ["days_back"],
+        },
+    },
+    {
         "name": "get_ftp_history",
         "description": "Past FTP values with the date each was set.",
         "input_schema": {"type": "object", "properties": {}},
@@ -117,6 +129,7 @@ STATUS_LABELS = {
     "get_planned_workouts": "Checking your planner",
     "get_races": "Checking your race calendar",
     "get_wellness": "Checking your check ins",
+    "get_recovery": "Checking your sleep and recovery",
     "get_ftp_history": "Checking your FTP history",
     "propose_workouts": "Drafting workouts",
 }
@@ -201,6 +214,13 @@ def run_tool(name: str, args: dict, proposals: list[dict]) -> str:
         result = [
             {k: w.get(k) for k in ("date", "legs_feel", "energy", "sleep_hours", "notes")}
             for w in get_wellness_range(start, date.today().isoformat())
+        ]
+    elif name == "get_recovery":
+        days_back = _days(args, "days_back", 1, 90)
+        start = (date.today() - timedelta(days=days_back)).isoformat()
+        result = [
+            {k: v for k, v in r.items() if k != "synced_at" and v is not None}
+            for r in get_recovery_range(start, date.today().isoformat())
         ]
     elif name == "get_ftp_history":
         result = [{"date": f["date"], "ftp_watts": f["ftp_watts"]} for f in get_ftp_history()]

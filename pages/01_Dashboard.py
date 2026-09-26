@@ -38,7 +38,7 @@ with st.sidebar:
         format_func=lambda v: ["😴 Crashed", "😩 Low", "😐 OK", "😊 Good", "⚡ High"][v - 1],
     )
     btn_label = "Update" if existing_wellness else "Log"
-    if st.button(btn_label, use_container_width=True):
+    if st.button(btn_label, width="stretch"):
         log_wellness({"date": today_str, "legs_feel": legs, "energy": energy,
                       "sleep_hours": None, "notes": ""})
         st.success("Logged!")
@@ -263,7 +263,7 @@ fig.update_yaxes(
     secondary_y=True,
 )
 
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 
 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
@@ -316,7 +316,7 @@ if any(w["rides"] > 0 or w["planned_tss"] > 0 for w in weekly):
             yaxis=dict(showgrid=True, gridcolor="rgba(150,150,150,0.15)",
                        title="TSS", title_font=dict(size=10)),
         )
-        st.plotly_chart(tss_fig, use_container_width=True)
+        st.plotly_chart(tss_fig, width="stretch")
 
     if col_zone is not None:
         with col_zone:
@@ -359,7 +359,7 @@ if any(w["rides"] > 0 or w["planned_tss"] > 0 for w in weekly):
                 yaxis=dict(showgrid=True, gridcolor="rgba(150,150,150,0.15)",
                            title="Hours", title_font=dict(size=10)),
             )
-            st.plotly_chart(zone_fig, use_container_width=True)
+            st.plotly_chart(zone_fig, width="stretch")
     else:
         st.caption("Zone distribution will appear after syncing rides and clicking 'Recalculate TSS'.")
 else:
@@ -508,7 +508,7 @@ if activities:
                         ),
                         yaxis=dict(showgrid=False, showticklabels=False),
                     )
-                    st.plotly_chart(zfig, use_container_width=True,
+                    st.plotly_chart(zfig, width="stretch",
                                     config={"displayModeBar": False})
 
                     # Zone breakdown table
@@ -559,7 +559,7 @@ with st.expander("Power & HR Zones"):
                     "min_watts": "Min (W)", "max_watts": "Max (W)",
                 }),
                 hide_index=True,
-                use_container_width=True,
+                width="stretch",
             )
         else:
             st.info("Set FTP above to see power zones.")
@@ -579,7 +579,7 @@ with st.expander("Power & HR Zones"):
                     "min_bpm": "Min (bpm)", "max_bpm": "Max (bpm)",
                 }),
                 hide_index=True,
-                use_container_width=True,
+                width="stretch",
             )
         else:
             st.info("Set LTHR above to see HR zones.")
@@ -608,4 +608,4 @@ with st.expander("Power & HR Zones"):
                        tickfont=dict(size=10, color="#9CA3AF")),
             font=dict(color="#9CA3AF"),
         )
-        st.plotly_chart(ftp_fig, use_container_width=True)
+        st.plotly_chart(ftp_fig, width="stretch")

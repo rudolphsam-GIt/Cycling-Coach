@@ -536,3 +536,97 @@ def get_conversation_history(limit: int = 20) -> list:
     ).fetchall()
     conn.close()
     return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
+
+
+# ── Recovery (Garmin sleep, HRV, resting HR, readiness) ───────────────────────
+
+RECOVERY_FIELDS = ("sleep_hours", "sleep_score", "hrv_ms", "hrv_status",
+                   "resting_hr", "readiness", "body_battery")
+
+
+def upsert_recovery(day: str, data: dict) -> None:
+    row = {k: data.get(k) for k in RECOVERY_FIELDS}
+    conn = get_conn()
+    conn.execute(
+        f"""INSERT INTO recovery_daily (date, {", ".join(RECOVERY_FIELDS)}, synced_at)
+            VALUES (:date, {", ".join(":" + k for k in RECOVERY_FIELDS)}, :synced_at)
+            ON CONFLICT(date) DO UPDATE SET
+            {", ".join(f"{k}=excluded.{k}" for k in RECOVERY_FIELDS)},
+            synced_at=excluded.synced_at""",
+        {**row, "date": day, "synced_at": datetime.utcnow().isoformat()},
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_recovery_range(start: str, end: str) -> list:
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM recovery_daily WHERE date BETWEEN ? AND ? ORDER BY date", (start, end)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ── Coach reports (ride reviews, weekly check ins, race plans) ────────────────
+
+def save_report(kind: str, ref_key: str, title: str, content: str) -> None:
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO coach_reports (kind, ref_key, title, content, created_at)
+           VALUES (?,?,?,?,?)
+           ON CONFLICT(kind, ref_key) DO UPDATE SET
+               title=excluded.title, content=excluded.content, created_at=excluded.created_at""",
+        (kind, ref_key, title, content, datetime.utcnow().isoformat()),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_report(kind: str, ref_key: str) -> dict | None:
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT * FROM coach_reports WHERE kind=? AND ref_key=?", (kind, ref_key)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_reports(kind: str, limit: int = 10) -> list:
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM coach_reports WHERE kind=? ORDER BY ref_key DESC LIMIT ?", (kind, limit)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ── Coach memory (things the athlete has told the coach) ──────────────────────
+
+def add_memory(category: str, note: str) -> int:
+    conn = get_conn()
+    cur = conn.execute(
+        "INSERT INTO coach_memory (category, note, created_at) VALUES (?,?,?)",
+        (category, note, datetime.utcnow().isoformat()),
+    )
+    conn.commit()
+    mid = cur.lastrowid
+    conn.close()
+    return mid
+
+
+def get_memories(active_only: bool = True) -> list:
+    conn = get_conn()
+    sql = "SELECT * FROM coach_memory"
+    if active_only:
+        sql += " WHERE active=1"
+    rows = conn.execute(sql + " ORDER BY created_at").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def forget_memory(mid: int) -> None:
+    conn = get_conn()
+    conn.execute("UPDATE coach_memory SET active=0 WHERE id=?", (mid,))
+    conn.commit()
+    conn.close()

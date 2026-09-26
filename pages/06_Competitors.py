@@ -52,7 +52,7 @@ with st.expander("📋 Pick from OBRA schedule", expanded=True):
         include_past = st.checkbox("Include past races this year", value=True,
                                    help="Past events have results posted — great for pulling competitor lists")
     with col_fetch:
-        fetch_btn = st.button("Load OBRA Races", key="comp_fetch", use_container_width=True)
+        fetch_btn = st.button("Load OBRA Races", key="comp_fetch", width="stretch")
     with col_refresh:
         refresh_btn = st.button("↺", key="comp_refresh", help="Force refresh from OBRA")
 
@@ -206,7 +206,7 @@ with pull_tab:
     load_cats_btn = st.button(
         "Load Categories for This Event",
         disabled=not event_id_str.strip().isdigit(),
-        use_container_width=True,
+        width="stretch",
     )
     if load_cats_btn and event_id_str.strip().isdigit():
         eid = int(event_id_str.strip())
@@ -242,7 +242,7 @@ with pull_tab:
 
         pull_btn = st.button(
             f"🔄 Pull {chosen_cat['count']} Riders — {chosen_cat['label']}",
-            use_container_width=True,
+            width="stretch",
         )
 
         if pull_btn:
@@ -292,7 +292,7 @@ with manual_tab:
     run_research = st.button(
         f"🔍 Research {len(names)} Competitor{'s' if len(names) != 1 else ''}",
         disabled=len(names) == 0,
-        use_container_width=True,
+        width="stretch",
     )
 
     if run_research and names:
@@ -359,7 +359,7 @@ if profiles:
         })
 
     if rows:
-        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
 
     st.divider()
 
@@ -412,7 +412,7 @@ if profiles:
                 if cached_pub is None:
                     if st.button("🔍 Search ZwiftPower & public profiles",
                                  key=f"pub_{p.get('people_id', name)}",
-                                 use_container_width=True):
+                                 width="stretch"):
                         with st.spinner("Searching..."):
                             result = search_public_power(name)
                         st.session_state.public_power_cache[cache_key] = result
@@ -443,9 +443,9 @@ if profiles:
     st.divider()
     col_btn1, col_btn2, _ = st.columns([1, 1, 2])
     with col_btn1:
-        gen_tactics = st.button("⚡ Generate Tactics Brief", use_container_width=True)
+        gen_tactics = st.button("⚡ Generate Tactics Brief", width="stretch")
     with col_btn2:
-        if st.button("🗑 Clear Results", use_container_width=True):
+        if st.button("🗑 Clear Results", width="stretch"):
             st.session_state.competitor_profiles = []
             st.session_state.tactics_brief = ""
             st.session_state.public_power_cache = {}

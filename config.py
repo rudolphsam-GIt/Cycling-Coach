@@ -25,8 +25,10 @@ def is_setup_complete():
     """Check if the user has at least one data source and Claude configured."""
     has_strava = bool(STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET and
                       STRAVA_CLIENT_ID != "paste_your_client_id_here")
-    has_garmin = bool(GARMIN_EMAIL and GARMIN_PASSWORD and
-                      GARMIN_EMAIL != "your@email.com")
+    garmin_tokens = os.path.join(os.path.expanduser("~"), ".cycling_coach_garmin",
+                                 "garmin_tokens.json")
+    has_garmin = os.path.isfile(garmin_tokens) or bool(
+        GARMIN_EMAIL and GARMIN_PASSWORD and GARMIN_EMAIL != "your@email.com")
     has_claude = bool(ANTHROPIC_API_KEY and
                       ANTHROPIC_API_KEY != "paste_your_key_here")
     return (has_strava or has_garmin) and has_claude
