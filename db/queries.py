@@ -458,9 +458,9 @@ def add_strength_session(data: dict) -> int:
     conn = get_conn()
     cur = conn.execute(
         """INSERT INTO strength_sessions (date, plan_week, exercises_json,
-           duration_minutes, notes, phase) VALUES (:date,:plan_week,:exercises_json,
-           :duration_minutes,:notes,:phase)""",
-        {**data, "phase": data.get("phase")},
+           duration_minutes, notes, phase, completed) VALUES (:date,:plan_week,
+           :exercises_json,:duration_minutes,:notes,:phase,:completed)""",
+        {**data, "phase": data.get("phase"), "completed": data.get("completed", 0)},
     )
     conn.commit()
     sid = cur.lastrowid
@@ -479,11 +479,14 @@ def get_strength_sessions(days_back: int = 60) -> list:
     return [dict(r) for r in rows]
 
 
-def mark_strength_complete(sid: int, duration_minutes: int, notes: str = ""):
+def mark_strength_complete(sid: int, duration_minutes: int, notes: str = "",
+                           exercises_json: str | None = None):
+    """Mark a session done. Pass exercises_json to store what was actually lifted."""
     conn = get_conn()
     conn.execute(
-        "UPDATE strength_sessions SET completed=1, duration_minutes=?, notes=? WHERE id=?",
-        (duration_minutes, notes, sid),
+        """UPDATE strength_sessions SET completed=1, duration_minutes=?, notes=?,
+           exercises_json=COALESCE(?, exercises_json) WHERE id=?""",
+        (duration_minutes, notes, exercises_json, sid),
     )
     conn.commit()
     conn.close()

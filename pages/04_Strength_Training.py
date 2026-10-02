@@ -116,6 +116,49 @@ PLANS = {
     },
 }
 
+# ── Sessions your coach planned ──────────────────────────────────────────────
+
+def is_planned(s: dict) -> bool:
+    return not s.get("completed") and "Planned by AI Coach" in (s.get("notes") or "")
+
+
+planned = sorted((s for s in get_strength_sessions(days_back=14) if is_planned(s)),
+                 key=lambda s: s["date"])
+if planned:
+    st.subheader("Planned by your coach")
+    st.caption("Log the weights you used and the session counts toward your Strength Progress chart.")
+    for ps in planned:
+        ps_exercises = json.loads(ps["exercises_json"]) if ps.get("exercises_json") else []
+        ps_name = (ps.get("notes") or "").split(" | ")[0]
+        with st.expander(f"{ps['date']} · {ps_name}"):
+            with st.form(f"planned_form_{ps['id']}"):
+                ps_duration = st.number_input("Duration (minutes)", 5, 180,
+                                              int(ps.get("duration_minutes") or 45))
+                ps_weights = {}
+                for i, ex in enumerate(ps_exercises):
+                    st.markdown(f"**{ex['name']}** · {ex['sets']} × {ex.get('reps', '')} · "
+                                f"{ex.get('intensity', '')}")
+                    if ex.get("notes"):
+                        st.caption(ex["notes"])
+                    if "bodyweight" not in (ex.get("intensity") or "").lower():
+                        ps_weights[i] = st.number_input(
+                            "Weight used (kg)", min_value=0.0, max_value=300.0,
+                            value=0.0, step=2.5, key=f"pw_{ps['id']}_{i}")
+                ps_notes = st.text_area("Notes", key=f"pn_{ps['id']}",
+                                        placeholder="How did it go? Any PRs?")
+                if st.form_submit_button("Save Session ✅"):
+                    logged = []
+                    for i, ex in enumerate(ps_exercises):
+                        row = dict(ex)
+                        if ps_weights.get(i, 0) > 0:
+                            row["weight_kg"] = ps_weights[i]
+                        logged.append(row)
+                    mark_strength_complete(ps["id"], ps_duration, f"{ps_name} | {ps_notes}",
+                                           json.dumps(logged))
+                    st.success("Session logged!")
+                    st.rerun()
+    st.divider()
+
 # ── Phase selector ────────────────────────────────────────────────────────────
 col_plan, col_log = st.columns([2, 1])
 
@@ -175,6 +218,7 @@ with col_log:
                     "exercises_json": json.dumps(enriched),
                     "duration_minutes": duration,
                     "notes": f"{session_name} | {notes}",
+                    "completed": 1,
                 })
                 st.session_state.pop("log_session", None)
                 st.session_state.pop("log_exercises", None)
@@ -185,7 +229,7 @@ with col_log:
 
     # ── Session history ───────────────────────────────────────────────────────
     st.subheader("Recent Sessions")
-    sessions = get_strength_sessions(days_back=60)
+    sessions = [s for s in get_strength_sessions(days_back=60) if not is_planned(s)]
     if sessions:
         for s in sessions[:10]:
             exercises = json.loads(s["exercises_json"]) if s.get("exercises_json") else []

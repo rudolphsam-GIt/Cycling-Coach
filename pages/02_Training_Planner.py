@@ -195,10 +195,15 @@ def fit_download_panel() -> None:
         elif ready:
             try:
                 buf = io.BytesIO()
+                used_names: set[str] = set()
                 with zipfile.ZipFile(buf, "w") as zf:
                     for w, steps in ready:
-                        zf.writestr(f"{w['date']}_{_slug(w['name'])}.fit",
-                                   garmin_workouts.to_fit_bytes(w, steps))
+                        base = f"{w['date']}_{_slug(w['name'])}"
+                        arcname, n = f"{base}.fit", 2
+                        while arcname in used_names:
+                            arcname, n = f"{base}_{n}.fit", n + 1
+                        used_names.add(arcname)
+                        zf.writestr(arcname, garmin_workouts.to_fit_bytes(w, steps))
                 st.download_button(f"Download {len(ready)} workouts (.zip)", data=buf.getvalue(),
                                    file_name="training_plan.zip", mime="application/zip",
                                    width="stretch", type="primary")
@@ -277,7 +282,8 @@ if coach_available:
                      {"ctl": metrics["ctl"], "atl": metrics["atl"], "tsb": metrics["tsb"]})
         save_message("assistant", reply)
         if proposals:
-            st.session_state["proposed_workouts"] = proposals
+            st.session_state["proposed_workouts"] = coach_ui.merge_proposals(
+                st.session_state.get("proposed_workouts"), proposals)
         st.rerun()
 
     races = get_races(upcoming_only=True)
@@ -490,7 +496,8 @@ with left:
                         else date.fromisoformat(st.session_state.get("add_workout_date", today.isoformat())))
         default_name = editing_w["name"]        if editing_w else ""
         default_type = editing_w["workout_type"] if editing_w and editing_w.get("workout_type") in WORKOUT_TYPES else WORKOUT_TYPES[0]
-        default_tss  = int(editing_w["tss_planned"] or 60) if editing_w else 60
+        default_tss  = (int(editing_w["tss_planned"]) if editing_w and editing_w.get("tss_planned") is not None
+                        else 60)
         default_desc = editing_w.get("description") or "" if editing_w else ""
 
         with st.form("workout_form", clear_on_submit=not editing_w):

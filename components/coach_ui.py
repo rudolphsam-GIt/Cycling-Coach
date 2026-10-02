@@ -65,6 +65,18 @@ def stream_reply(system: list[dict], messages: list[dict], effort: str,
     return reply, error
 
 
+def merge_proposals(existing: list[dict] | None, new: list[dict]) -> list[dict]:
+    """
+    Combine a new proposal with one the athlete hasn't confirmed yet. Anything
+    new for a date and kind replaces the old entry for that date and kind, so a
+    revised block doesn't duplicate rows while an additive request ("also add a
+    recovery day Friday") keeps everything else already on screen.
+    """
+    replaced = {(p.get("kind", "ride"), p["date"]) for p in new}
+    kept = [p for p in (existing or []) if (p.get("kind", "ride"), p["date"]) not in replaced]
+    return sorted(kept + new, key=lambda p: (p["date"], p.get("kind", "ride")))
+
+
 def proposal_card(state_key: str) -> None:
     """
     Show workouts and/or strength sessions proposed by the coach, stored in
