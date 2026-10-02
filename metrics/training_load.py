@@ -1,17 +1,22 @@
 """
-CTL / ATL / TSB calculations using simple rolling averages.
+CTL / ATL / TSB calculations using the standard Coggan Performance Manager
+model (the same one TrainingPeaks uses) — exponentially weighted moving
+averages of daily TSS, not a flat windowed average.
 
-Fitness (CTL)  = 42-day rolling average of daily TSS
-Fatigue (ATL)  = 7-day rolling average of daily TSS
-Form (TSB)     = yesterday's CTL minus yesterday's ATL
+Fitness (CTL) = CTL_yesterday + (TSS_today - CTL_yesterday) * (1 - exp(-1/42))
+Fatigue (ATL) = ATL_yesterday + (TSS_today - ATL_yesterday) * (1 - exp(-1/7))
+Form (TSB)    = yesterday's CTL minus yesterday's ATL
 """
 
+import math
 from datetime import date, timedelta
 import pandas as pd
 from db.queries import get_daily_tss, get_setting
 
 CTL_DAYS = 42
 ATL_DAYS = 7
+CTL_ALPHA = 1 - math.exp(-1 / CTL_DAYS)
+ATL_ALPHA = 1 - math.exp(-1 / ATL_DAYS)
 
 
 def compute_pmc(
@@ -23,15 +28,17 @@ def compute_pmc(
     """
     Return a DataFrame [date, tss, ctl, atl, tsb] for every day in [start, end].
 
-    CTL = simple 42-day rolling average of daily TSS
-    ATL = simple 7-day rolling average of daily TSS
-    TSB = yesterday's CTL - yesterday's ATL
+    initial_ctl/initial_atl seed the EWMA as of the day before the lookback
+    window starts, then the exponential average is carried forward day by
+    day through to `end` — the same recursive update TrainingPeaks uses,
+    so a fitness/fatigue baseline set once continues to evolve correctly
+    rather than needing re-seeding.
     """
-    # Fetch enough history before start to fill the 42-day window
+    # Lookback lets the EWMA settle before `start` so the seed value isn't
+    # still dominating the displayed range.
     lookback_start = start - timedelta(days=CTL_DAYS)
     tss_map = get_daily_tss(lookback_start.isoformat(), end.isoformat())
 
-    # Build a full daily TSS list from lookback_start to end
     all_days = []
     current = lookback_start
     while current <= end:
@@ -39,25 +46,15 @@ def compute_pmc(
         current += timedelta(days=1)
 
     rows = []
-    for i, (day, tss) in enumerate(all_days):
-        if day < start:
-            continue
-
-        # 42-day window ending today
-        ctl_window = [t for _, t in all_days[max(0, i - CTL_DAYS + 1): i + 1]]
-        ctl = round(sum(ctl_window) / CTL_DAYS, 2)
-
-        # 7-day window ending today
-        atl_window = [t for _, t in all_days[max(0, i - ATL_DAYS + 1): i + 1]]
-        atl = round(sum(atl_window) / ATL_DAYS, 2)
-
-        # TSB = yesterday's CTL - yesterday's ATL
-        if rows:
-            tsb = round(rows[-1]["ctl"] - rows[-1]["atl"], 2)
-        else:
-            tsb = round(initial_ctl - initial_atl, 2)
-
-        rows.append({"date": day, "tss": tss, "ctl": ctl, "atl": atl, "tsb": tsb})
+    ctl, atl = initial_ctl, initial_atl
+    for day, tss in all_days:
+        prev_ctl, prev_atl = ctl, atl
+        ctl = round(prev_ctl + (tss - prev_ctl) * CTL_ALPHA, 2)
+        atl = round(prev_atl + (tss - prev_atl) * ATL_ALPHA, 2)
+        # TSB uses yesterday's CTL/ATL, i.e. the values going into today's update.
+        tsb = round(prev_ctl - prev_atl, 2)
+        if day >= start:
+            rows.append({"date": day, "tss": tss, "ctl": ctl, "atl": atl, "tsb": tsb})
 
     return pd.DataFrame(rows)
 
@@ -92,37 +89,17 @@ def project_future(
     planned_tss: dict,   # {date_str: tss}
     days_ahead: int = 42,
 ) -> pd.DataFrame:
-    """Project CTL/ATL/TSB forward using a planned TSS schedule."""
-    # Seed a TSS history window from recent actuals + planned
-    from db.queries import get_daily_tss as _get_tss
-    history_start = date.today() - timedelta(days=CTL_DAYS)
-    history = _get_tss(history_start.isoformat(), date.today().isoformat())
-
-    # Build combined window: past actuals + future planned
-    all_days = []
-    d = history_start
-    while d <= date.today():
-        all_days.append((d, history.get(d.isoformat(), 0.0)))
-        d += timedelta(days=1)
-    for i in range(days_ahead):
-        d = date.today() + timedelta(days=i + 1)
-        all_days.append((d, planned_tss.get(d.isoformat(), 0.0)))
-
+    """Project CTL/ATL/TSB forward from today's actual values using a planned
+    TSS schedule, via the same EWMA update compute_pmc uses."""
     rows = []
-    today_idx = next(i for i, (day, _) in enumerate(all_days) if day == date.today())
-
-    prev_ctl, prev_atl = current_ctl, current_atl
-    for i in range(today_idx + 1, len(all_days)):
-        day, tss = all_days[i]
-
-        ctl_window = [t for _, t in all_days[max(0, i - CTL_DAYS + 1): i + 1]]
-        ctl = round(sum(ctl_window) / CTL_DAYS, 2)
-
-        atl_window = [t for _, t in all_days[max(0, i - ATL_DAYS + 1): i + 1]]
-        atl = round(sum(atl_window) / ATL_DAYS, 2)
-
+    ctl, atl = current_ctl, current_atl
+    for i in range(days_ahead):
+        day = date.today() + timedelta(days=i + 1)
+        tss = planned_tss.get(day.isoformat(), 0.0)
+        prev_ctl, prev_atl = ctl, atl
+        ctl = round(prev_ctl + (tss - prev_ctl) * CTL_ALPHA, 2)
+        atl = round(prev_atl + (tss - prev_atl) * ATL_ALPHA, 2)
         tsb = round(prev_ctl - prev_atl, 2)
         rows.append({"date": day, "tss": tss, "ctl": ctl, "atl": atl, "tsb": tsb})
-        prev_ctl, prev_atl = ctl, atl
 
     return pd.DataFrame(rows)
