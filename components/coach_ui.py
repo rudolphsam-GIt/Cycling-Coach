@@ -4,12 +4,14 @@ workouts the coach proposed with a confirm button.
 """
 from __future__ import annotations
 
+import json
+
 import pandas as pd
 import streamlit as st
 
 import claude_client
 import coach_tools
-from db.queries import add_workout
+from db.queries import add_workout, add_strength_session
 
 
 def local_time(utc_iso: str) -> str:
@@ -64,29 +66,86 @@ def stream_reply(system: list[dict], messages: list[dict], effort: str,
 
 
 def proposal_card(state_key: str) -> None:
-    """Show proposed workouts stored in st.session_state[state_key] with confirm/discard."""
+    """
+    Show workouts and/or strength sessions proposed by the coach, stored in
+    st.session_state[state_key], with confirm/discard. Each item is tagged
+    kind="ride" or kind="strength" (propose_workouts/propose_strength_sessions
+    in coach_tools.py); a multi-week ride block additionally carries phase /
+    week_number, which groups the preview instead of showing one flat list.
+    """
     added_key = f"{state_key}_added"
     if added := st.session_state.pop(added_key, None):
-        st.success(f"Added {added} workout{'s' if added > 1 else ''} to your Training Planner.")
+        rides_n, strength_n = added
+        parts = []
+        if rides_n:
+            parts.append(f"{rides_n} ride{'s' if rides_n > 1 else ''}")
+        if strength_n:
+            parts.append(f"{strength_n} strength session{'s' if strength_n > 1 else ''}")
+        if parts:
+            st.success("Added " + " and ".join(parts) + " to your plan.")
 
     proposed = st.session_state.get(state_key)
     if not proposed:
         return
+
+    rides = [p for p in proposed if p.get("kind", "ride") == "ride"]
+    strength = [p for p in proposed if p.get("kind") == "strength"]
+
     with st.container(border=True):
-        st.markdown("**Proposed workouts** · review before adding to your planner")
-        st.dataframe(
-            pd.DataFrame(proposed).rename(columns={
-                "date": "Date", "name": "Workout", "workout_type": "Type",
-                "description": "Details", "tss_planned": "TSS"}),
-            hide_index=True, width="stretch",
-        )
+        st.markdown("**Proposed plan** · review before adding to your calendar")
+
+        if rides:
+            has_phases = any(r.get("phase") for r in rides)
+            if has_phases:
+                by_phase: dict[str, list] = {}
+                for r in rides:
+                    by_phase.setdefault(r.get("phase") or "Workouts", list()).append(r)
+                for phase_name, items in by_phase.items():
+                    phase_tss = sum(i.get("tss_planned") or 0 for i in items)
+                    df = pd.DataFrame(items).rename(columns={
+                        "date": "Date", "name": "Workout", "workout_type": "Type",
+                        "description": "Details", "tss_planned": "TSS", "week_number": "Week"})
+                    cols = [c for c in ["Week", "Date", "Workout", "Type", "Details", "TSS"]
+                            if c in df.columns]
+                    with st.expander(f"{phase_name} · {len(items)} rides · {phase_tss:.0f} TSS",
+                                     expanded=True):
+                        st.dataframe(df[cols], hide_index=True, width="stretch")
+            else:
+                st.dataframe(
+                    pd.DataFrame(rides).rename(columns={
+                        "date": "Date", "name": "Workout", "workout_type": "Type",
+                        "description": "Details", "tss_planned": "TSS"})[
+                        ["Date", "Workout", "Type", "Details", "TSS"]],
+                    hide_index=True, width="stretch",
+                )
+
+        if strength:
+            st.markdown(f"**Strength · {len(strength)} session{'s' if len(strength) > 1 else ''}**")
+            for s in strength:
+                ex_names = ", ".join(e["name"] for e in s.get("exercises", [])[:4])
+                more = f" +{len(s['exercises']) - 4} more" if len(s.get("exercises", [])) > 4 else ""
+                st.caption(f"{s['date']} · **{s['name']}** · {ex_names}{more}")
+
         c1, c2 = st.columns(2)
         if c1.button("Add to Training Planner", type="primary", width="stretch",
                      key=f"{state_key}_add"):
-            for w in proposed:
-                add_workout({**w, "structured_json": None, "notes": "Planned by AI Coach"})
+            for w in rides:
+                add_workout({
+                    "date": w["date"], "name": w["name"], "workout_type": w["workout_type"],
+                    "description": w["description"], "structured_json": None,
+                    "tss_planned": w["tss_planned"], "notes": "Planned by AI Coach",
+                    "phase": w.get("phase"), "week_number": w.get("week_number"),
+                })
+            for s in strength:
+                add_strength_session({
+                    "date": s["date"], "plan_week": s.get("week_number"),
+                    "exercises_json": json.dumps(s["exercises"]),
+                    "duration_minutes": s.get("duration_minutes"),
+                    "notes": f"{s['name']} | Planned by AI Coach",
+                    "phase": s.get("phase"),
+                })
             st.session_state.pop(state_key)
-            st.session_state[added_key] = len(proposed)
+            st.session_state[added_key] = (len(rides), len(strength))
             st.rerun()
         if c2.button("Discard", width="stretch", key=f"{state_key}_discard"):
             st.session_state.pop(state_key)

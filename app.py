@@ -60,10 +60,8 @@ else:
         "Train": [
             st.Page("pages/01_Dashboard.py", title="Today", icon=":material/today:",
                     url_path="today", default=True),
-            st.Page("pages/02_Training_Planner.py", title="Plan", icon=":material/calendar_month:",
+            st.Page("pages/02_Training_Planner.py", title="Plan", icon=":material/forum:",
                     url_path="plan"),
-            st.Page("pages/05_AI_Coach.py", title="Coach", icon=":material/forum:",
-                    url_path="coach"),
             st.Page("pages/04_Strength_Training.py", title="Strength",
                     icon=":material/fitness_center:", url_path="strength"),
         ],

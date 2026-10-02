@@ -15,7 +15,8 @@ from db.queries import (get_activities, get_workouts, get_races, get_wellness_ra
                         get_ftp_history, get_weekly_tss_summary, get_setting, get_recovery_range,
                         add_memory,
                         WORKOUT_TYPES)
-from metrics.training_load import compute_pmc
+from metrics.training_load import compute_pmc, get_current_metrics
+import planning
 
 
 MEMORY_CATEGORIES = ["health", "schedule", "preferences", "goals", "training_response", "other"]
@@ -115,7 +116,9 @@ TOOLS = [
         "name": "propose_workouts",
         "description": "Propose workouts to add to the athlete's Training Planner. Nothing is saved "
                        "until the athlete confirms, so call this whenever they ask you to plan, "
-                       "schedule or import workouts, then tell them to review and confirm below.",
+                       "schedule or import workouts, then tell them to review and confirm below. "
+                       "For a multi-week block, tag each workout with phase and week_number so the "
+                       "athlete sees it grouped sensibly instead of as one long flat list.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -130,12 +133,77 @@ TOOLS = [
                             "description": {"type": "string",
                                             "description": "Structure with durations and power targets"},
                             "tss_planned": {"type": "number"},
+                            "phase": {"type": "string",
+                                     "description": "Optional — e.g. 'Base / Endurance', only for "
+                                                    "multi-week blocks, groups the proposal in the UI"},
+                            "week_number": {"type": "integer",
+                                           "description": "Optional — 1-based week within the block"},
                         },
                         "required": ["date", "name", "workout_type", "description", "tss_planned"],
                     },
                 },
             },
             "required": ["workouts"],
+        },
+    },
+    {
+        "name": "propose_strength_sessions",
+        "description": "Propose strength sessions to add alongside rides from propose_workouts. "
+                       "Nothing is saved until the athlete confirms. Use this when a plan should "
+                       "include gym work, not just riding.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "sessions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "date": {"type": "string", "description": "YYYY-MM-DD, today or later"},
+                            "name": {"type": "string", "description": "e.g. 'Lower body — heavy'"},
+                            "exercises": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {"type": "string"},
+                                        "sets": {"type": "integer"},
+                                        "reps": {"type": "string"},
+                                        "intensity": {"type": "string"},
+                                        "notes": {"type": "string"},
+                                    },
+                                    "required": ["name", "sets", "reps", "intensity"],
+                                },
+                            },
+                            "duration_minutes": {"type": "integer"},
+                            "phase": {"type": "string", "description": "Optional, as in propose_workouts"},
+                            "week_number": {"type": "integer", "description": "Optional, as in propose_workouts"},
+                        },
+                        "required": ["date", "name", "exercises", "duration_minutes"],
+                    },
+                },
+            },
+            "required": ["sessions"],
+        },
+    },
+    {
+        "name": "generate_training_block",
+        "description": "Generate a draft periodized block of rides from today (or a given start "
+                       "date) to a race date, ramping weekly training load toward a target CTL "
+                       "with a taper worked into the end. This does not propose or save anything — "
+                       "use it as a starting scaffold for a multi-week plan you're building with "
+                       "the athlete in conversation, then adjust it based on what they tell you "
+                       "before calling propose_workouts with the final version.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "target_ctl": {"type": "number", "description": "Target peak CTL (fitness) before the taper, roughly 10 to 200."},
+                "race_date": {"type": "string", "description": "YYYY-MM-DD, the race or goal date, in the future"},
+                "phase_focus": {"type": "string", "enum": list(planning.DAY_TEMPLATES.keys()),
+                                "description": "The build phase's emphasis for the non-taper weeks"},
+                "start_date": {"type": "string", "description": "YYYY-MM-DD, defaults to today if omitted"},
+            },
+            "required": ["target_ctl", "race_date", "phase_focus"],
         },
     },
 ]
@@ -151,6 +219,8 @@ STATUS_LABELS = {
     "get_ftp_history": "Checking your FTP history",
     "remember": "Saving a note about you",
     "propose_workouts": "Drafting workouts",
+    "propose_strength_sessions": "Drafting strength sessions",
+    "generate_training_block": "Sketching a training block",
 }
 
 
@@ -253,38 +323,118 @@ def run_tool(name: str, args: dict, proposals: list[dict]) -> str:
         return "Saved."
     elif name == "propose_workouts":
         result = _propose(args, proposals)
+    elif name == "propose_strength_sessions":
+        result = _propose_strength(args, proposals)
+    elif name == "generate_training_block":
+        result = _generate_block(args)
     else:
         raise ToolInputError(f"unknown tool {name}")
 
-    if not result and name != "propose_workouts":
+    if not result and name not in ("propose_workouts", "propose_strength_sessions"):
         return "No data found for that period."
     return json.dumps(result, default=str)
+
+
+def _optional_str(w: dict, key: str, where: str) -> str | None:
+    value = w.get(key)
+    if value is not None and not isinstance(value, str):
+        raise ToolInputError(f"{where} {key} must be a string")
+    return value
+
+
+def _optional_int(w: dict, key: str, where: str) -> int | None:
+    value = w.get(key)
+    if value is not None and (not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= 52):
+        raise ToolInputError(f"{where} {key} must be an integer from 1 to 52")
+    return value
 
 
 def _propose(args: dict, proposals: list[dict]) -> str:
     workouts = args.get("workouts")
     if not isinstance(workouts, list) or not workouts:
         raise ToolInputError("workouts must be a non empty list")
-    if len(workouts) > 42:
-        raise ToolInputError("propose at most 42 workouts at a time")
+    if len(workouts) > 60:
+        raise ToolInputError("propose at most 60 workouts at a time")
 
     checked = []
     for i, w in enumerate(workouts):
         if not isinstance(w, dict):
             raise ToolInputError(f"workout {i} must be an object")
-        day = _iso_date(w.get("date"), f"workout {i} date")
+        where = f"workout {i}"
+        day = _iso_date(w.get("date"), f"{where} date")
         if day < date.today():
-            raise ToolInputError(f"workout {i} is dated in the past")
+            raise ToolInputError(f"{where} is dated in the past")
         if w.get("workout_type") not in WORKOUT_TYPES:
-            raise ToolInputError(f"workout {i} workout_type must be one of {WORKOUT_TYPES}")
+            raise ToolInputError(f"{where} workout_type must be one of {WORKOUT_TYPES}")
         name, desc, tss = w.get("name"), w.get("description"), w.get("tss_planned")
         if not isinstance(name, str) or not name.strip() or not isinstance(desc, str):
-            raise ToolInputError(f"workout {i} needs a name and description")
+            raise ToolInputError(f"{where} needs a name and description")
         if not isinstance(tss, (int, float)) or isinstance(tss, bool) or not 0 <= tss <= 500:
-            raise ToolInputError(f"workout {i} tss_planned must be a number from 0 to 500")
-        checked.append({"date": day.isoformat(), "name": name.strip(), "workout_type": w["workout_type"],
-                        "description": desc.strip(), "tss_planned": float(tss)})
+            raise ToolInputError(f"{where} tss_planned must be a number from 0 to 500")
+        checked.append({"kind": "ride", "date": day.isoformat(), "name": name.strip(),
+                        "workout_type": w["workout_type"], "description": desc.strip(),
+                        "tss_planned": float(tss), "phase": _optional_str(w, "phase", where),
+                        "week_number": _optional_int(w, "week_number", where)})
 
     proposals.extend(checked)
-    return (f"{len(checked)} workouts are shown to the athlete with a confirm button. "
+    return (f"{len(checked)} rides are shown to the athlete with a confirm button. "
             "They are not saved yet; tell the athlete to review and confirm them below the chat.")
+
+
+def _propose_strength(args: dict, proposals: list[dict]) -> str:
+    sessions = args.get("sessions")
+    if not isinstance(sessions, list) or not sessions:
+        raise ToolInputError("sessions must be a non empty list")
+    if len(sessions) > 30:
+        raise ToolInputError("propose at most 30 strength sessions at a time")
+
+    checked = []
+    for i, s in enumerate(sessions):
+        if not isinstance(s, dict):
+            raise ToolInputError(f"session {i} must be an object")
+        where = f"session {i}"
+        day = _iso_date(s.get("date"), f"{where} date")
+        if day < date.today():
+            raise ToolInputError(f"{where} is dated in the past")
+        name = s.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ToolInputError(f"{where} needs a name")
+        exercises = s.get("exercises")
+        if not isinstance(exercises, list) or not exercises:
+            raise ToolInputError(f"{where} needs at least one exercise")
+        for j, ex in enumerate(exercises):
+            if (not isinstance(ex, dict) or not isinstance(ex.get("name"), str) or not ex["name"].strip()
+                    or not isinstance(ex.get("sets"), int) or isinstance(ex.get("sets"), bool)
+                    or not isinstance(ex.get("reps"), str) or not ex["reps"].strip()
+                    or not isinstance(ex.get("intensity"), str) or not ex["intensity"].strip()):
+                raise ToolInputError(f"{where} exercise {j} needs a name, integer sets, reps and intensity")
+        duration = s.get("duration_minutes")
+        if not isinstance(duration, int) or isinstance(duration, bool) or not 5 <= duration <= 180:
+            raise ToolInputError(f"{where} duration_minutes must be a whole number from 5 to 180")
+        checked.append({"kind": "strength", "date": day.isoformat(), "name": name.strip(),
+                        "exercises": exercises, "duration_minutes": duration,
+                        "phase": _optional_str(s, "phase", where),
+                        "week_number": _optional_int(s, "week_number", where)})
+
+    proposals.extend(checked)
+    return (f"{len(checked)} strength sessions are shown to the athlete with a confirm button. "
+            "They are not saved yet; tell the athlete to review and confirm them below the chat.")
+
+
+def _generate_block(args: dict) -> list[dict]:
+    target_ctl = args.get("target_ctl")
+    if not isinstance(target_ctl, (int, float)) or isinstance(target_ctl, bool) or not 10 <= target_ctl <= 200:
+        raise ToolInputError("target_ctl must be a number from 10 to 200")
+    race_date = _iso_date(args.get("race_date"), "race_date")
+    if race_date <= date.today():
+        raise ToolInputError("race_date must be in the future")
+    phase_focus = args.get("phase_focus")
+    if not isinstance(phase_focus, str) or phase_focus not in planning.DAY_TEMPLATES:
+        raise ToolInputError(f"phase_focus must be one of {list(planning.DAY_TEMPLATES.keys())}")
+    start = _iso_date(args["start_date"], "start_date") if args.get("start_date") else date.today()
+    if start >= race_date:
+        raise ToolInputError("start_date must be before race_date")
+    if (race_date - start).days > 104 * 7:
+        raise ToolInputError("that's more than 2 years out — generate a shorter block and extend it later")
+    current_ctl = get_current_metrics()["ctl"]
+    return planning.generate_block(current_ctl, float(target_ctl), race_date, phase_focus, start)

@@ -57,7 +57,9 @@ CREATE TABLE IF NOT EXISTS workouts (
     tss_planned REAL,
     completed INTEGER DEFAULT 0,
     activity_id INTEGER,
-    notes TEXT
+    notes TEXT,
+    phase TEXT,
+    week_number INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS races (
@@ -78,7 +80,8 @@ CREATE TABLE IF NOT EXISTS strength_sessions (
     exercises_json TEXT,
     completed INTEGER DEFAULT 0,
     duration_minutes INTEGER,
-    notes TEXT
+    notes TEXT,
+    phase TEXT
 );
 
 CREATE TABLE IF NOT EXISTS recovery_daily (
@@ -146,6 +149,9 @@ def run_migrations():
         "ALTER TABLE workouts ADD COLUMN garmin_workout_id TEXT",
         "ALTER TABLE workouts ADD COLUMN garmin_schedule_id TEXT",
         "ALTER TABLE workouts ADD COLUMN garmin_sent_at TEXT",
+        "ALTER TABLE workouts ADD COLUMN phase TEXT",
+        "ALTER TABLE workouts ADD COLUMN week_number INTEGER",
+        "ALTER TABLE strength_sessions ADD COLUMN phase TEXT",
     ]:
         try:
             conn.execute(col_sql)

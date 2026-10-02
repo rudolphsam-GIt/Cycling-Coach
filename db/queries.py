@@ -240,9 +240,10 @@ def add_workout(data: dict) -> int:
     conn = get_conn()
     cur = conn.execute(
         """INSERT INTO workouts (date, name, workout_type, description,
-           structured_json, tss_planned, notes)
-           VALUES (:date,:name,:workout_type,:description,:structured_json,:tss_planned,:notes)""",
-        data,
+           structured_json, tss_planned, notes, phase, week_number)
+           VALUES (:date,:name,:workout_type,:description,:structured_json,:tss_planned,:notes,
+                   :phase,:week_number)""",
+        {**data, "phase": data.get("phase"), "week_number": data.get("week_number")},
     )
     conn.commit()
     wid = cur.lastrowid
@@ -457,9 +458,9 @@ def add_strength_session(data: dict) -> int:
     conn = get_conn()
     cur = conn.execute(
         """INSERT INTO strength_sessions (date, plan_week, exercises_json,
-           duration_minutes, notes) VALUES (:date,:plan_week,:exercises_json,
-           :duration_minutes,:notes)""",
-        data,
+           duration_minutes, notes, phase) VALUES (:date,:plan_week,:exercises_json,
+           :duration_minutes,:notes,:phase)""",
+        {**data, "phase": data.get("phase")},
     )
     conn.commit()
     sid = cur.lastrowid

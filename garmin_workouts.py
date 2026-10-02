@@ -136,10 +136,30 @@ def _watts(pct: float | None, ftp: float) -> float | None:
     return None if pct is None else round(pct / 100 * ftp)
 
 
+def _walk_steps(steps: list):
+    """Flatten `steps` into leaf steps, yielding (step, enclosing_repeat) pairs.
+
+    `enclosing_repeat` is the repeat dict a leaf step belongs to (so callers
+    can read its `repeat_count`, or detect a new repeat block by identity),
+    or None for a top-level step. This only flattens repeat_steps into leaves
+    once each (not expanded per-repetition) — callers that need the
+    multiplier use enclosing_repeat["repeat_count"] themselves. Shared by
+    preview_rows and total_minutes; to_garmin_json and to_fit_bytes need
+    different per-step output shapes and are intentionally left separate.
+    """
+    for s in steps:
+        if s["kind"] == "repeat":
+            for inner in s["repeat_steps"]:
+                yield inner, s
+        else:
+            yield s, None
+
+
 def preview_rows(steps: list) -> list[dict]:
     """Readable rows for showing the steps before sending."""
     ftp = _ftp()
     rows = []
+    last_group = None
 
     def row(s, prefix=""):
         low, high = _watts(s["low_pct"], ftp), _watts(s["high_pct"], ftp)
@@ -147,19 +167,21 @@ def preview_rows(steps: list) -> list[dict]:
         rows.append({"Step": prefix + s["kind"].title(), "Time": f"{s['minutes']:g} min",
                      "Target": target})
 
-    for s in steps:
-        if s["kind"] == "repeat":
-            rows.append({"Step": f"Repeat {s['repeat_count']}×", "Time": "", "Target": ""})
-            for inner in s["repeat_steps"]:
-                row(inner, "    ")
+    for s, group in _walk_steps(steps):
+        if group is not None:
+            if group is not last_group:
+                rows.append({"Step": f"Repeat {group['repeat_count']}×", "Time": "", "Target": ""})
+                last_group = group
+            row(s, "    ")
         else:
+            last_group = None
             row(s)
     return rows
 
 
 def total_minutes(steps: list) -> float:
-    return sum(s["repeat_count"] * sum(i["minutes"] for i in s["repeat_steps"])
-               if s["kind"] == "repeat" else s["minutes"] for s in steps)
+    return sum(s["minutes"] * (group["repeat_count"] if group is not None else 1)
+               for s, group in _walk_steps(steps))
 
 
 def to_garmin_json(workout: dict, steps: list) -> dict:
@@ -250,6 +272,103 @@ def send(workout: dict, steps: list) -> None:
     schedule_id = (scheduled or {}).get("workoutScheduleId") or (scheduled or {}).get("scheduleId")
     set_workout_garmin(workout["id"], str(workout_id), str(schedule_id) if schedule_id else None,
                        json.dumps(steps), datetime.utcnow().isoformat())
+
+
+def to_fit_bytes(workout: dict, steps: list) -> bytes:
+    """
+    Build a standalone .fit workout file from the same steps used to send to
+    Garmin, for athletes who want to import the workout somewhere else (e.g.
+    TrainingPeaks accepts a manually-uploaded .fit file) instead of, or in
+    addition to, sending it straight to a Garmin device.
+
+    FIT represents a repeated interval as a flat list of steps followed by a
+    trailing marker step (duration_type REPEAT_UNTIL_STEPS_CMPLT) that uses
+    two separate fields: duration_step holds the message_index of the first
+    step in the repeated block (i.e. which step to repeat from), and
+    target_repeat_steps holds the actual repeat count. The repeated block is
+    the run of steps between duration_step's index and this marker — unlike
+    Garmin Connect's nested RepeatGroupDTO JSON, so this is a separate
+    serializer, not a reuse of to_garmin_json's shape, even though both start
+    from the same `steps`. workout.num_valid_steps must count only the real
+    steps, not these repeat meta-steps (confirmed against fit_tool's own
+    validator).
+    """
+    from fit_tool.fit_file_builder import FitFileBuilder
+    from fit_tool.profile.messages.file_id_message import FileIdMessage
+    from fit_tool.profile.messages.workout_message import WorkoutMessage
+    from fit_tool.profile.messages.workout_step_message import WorkoutStepMessage
+    from fit_tool.profile.profile_type import (Sport, Intensity, WorkoutStepDuration,
+                                                WorkoutStepTarget, Manufacturer, FileType)
+
+    ftp = _ftp()
+    intensity_for = {
+        "warmup": Intensity.WARMUP, "interval": Intensity.INTERVAL,
+        "recovery": Intensity.RECOVERY, "cooldown": Intensity.COOLDOWN,
+    }
+
+    fit_steps: list = []
+    next_index = 0
+    valid_step_count = 0
+
+    def add_step(s: dict) -> int:
+        nonlocal next_index, valid_step_count
+        step = WorkoutStepMessage()
+        step.message_index = next_index
+        step.workout_step_name = s["kind"].title()[:16]
+        step.intensity = intensity_for.get(s["kind"], Intensity.ACTIVE)
+        step.duration_type = WorkoutStepDuration.TIME
+        step.duration_time = round(s["minutes"] * 60, 1)
+        low, high = _watts(s["low_pct"], ftp), _watts(s["high_pct"], ftp)
+        if low is not None:
+            step.target_type = WorkoutStepTarget.POWER
+            step.custom_target_power_low = int(low)
+            step.custom_target_power_high = int(high)
+        else:
+            step.target_type = WorkoutStepTarget.OPEN
+        fit_steps.append(step)
+        this_index = next_index
+        next_index += 1
+        valid_step_count += 1
+        return this_index
+
+    for s in steps:
+        if s["kind"] == "repeat":
+            first_index = None
+            for inner in s["repeat_steps"]:
+                i = add_step(inner)
+                if first_index is None:
+                    first_index = i
+            # Repeat meta-step: duration_step holds the index of the first
+            # step in the repeated block, and target_repeat_steps holds the
+            # repeat count. Not counted in num_valid_steps (see docstring).
+            marker = WorkoutStepMessage()
+            marker.message_index = next_index
+            marker.duration_type = WorkoutStepDuration.REPEAT_UNTIL_STEPS_CMPLT
+            marker.duration_step = first_index
+            marker.target_type = WorkoutStepTarget.OPEN
+            marker.target_repeat_steps = s["repeat_count"]
+            fit_steps.append(marker)
+            next_index += 1
+        else:
+            add_step(s)
+
+    file_id = FileIdMessage()
+    file_id.type = FileType.WORKOUT
+    file_id.manufacturer = Manufacturer.DEVELOPMENT.value
+    file_id.product = 0
+    file_id.time_created = round(datetime.utcnow().timestamp() * 1000)
+    file_id.serial_number = 0x1E4C7
+
+    workout_msg = WorkoutMessage()
+    workout_msg.workout_name = workout["name"][:40]
+    workout_msg.sport = Sport.CYCLING
+    workout_msg.num_valid_steps = valid_step_count
+
+    builder = FitFileBuilder(auto_define=True, min_string_size=50)
+    builder.add(file_id)
+    builder.add(workout_msg)
+    builder.add_all(fit_steps)
+    return builder.build().to_bytes()
 
 
 def remove_from_garmin(workout: dict) -> None:
