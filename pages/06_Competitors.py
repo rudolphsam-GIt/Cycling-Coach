@@ -2,7 +2,9 @@ from __future__ import annotations
 import streamlit as st
 import pandas as pd
 from datetime import date
-from components import inject_styles, section_header, page_header
+from html import escape
+
+from components import section_header, page_header
 
 from db.schema import run_migrations
 from db.queries import get_races
@@ -13,8 +15,6 @@ from research.public_power import search_public_power
 
 run_migrations()
 
-st.set_page_config(page_title="Competitors · Cycling Coach", layout="wide")
-inject_styles()
 page_header("Competitors", "Scout the field from OBRA results and get a tactics brief")
 st.caption("Look up OBRA race results, estimate competitor power, and generate a race tactics brief.")
 
@@ -40,21 +40,22 @@ Cat 1–2: ±0.3 W/kg · Cat 3–5: ±0.5 W/kg · ZwiftPower data: ±0.1 W/kg (s
 """)
 
 # ── Race info ─────────────────────────────────────────────────────────────────
-st.subheader("Race Info")
+section_header("Race Info", "Pick the race you are scouting")
 
-with st.expander("📋 Pick from OBRA schedule", expanded=True):
+with st.expander("Pick from OBRA schedule", icon=":material/search:", expanded=True):
     disc_options = list(DISCIPLINES.keys())
     selected_discs = st.multiselect(
         "Disciplines", disc_options, default=["Road", "Criterium"], key="comp_discs"
     )
-    col_past, col_fetch, col_refresh = st.columns([2, 2, 1])
-    with col_past:
-        include_past = st.checkbox("Include past races this year", value=True,
-                                   help="Past events have results posted — great for pulling competitor lists")
+    include_past = st.checkbox("Include past races this year", value=True,
+                               help="Past events have results posted, which is great for pulling competitor lists")
+    col_fetch, col_refresh = st.columns(2)
     with col_fetch:
-        fetch_btn = st.button("Load OBRA Races", key="comp_fetch", width="stretch")
+        fetch_btn = st.button("Load OBRA Races", key="comp_fetch", icon=":material/download:",
+                              width="stretch")
     with col_refresh:
-        refresh_btn = st.button("↺", key="comp_refresh", help="Force refresh from OBRA")
+        refresh_btn = st.button("Refresh from OBRA", key="comp_refresh", icon=":material/refresh:",
+                                help="Force refresh from OBRA", width="stretch")
 
     if fetch_btn or refresh_btn or "comp_obra_races" in st.session_state:
         if fetch_btn or refresh_btn:
@@ -74,15 +75,15 @@ with st.expander("📋 Pick from OBRA schedule", expanded=True):
             if past_count:
                 count_label += f" + {past_count} past"
             race_labels = {
-                f"{'✓ ' if r.get('is_past') else ''}{r['name']}  —  {r['date']}": r
+                f"{'(past) ' if r.get('is_past') else ''}{r['name']}  /  {r['date']}": r
                 for r in obra_races
             }
             chosen_obra_label = st.selectbox(
                 f"{count_label} races found",
-                ["— select a race —"] + list(race_labels.keys()),
+                ["Select a race"] + list(race_labels.keys()),
                 key="comp_obra_select",
             )
-            if chosen_obra_label != "— select a race —":
+            if chosen_obra_label != "Select a race":
                 selected = race_labels[chosen_obra_label]
                 prev = st.session_state.get("comp_selected_obra", {})
                 if selected.get("id") != prev.get("id"):
@@ -135,7 +136,7 @@ if obra_sel:
     # Location / promoter
     info_parts = []
     if obra_details.get("location"):
-        info_parts.append(f"📍 {obra_details['location']}")
+        info_parts.append(f":material/location_on: {obra_details['location']}")
     if obra_details.get("promoter"):
         info_parts.append(f"Promoter: {obra_details['promoter']}")
     if info_parts:
@@ -160,7 +161,7 @@ if obra_sel:
 else:
     # Fall back to calendar pick
     calendar_races = get_races(upcoming_only=True)
-    calendar_options = {"— select a race —": None}
+    calendar_options = {"Select a race": None}
     calendar_options.update({f"{r['name']} ({r['date']})": r for r in calendar_races})
     chosen_label = st.selectbox("Or pick from your race calendar", list(calendar_options.keys()))
     chosen_race = calendar_options[chosen_label]
@@ -181,7 +182,7 @@ else:
 
 # ── Load competitors ──────────────────────────────────────────────────────────
 st.divider()
-st.subheader("Load Competitors")
+section_header("Load Competitors", "Pull a field from OBRA or paste names")
 
 pull_tab, manual_tab = st.tabs([":material/download: Pull from an OBRA event", ":material/edit: Paste names"])
 
@@ -241,7 +242,8 @@ with pull_tab:
         chosen_cat = cat_options[chosen_cat_label]
 
         pull_btn = st.button(
-            f"🔄 Pull {chosen_cat['count']} Riders — {chosen_cat['label']}",
+            f"Pull {chosen_cat['count']} Riders for {chosen_cat['label']}",
+            icon=":material/download:",
             width="stretch",
         )
 
@@ -267,7 +269,7 @@ with pull_tab:
                 st.session_state.competitor_profiles = pulled
                 st.session_state["pull_gender"] = pull_gender
                 st.session_state.public_power_cache = {}
-                st.success(f"Loaded {len(pulled)} riders — {chosen_cat['label']}.")
+                st.success(f"Loaded {len(pulled)} riders for {chosen_cat['label']}.")
                 st.rerun()
             else:
                 st.warning(
@@ -290,7 +292,8 @@ with manual_tab:
     names = [n.strip() for n in names_input.strip().splitlines() if n.strip()]
 
     run_research = st.button(
-        f"🔍 Research {len(names)} Competitor{'s' if len(names) != 1 else ''}",
+        f"Research {len(names)} Competitor{'s' if len(names) != 1 else ''}",
+        icon=":material/search:",
         disabled=len(names) == 0,
         width="stretch",
     )
@@ -321,7 +324,7 @@ profiles = st.session_state.get("competitor_profiles", [])
 
 if profiles:
     st.divider()
-    st.subheader("Competitor Profiles")
+    section_header("Competitor Profiles", "Everyone in the field you loaded")
 
     # ── Category filter ───────────────────────────────────────────────────────
     available_cats = sorted({
@@ -368,7 +371,7 @@ if profiles:
         name = p.get("name") or p.get("search_name", "Unknown")
 
         if p.get("error"):
-            with st.expander(f"❓ {name} — not found"):
+            with st.expander(f"{name} (not found)", icon=":material/help:"):
                 st.warning(p["error"])
                 st.caption("May race under a different name, be new to OBRA, or not have raced recently.")
             continue
@@ -410,7 +413,8 @@ if profiles:
                 cached_pub = st.session_state.public_power_cache.get(cache_key)
 
                 if cached_pub is None:
-                    if st.button("🔍 Search ZwiftPower & public profiles",
+                    if st.button("Search ZwiftPower & public profiles",
+                                 icon=":material/search:",
                                  key=f"pub_{p.get('people_id', name)}",
                                  width="stretch"):
                         with st.spinner("Searching..."):
@@ -434,7 +438,7 @@ if profiles:
                     else:
                         st.caption("No public Strava/Garmin profiles found")
 
-                    if st.button("↺ Search again", key=f"re_{p.get('people_id', name)}"):
+                    if st.button("Search again", icon=":material/refresh:", key=f"re_{p.get('people_id', name)}"):
                         st.session_state.public_power_cache.pop(cache_key, None)
                         st.rerun()
 
@@ -443,9 +447,9 @@ if profiles:
     st.divider()
     col_btn1, col_btn2, _ = st.columns([1, 1, 2])
     with col_btn1:
-        gen_tactics = st.button("⚡ Generate Tactics Brief", width="stretch")
+        gen_tactics = st.button("Generate Tactics Brief", icon=":material/bolt:", width="stretch")
     with col_btn2:
-        if st.button("🗑 Clear Results", width="stretch"):
+        if st.button("Clear Results", icon=":material/delete:", width="stretch"):
             st.session_state.competitor_profiles = []
             st.session_state.tactics_brief = ""
             st.session_state.public_power_cache = {}
@@ -466,15 +470,16 @@ if profiles:
             st.session_state.tactics_brief = brief
 
 if st.session_state.get("tactics_brief"):
-    st.subheader(f"Race Tactics Brief — {race_name}")
+    section_header(f"Race Tactics Brief for {escape(race_name)}")
     st.markdown(st.session_state.tactics_brief)
     st.download_button(
-        "📥 Download Tactics Brief",
+        "Download Tactics Brief",
+        icon=":material/download:",
         data=st.session_state.tactics_brief,
         file_name=f"tactics_{race_name.replace(' ', '_')}.txt",
         mime="text/plain",
     )
-    if chosen_race and st.button("💾 Save to Race Calendar Notes"):
+    if chosen_race and st.button("Save to Race Calendar Notes", icon=":material/save:"):
         from db.queries import get_conn
         conn = get_conn()
         conn.execute("UPDATE races SET notes = ? WHERE id = ?",

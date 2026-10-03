@@ -262,6 +262,7 @@ def get_workouts(start: str, end: str) -> list:
 
 
 def update_workout(wid: int, data: dict):
+    """Save edits. The date is not changed here, use move_workout for that."""
     conn = get_conn()
     conn.execute(
         """UPDATE workouts SET name=:name, workout_type=:workout_type,
@@ -275,6 +276,26 @@ def update_workout(wid: int, data: dict):
     )
     conn.commit()
     conn.close()
+
+
+def move_workout(wid: int, new_date: str) -> dict | None:
+    """Move a planned workout to another day. The Garmin ids are cleared, since the
+    copy on Garmin is scheduled for the old day. Returns the row as it was before
+    the move (so the caller can remove the Garmin copy or undo), or None if the
+    workout doesn't exist or is already on that day."""
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM workouts WHERE id=?", (wid,)).fetchone()
+    if not row or row["date"] == new_date:
+        conn.close()
+        return None
+    conn.execute(
+        """UPDATE workouts SET date=?, garmin_workout_id=NULL, garmin_schedule_id=NULL,
+           garmin_sent_at=NULL WHERE id=?""",
+        (new_date, wid),
+    )
+    conn.commit()
+    conn.close()
+    return dict(row)
 
 
 def get_workout(wid: int) -> dict | None:
@@ -477,6 +498,27 @@ def get_strength_sessions(days_back: int = 60) -> list:
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def get_strength_session(sid: int) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM strength_sessions WHERE id=?", (sid,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def move_strength_session(sid: int, new_date: str) -> dict | None:
+    """Move a strength session to another day. Returns the row as it was before,
+    or None if it doesn't exist or is already on that day."""
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM strength_sessions WHERE id=?", (sid,)).fetchone()
+    if not row or row["date"] == new_date:
+        conn.close()
+        return None
+    conn.execute("UPDATE strength_sessions SET date=? WHERE id=?", (new_date, sid))
+    conn.commit()
+    conn.close()
+    return dict(row)
 
 
 def mark_strength_complete(sid: int, duration_minutes: int, notes: str = "",

@@ -13,6 +13,12 @@ import claude_client
 import coach_tools
 from db.queries import add_workout, add_strength_session
 
+# Jumping to the Plan page's calendar. The Plan page copies PLAN_JUMP_KEY into its
+# tab bar state before drawing the tabs and maps the value to its own tab label.
+PLAN_PAGE = "pages/02_Training_Planner.py"
+PLAN_JUMP_KEY = "plan_jump"
+PLAN_JUMP_CALENDAR = "calendar"
+
 
 def local_time(utc_iso: str) -> str:
     """Show a stored UTC timestamp in the computer's local time."""
@@ -77,24 +83,52 @@ def merge_proposals(existing: list[dict] | None, new: list[dict]) -> list[dict]:
     return sorted(kept + new, key=lambda p: (p["date"], p.get("kind", "ride")))
 
 
-def proposal_card(state_key: str) -> None:
+def jump_to_calendar(day_iso: str, on_plan_page: bool = False) -> None:
+    """Open the Plan page's calendar on the month and day of `day_iso`."""
+    from datetime import date
+    d = date.fromisoformat(day_iso)
+    st.session_state["cal_ym"] = (d.year, d.month)
+    st.session_state["cal_sel"] = day_iso
+    st.session_state[PLAN_JUMP_KEY] = PLAN_JUMP_CALENDAR
+    if on_plan_page:
+        st.rerun()
+    else:
+        st.switch_page(PLAN_PAGE)
+
+
+def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
     """
     Show workouts and/or strength sessions proposed by the coach, stored in
     st.session_state[state_key], with confirm/discard. Each item is tagged
     kind="ride" or kind="strength" (propose_workouts/propose_strength_sessions
     in coach_tools.py); a multi-week ride block additionally carries phase /
     week_number, which groups the preview instead of showing one flat list.
+
+    After the items are added, a "View on calendar" button opens the Plan page
+    on the earliest added date. `on_plan_page` says whether this card is already
+    drawn on the Plan page (then it just switches tab) or on another page (then
+    it navigates there).
     """
     added_key = f"{state_key}_added"
-    if added := st.session_state.pop(added_key, None):
-        rides_n, strength_n = added
+    added = st.session_state.get(added_key)
+    if added:
+        # Show this for the run that follows the add and one more, so a click on
+        # "View on calendar" in that second run still finds its button.
+        if added["shown"]:
+            st.session_state.pop(added_key)
+        else:
+            added["shown"] = True
         parts = []
-        if rides_n:
-            parts.append(f"{rides_n} ride{'s' if rides_n > 1 else ''}")
-        if strength_n:
-            parts.append(f"{strength_n} strength session{'s' if strength_n > 1 else ''}")
+        if added["rides"]:
+            parts.append(f"{added['rides']} ride{'s' if added['rides'] > 1 else ''}")
+        if added["strength"]:
+            parts.append(f"{added['strength']} strength session{'s' if added['strength'] > 1 else ''}")
         if parts:
             st.success("Added " + " and ".join(parts) + " to your plan.")
+            if added.get("first"):
+                if st.button("View on calendar", key=f"{state_key}_viewcal",
+                             icon=":material/calendar_month:"):
+                    jump_to_calendar(added["first"], on_plan_page)
 
     proposed = st.session_state.get(state_key)
     if not proposed:
@@ -119,9 +153,10 @@ def proposal_card(state_key: str) -> None:
                         "description": "Details", "tss_planned": "TSS", "week_number": "Week"})
                     cols = [c for c in ["Week", "Date", "Workout", "Type", "Details", "TSS"]
                             if c in df.columns]
-                    with st.expander(f"{phase_name} · {len(items)} rides · {phase_tss:.0f} TSS",
-                                     expanded=True):
-                        st.dataframe(df[cols], hide_index=True, width="stretch")
+                    # A plain heading rather than an expander, so this card can
+                    # sit inside the Weekly Check In expander without nesting.
+                    st.markdown(f"**{phase_name}** · {len(items)} rides · {phase_tss:.0f} TSS")
+                    st.dataframe(df[cols], hide_index=True, width="stretch")
             else:
                 st.dataframe(
                     pd.DataFrame(rides).rename(columns={
@@ -156,8 +191,11 @@ def proposal_card(state_key: str) -> None:
                     "notes": f"{s['name']} | Planned by AI Coach",
                     "phase": s.get("phase"),
                 })
+            dates = [p["date"] for p in rides + strength]
             st.session_state.pop(state_key)
-            st.session_state[added_key] = (len(rides), len(strength))
+            st.session_state[added_key] = {"rides": len(rides), "strength": len(strength),
+                                           "first": min(dates) if dates else None,
+                                           "shown": False}
             st.rerun()
         if c2.button("Discard", width="stretch", key=f"{state_key}_discard"):
             st.session_state.pop(state_key)
@@ -165,7 +203,7 @@ def proposal_card(state_key: str) -> None:
 
 
 def report_block(kind: str, ref_key: str, title: str, prompt: str, *,
-                 button_label: str, auto: bool = False) -> None:
+                 button_label: str, auto: bool = False, on_plan_page: bool = False) -> None:
     """
     Show a saved coach report, or write one when asked (or right away if auto).
     Proposed workouts from the report get their own confirm card.
@@ -212,4 +250,4 @@ def report_block(kind: str, ref_key: str, title: str, prompt: str, *,
                 st.session_state[run_key] = True
                 st.rerun()
 
-    proposal_card(state_key)
+    proposal_card(state_key, on_plan_page=on_plan_page)

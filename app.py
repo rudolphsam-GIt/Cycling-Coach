@@ -1,4 +1,6 @@
 from __future__ import annotations
+from pathlib import Path
+
 import streamlit as st
 from db.schema import run_migrations
 from config import is_setup_complete
@@ -6,7 +8,6 @@ from components import inject_styles
 from components.onboarding import is_onboarding_complete, render_onboarding
 
 st.set_page_config(
-    page_title="Cycling Coach",
     page_icon="assets/icon.svg",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -17,43 +18,44 @@ run_migrations()
 
 
 def render_setup_needed():
-    st.markdown("""
-    <div style="max-width:600px; margin: 60px auto; text-align:center;">
-        <div style="font-size:3rem;">🚴</div>
-        <h1 style="color:#0066CC; margin-bottom:8px;">Cycling Coach</h1>
-        <p style="color:#6B7280; font-size:1.1rem; margin-bottom:32px;">
-            Training load · Race prep · Strength · AI coaching
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    app_dir = Path(__file__).parent
+    st.markdown(
+        '<div class="hero">'
+        '<div class="hero-eyebrow">Setup</div>'
+        '<div class="hero-title">Cycling Coach</div>'
+        '<div class="hero-sub">Training load, race prep, strength and AI coaching.</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
-    st.warning("**Setup needed** — your API keys aren't configured yet.")
-    with st.expander("Quick Setup (one time only)", expanded=True):
-        st.markdown("""
-**Step 1 — Copy the config file** — in Terminal:
-```
-cp ~/cycling-coach/.env.example ~/cycling-coach/.env
-```
-
-**Step 2 — Fill in your API keys** — open `~/cycling-coach/.env` in TextEdit:
-
-| Key | Where to get it |
-|-----|-----------------|
-| `STRAVA_CLIENT_ID` + `STRAVA_CLIENT_SECRET` | [strava.com/settings/api](https://www.strava.com/settings/api) — set callback domain to `localhost` |
-| `GARMIN_EMAIL` + `GARMIN_PASSWORD` | Your Garmin Connect login |
-| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) |
-
-**Step 3 — Restart the app:**
-```
-bash ~/cycling-coach/start.sh
-```
-        """)
+    col_l, col_main, col_r = st.columns([1, 3, 1])
+    with col_main:
+        st.warning(
+            "**One thing is needed to open the app.** Add your Anthropic API key. "
+            "Garmin and Strava are connected afterwards from Settings.",
+            icon=":material/key:",
+        )
+        st.markdown("**Step 1.** Copy the example config file. In Terminal, run")
+        st.code(f'cp "{app_dir / ".env.example"}" "{app_dir / ".env"}"', language="bash")
+        st.markdown(
+            "**Step 2.** Open `.env` in a text editor and set your key, which you can "
+            "create at [console.anthropic.com](https://console.anthropic.com)."
+        )
+        st.code(f'open -e "{app_dir / ".env"}"', language="bash")
+        st.code("ANTHROPIC_API_KEY=your_key_here", language="bash")
+        st.markdown("**Step 3.** Restart the app.")
+        st.code(f'bash "{app_dir / "start.sh"}"', language="bash")
+        st.caption(
+            "Strava keys in `.env` are optional. If you want Strava, "
+            "`STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET` come from "
+            "strava.com/settings/api, with the callback domain set to `localhost`."
+        )
 
 
 if not is_setup_complete():
-    pg = st.navigation([st.Page(render_setup_needed, title="Setup", icon="🚴")])
+    pg = st.navigation([st.Page(render_setup_needed, title="Setup", icon=":material/directions_bike:")])
 elif not is_onboarding_complete():
-    pg = st.navigation([st.Page(render_onboarding, title="Welcome", icon="🚴")])
+    pg = st.navigation([st.Page(render_onboarding, title="Welcome", icon=":material/directions_bike:")])
 else:
     st.logo("assets/logo.svg", size="large", icon_image="assets/icon.svg")
     pg = st.navigation({

@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import json
 from datetime import date, timedelta
-from components import inject_styles, section_header, page_header
+from components import section_header, page_header, theme, charts
 
 from db.schema import run_migrations
 from db.queries import (add_strength_session, get_strength_sessions,
@@ -12,8 +12,6 @@ from db.queries import (add_strength_session, get_strength_sessions,
 
 run_migrations()
 
-st.set_page_config(page_title="Strength · Cycling Coach", layout="wide")
-inject_styles()
 page_header("Strength", "Phase based gym work that supports your riding")
 
 # ── Cycling-specific strength plans ──────────────────────────────────────────
@@ -125,8 +123,8 @@ def is_planned(s: dict) -> bool:
 planned = sorted((s for s in get_strength_sessions(days_back=14) if is_planned(s)),
                  key=lambda s: s["date"])
 if planned:
-    st.subheader("Planned by your coach")
-    st.caption("Log the weights you used and the session counts toward your Strength Progress chart.")
+    section_header("Planned by your coach",
+                   "Log the weights you used and the session counts toward your Strength Progress chart.")
     for ps in planned:
         ps_exercises = json.loads(ps["exercises_json"]) if ps.get("exercises_json") else []
         ps_name = (ps.get("notes") or "").split(" | ")[0]
@@ -146,7 +144,7 @@ if planned:
                             value=0.0, step=2.5, key=f"pw_{ps['id']}_{i}")
                 ps_notes = st.text_area("Notes", key=f"pn_{ps['id']}",
                                         placeholder="How did it go? Any PRs?")
-                if st.form_submit_button("Save Session ✅"):
+                if st.form_submit_button("Save Session", icon=":material/save:"):
                     logged = []
                     for i, ex in enumerate(ps_exercises):
                         row = dict(ex)
@@ -203,7 +201,7 @@ with col_log:
                                         value=0.0, step=2.5, key=f"w_{ex['name']}")
                     weights[ex["name"]] = w
 
-            if st.form_submit_button("Save Session ✅"):
+            if st.form_submit_button("Save Session", icon=":material/save:"):
                 # Attach logged weights to exercises
                 enriched = []
                 for ex in exercises:
@@ -243,7 +241,7 @@ with col_log:
 
 # ── Progress tracker ──────────────────────────────────────────────────────────
 st.divider()
-st.subheader("Strength Progress")
+section_header("Strength Progress", "Weight used over time for each lift you have logged")
 
 sessions_all = get_strength_sessions(days_back=180)
 lift_data: dict[str, list] = {}
@@ -269,12 +267,11 @@ if lift_data:
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=lift_df["date"], y=lift_df["weight_kg"],
                               mode="lines+markers", name=selected_lift,
-                              line=dict(color="#2196F3", width=2),
-                              marker=dict(size=8)))
-    fig.update_layout(height=280, plot_bgcolor="#1C1F2E",
-                       yaxis_title="Weight (kg)", xaxis_title="Date",
-                       margin=dict(l=10, r=10, t=10, b=10))
-    st.plotly_chart(fig, width="stretch")
+                              line=dict(color=theme.STRENGTH, width=2),
+                              marker=dict(size=8, color=theme.STRENGTH)))
+    charts.apply_theme(fig, height=280, legend="none")
+    fig.update_layout(yaxis_title="Weight (kg)", xaxis_title="Date")
+    charts.show(fig, key="strength_progress")
 else:
     st.info("Log sessions with weights to see your strength progress over time.")
 

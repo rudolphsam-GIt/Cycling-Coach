@@ -22,8 +22,8 @@ EXPERIENCE = {
 GOAL_BLURB = {
     "speed": "We'll lean on threshold and VO2max work, and track your FTP closely.",
     "endurance": "We'll prioritize long Z2 rides and steadily build your weekly volume.",
-    "weight_loss": "We'll focus on consistent, sustainable training volume — not extremes.",
-    "race": "We'll build toward your race using the Periodization Wizard in Training.",
+    "weight_loss": "We'll focus on consistent, sustainable training volume, not extremes.",
+    "race": "We'll build toward your race with your coach on the Plan page.",
     "general_fitness": "We'll keep things low-pressure and ramp your fitness gradually.",
 }
 
@@ -43,13 +43,14 @@ def goal_keys_to_labels(keys: list[str]) -> list[str]:
 
 
 def render_onboarding():
-    st.markdown("""
-    <div style="max-width:600px; margin: 40px auto 24px; text-align:center;">
-        <div style="font-size:2.5rem;">🚴</div>
-        <h1 style="color:#4D9FFF; margin-bottom:4px;">Welcome to Cycling Coach</h1>
-        <p style="color:#94A3B8;">Quick questions so your coach knows where to start.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        '<div class="hero">'
+        '<div class="hero-eyebrow">Cycling Coach</div>'
+        '<div class="hero-title">Welcome to Cycling Coach</div>'
+        '<div class="hero-sub">A few quick questions so your coach knows where to start.</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
     col_l, col_form, col_r = st.columns([1, 2, 1])
     with col_form:
@@ -86,7 +87,7 @@ def render_onboarding():
             if know_lthr:
                 lthr_input = st.number_input("LTHR (bpm)", min_value=100, max_value=210, value=160, step=1)
 
-            st.caption("Don't know FTP or LTHR yet? No problem — we'll estimate a starting point and refine it as you train.")
+            st.caption("Don't know FTP or LTHR yet? No problem, we'll estimate a starting point and refine it as you train.")
 
             has_race = st.checkbox("I have a specific race I'm training for")
             race_name = race_date = None

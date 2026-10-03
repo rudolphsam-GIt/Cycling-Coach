@@ -9,14 +9,11 @@ from db.queries import (get_setting, set_setting, log_ftp_history,
 from config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, GARMIN_EMAIL, GARMIN_PASSWORD
 import auth.strava as strava_auth
 import auth.garmin as garmin_auth
-from components.styles import inject_styles
 from components.cards import page_header
 from components.onboarding import GOALS, parse_goal_keys, goal_keys_to_labels
 
 run_migrations()
 
-st.set_page_config(page_title="Settings · Cycling Coach", layout="wide")
-inject_styles()
 page_header("Settings", "Your profile, connected accounts and data tools")
 
 tab_profile, tab_connections, tab_data = st.tabs([":material/person: Profile", ":material/link: Connections", ":material/build: Data tools"])
@@ -56,7 +53,7 @@ with tab_profile:
             help="Set this if you have prior training history. Leave at 0 to build from scratch.",
         )
 
-    if st.button("Save Profile", type="primary"):
+    if st.button("Save Profile", type="primary", icon=":material/save:"):
         old_ftp = int(get_setting("ftp_watts", 0) or 0)
         set_setting("ftp_watts", ftp)
         set_setting("weight_kg", weight)
@@ -81,7 +78,7 @@ with tab_connections:
             if last_sync and last_sync != "Never":
                 last_sync = last_sync[:16].replace("T", " ")
             st.success(f"Connected · Last sync: {last_sync}")
-            if st.button("Sync Strava (60 days)", width="stretch"):
+            if st.button("Sync Strava (60 days)", icon=":material/sync:", width="stretch"):
                 with st.spinner("Syncing from Strava..."):
                     count, msg = strava_auth.sync_activities(STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET)
                 st.success(msg) if "synced" in msg.lower() else st.error(msg)
@@ -133,7 +130,7 @@ with tab_connections:
             st.success(f"Connected · Last sync: {last_garmin}")
             st.caption("Rides, sleep, HRV, resting heart rate and readiness sync on their own "
                        "when you open the app.")
-            if st.button("Sync Garmin now (30 days)", width="stretch"):
+            if st.button("Sync Garmin now (30 days)", icon=":material/sync:", width="stretch"):
                 with st.spinner("Syncing from Garmin…"):
                     _, msg = garmin_auth.sync(days_back=30)
                 st.session_state["garmin_sync_msg"] = msg

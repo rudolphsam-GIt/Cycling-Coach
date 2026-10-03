@@ -14,13 +14,18 @@ from db.queries import (get_activities, get_setting, get_races, get_workouts,
                         get_recovery_range, is_ride)
 from metrics.training_load import compute_pmc, get_current_metrics
 from metrics.zones import get_power_zones, get_hr_zones
-from components.styles import inject_styles
-from components.cards import metric_card, section_header, tsb_banner, activity_card, page_header
+from components import charts, theme
+from components.cards import metric_card, section_header, tsb_banner, page_header
 
 run_migrations()
 
-st.set_page_config(page_title="Today · Cycling Coach", layout="wide")
-inject_styles()
+
+def _rgba(hex_color: str, alpha: float) -> str:
+    """Turn a theme hex color into an rgba() string with the given alpha."""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
 
 # ── Load settings and metrics ─────────────────────────────────────────────────
 ftp    = float(get_setting("ftp_watts", 200) or 200)
@@ -168,7 +173,7 @@ if date.today().weekday() in (5, 6, 0) and not get_report("weekly", _week.isofor
             "Open **Plan** to run it.")
 
 # ── PMC Chart ────────────────────────────────────────────────────────────────
-section_header("Performance Management Chart", "120-day CTL · ATL · TSB · Daily TSS")
+section_header("Performance Management Chart", "120-day CTL, ATL, TSB and daily TSS")
 
 start = date.today() - timedelta(days=120)
 end = date.today()
@@ -182,13 +187,13 @@ pmc["date"] = pd.to_datetime(pmc["date"])
 
 fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-# TSS bars (background layer)
+# TSS bars (background layer, neutral so the lines stand out)
 fig.add_trace(
     go.Bar(
         x=pmc["date"],
         y=pmc["tss"],
         name="Daily TSS",
-        marker_color="rgba(200,210,220,0.6)",
+        marker_color=_rgba(theme.TEXT3, 0.35),
         marker_line_width=0,
         width=86400000,
         hovertemplate="<b>TSS</b>: %{y:.0f}<extra></extra>",
@@ -196,112 +201,70 @@ fig.add_trace(
     secondary_y=False,
 )
 
-# CTL line
 fig.add_trace(
     go.Scatter(
         x=pmc["date"],
         y=pmc["ctl"],
-        name="CTL",
-        line=dict(color="#0066CC", width=2.5),
+        name="CTL (fitness)",
+        line=dict(color=charts.SERIES["ctl"], width=2.5),
         hovertemplate="<b>CTL</b>: %{y:.1f}<extra></extra>",
     ),
     secondary_y=False,
 )
 
-# ATL line
 fig.add_trace(
     go.Scatter(
         x=pmc["date"],
         y=pmc["atl"],
-        name="ATL",
-        line=dict(color="#FF4D00", width=2.5),
+        name="ATL (fatigue)",
+        line=dict(color=charts.SERIES["atl"], width=2.5),
         hovertemplate="<b>ATL</b>: %{y:.1f}<extra></extra>",
     ),
     secondary_y=False,
 )
 
-# TSB line (secondary axis, subtle fill)
+# TSB line on the secondary axis with a subtle fill
 fig.add_trace(
     go.Scatter(
         x=pmc["date"],
         y=pmc["tsb"],
-        name="TSB",
-        line=dict(color="#00AA44", width=2.5),
+        name="TSB (form)",
+        line=dict(color=charts.SERIES["tsb"], width=2.5),
         fill="tozeroy",
-        fillcolor="rgba(0,170,68,0.07)",
+        fillcolor=_rgba(charts.SERIES["tsb"], 0.08),
         hovertemplate="<b>TSB</b>: %{y:+.1f}<extra></extra>",
     ),
     secondary_y=True,
 )
 
-# Race markers
 for rd in race_dates:
     fig.add_vline(
         x=pd.Timestamp(rd).value,
         line_dash="dash",
-        line_color="rgba(139,92,246,0.7)",
+        line_color=theme.RACE,
         line_width=1.5,
         annotation_text="Race",
         annotation_position="top",
-        annotation_font_size=10,
-        annotation_font_color="#7C3AED",
+        annotation_font_size=12,
+        annotation_font_color=theme.RACE,
     )
 
-fig.update_layout(
-    height=360,
-    paper_bgcolor="#1C1F2E",
-    plot_bgcolor="#1C1F2E",
-    hovermode="x unified",
-    legend=dict(
-        orientation="h",
-        y=-0.18,
-        x=0,
-        font=dict(size=12),
-        bgcolor="rgba(0,0,0,0)",
-    ),
-    margin=dict(l=0, r=0, t=8, b=8),
-    font=dict(family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", size=12),
-)
+charts.apply_theme(fig, height=380, legend="top", dual_y=True)
+fig.update_layout(hovermode="x unified")
+fig.update_xaxes(showgrid=False, tickformat="%b %-d")
+fig.update_yaxes(title_text="CTL / ATL / TSS", secondary_y=False)
+fig.update_yaxes(title_text="TSB (form)", secondary_y=True,
+                 title_font=dict(size=12, color=charts.SERIES["tsb"]))
 
-fig.update_xaxes(
-    showgrid=False,
-    zeroline=False,
-    tickfont=dict(size=11, color="#9CA3AF"),
-    tickformat="%b %-d",
-)
-
-fig.update_yaxes(
-    title_text="CTL / ATL / TSS",
-    title_font=dict(size=11, color="#9CA3AF"),
-    tickfont=dict(size=11, color="#9CA3AF"),
-    gridcolor="rgba(0,0,0,0.05)",
-    gridwidth=1,
-    zeroline=True,
-    zerolinecolor="rgba(0,0,0,0.1)",
-    zerolinewidth=1,
-    secondary_y=False,
-)
-
-fig.update_yaxes(
-    title_text="TSB (Form)",
-    title_font=dict(size=11, color="#00AA44"),
-    tickfont=dict(size=11, color="#9CA3AF"),
-    gridcolor="rgba(0,0,0,0)",
-    zeroline=False,
-    secondary_y=True,
-)
-
-st.plotly_chart(fig, width="stretch")
-
-st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+charts.show(fig, key="dash_pmc")
 
 # ── Weekly Training Summary ───────────────────────────────────────────────────
-section_header("Weekly Summary", "Planned vs actual TSS · Zone distribution")
+section_header("Weekly Summary", "Planned vs actual TSS and zone distribution")
 
 weekly = get_weekly_tss_summary(weeks=5)
 
 if any(w["rides"] > 0 or w["planned_tss"] > 0 for w in weekly):
-    week_labels = [f"{w['week_start'][5:]}–{w['week_end'][5:]}" for w in weekly]
+    week_labels = [f"{w['week_start'][5:]} to {w['week_end'][5:]}" for w in weekly]
     planned_vals = [w["planned_tss"] for w in weekly]
     actual_vals  = [w["actual_tss"]  for w in weekly]
     has_zone_data = any(sum(w["zone_hours"]) > 0 for w in weekly)
@@ -318,7 +281,7 @@ if any(w["rides"] > 0 or w["planned_tss"] > 0 for w in weekly):
             name="Planned",
             x=week_labels,
             y=planned_vals,
-            marker_color="rgba(100,140,200,0.5)",
+            marker_color=_rgba(theme.TEXT3, 0.5),
             marker_line_width=0,
         ))
         tss_fig.add_trace(go.Bar(
@@ -326,33 +289,24 @@ if any(w["rides"] > 0 or w["planned_tss"] > 0 for w in weekly):
             x=week_labels,
             y=actual_vals,
             marker_color=[
-                "#22c55e" if (p == 0 or a >= p * 0.9) else
-                "#f59e0b" if a >= p * 0.7 else "#ef4444"
+                theme.GOOD if (p == 0 or a >= p * 0.9) else
+                theme.WARN if a >= p * 0.7 else theme.BAD
                 for a, p in zip(actual_vals, planned_vals)
             ],
             marker_line_width=0,
         ))
-        tss_fig.update_layout(
-            barmode="group",
-            height=220,
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            margin=dict(l=0, r=0, t=4, b=0),
-            legend=dict(orientation="h", y=1.15, x=0, font=dict(size=11)),
-            font=dict(size=11, color="#9CA3AF"),
-            xaxis=dict(showgrid=False, tickfont=dict(size=10)),
-            yaxis=dict(showgrid=True, gridcolor="rgba(150,150,150,0.15)",
-                       title="TSS", title_font=dict(size=10)),
-        )
-        st.plotly_chart(tss_fig, width="stretch")
+        charts.apply_theme(tss_fig, height=260, legend="top")
+        tss_fig.update_layout(barmode="group")
+        tss_fig.update_xaxes(showgrid=False)
+        tss_fig.update_yaxes(title_text="TSS")
+        charts.show(tss_fig, key="dash_weekly_tss")
 
     if col_zone is not None:
         with col_zone:
-            z_colors = ["#9ecae1", "#41ab5d", "#fdae6b", "#e6550d", "#bd0026"]
-            z_names  = ["Z1", "Z2", "Z3", "Z4", "Z5"]
+            z_names = ["Z1", "Z2", "Z3", "Z4", "Z5"]
             week_zone_totals = [sum(w["zone_hours"]) for w in weekly]
             zone_fig = go.Figure()
-            for i, (zname, color) in enumerate(zip(z_names, z_colors)):
+            for i, (zname, color) in enumerate(zip(z_names, theme.ZONE_COLORS)):
                 zh = [w["zone_hours"][i] for w in weekly]
                 pcts = [
                     (h / t * 100) if t > 0 else 0
@@ -375,126 +329,139 @@ if any(w["rides"] > 0 or w["planned_tss"] > 0 for w in weekly):
                         "<extra></extra>"
                     ),
                 ))
-            zone_fig.update_layout(
-                barmode="stack",
-                height=220,
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                margin=dict(l=0, r=0, t=4, b=0),
-                legend=dict(orientation="h", y=1.15, x=0, font=dict(size=11)),
-                font=dict(size=11, color="#9CA3AF"),
-                xaxis=dict(showgrid=False, tickfont=dict(size=10)),
-                yaxis=dict(showgrid=True, gridcolor="rgba(150,150,150,0.15)",
-                           title="Hours", title_font=dict(size=10)),
-            )
-            st.plotly_chart(zone_fig, width="stretch")
+            charts.apply_theme(zone_fig, height=260, legend="top")
+            zone_fig.update_layout(barmode="stack")
+            zone_fig.update_xaxes(showgrid=False)
+            zone_fig.update_yaxes(title_text="Hours")
+            charts.show(zone_fig, key="dash_weekly_zones")
     else:
-        st.caption("Zone distribution will appear after syncing rides and clicking 'Recalculate TSS'.")
+        st.caption("Zone distribution will appear after syncing rides and using Recalculate TSS in Settings.")
 else:
     st.info("No training data yet. Sync rides and add planned workouts to see your weekly summary.")
 
-st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-
 # ── Recent Activities ─────────────────────────────────────────────────────────
-section_header("Recent Activities", "Last 30 days")
+section_header("Recent Activities", "Last 30 days. Select a ride to see its details.")
 
 activities = get_activities(days_back=30)
 if activities:
-    def _fmt(val, fn):
+    def _num(val):
+        """Return a float, or None when the value is missing or NaN."""
         try:
-            return fn(val) if val is not None and val == val else "—"
-        except Exception:
-            return "—"
+            if val is None or val != val:
+                return None
+            return float(val)
+        except (TypeError, ValueError):
+            return None
 
-    for act in activities[:15]:  # cap at 15 to keep page responsive
+    def _fmt(val, fn):
+        v = _num(val)
+        if v is None:
+            return ""
+        try:
+            return fn(v)
+        except Exception:
+            return ""
+
+    def _hm(seconds):
+        s = _num(seconds)
+        if s is None:
+            return None
+        return f"{int(s // 3600)}:{int((s % 3600) // 60):02d}"
+
+    activities = sorted(activities, key=lambda a: a.get("date") or "", reverse=True)
+    ride_df = pd.DataFrame([
+        {
+            "Date": a.get("date") or "",
+            "Name": a.get("name") or "Untitled",
+            "Duration": _hm(a.get("duration_seconds")),
+            "Distance km": (_num(a.get("distance_meters")) / 1000
+                            if _num(a.get("distance_meters")) is not None else None),
+            "Avg W": _num(a.get("avg_power_watts")),
+            "NP": _num(a.get("normalized_power")),
+            "Avg HR": _num(a.get("avg_hr")),
+            "TSS": _num(a.get("tss")),
+            "IF": _num(a.get("if_value")),
+        }
+        for a in activities
+    ])
+
+    ride_event = st.dataframe(
+        ride_df,
+        hide_index=True,
+        width="stretch",
+        height=min(38 + 35 * len(ride_df), 420),
+        key="dash_recent_rides",
+        on_select="rerun",
+        selection_mode="single-row",
+        column_config={
+            "Date": st.column_config.TextColumn("Date", width="small"),
+            "Name": st.column_config.TextColumn("Name", width="large"),
+            "Duration": st.column_config.TextColumn("Duration", width="small"),
+            "Distance km": st.column_config.NumberColumn("Distance km", format="%.1f", width="small"),
+            "Avg W": st.column_config.NumberColumn("Avg W", format="%d", width="small"),
+            "NP": st.column_config.NumberColumn("NP", format="%d", width="small"),
+            "Avg HR": st.column_config.NumberColumn("Avg HR", format="%d", width="small"),
+            "TSS": st.column_config.NumberColumn("TSS", format="%d", width="small"),
+            "IF": st.column_config.NumberColumn("IF", format="%.2f", width="small"),
+        },
+    )
+
+    _sel_rows = list(ride_event.selection.rows) if ride_event and ride_event.selection else []
+    if not _sel_rows or _sel_rows[0] >= len(activities):
+        st.caption("Select a ride to see its details.")
+    else:
+        act = activities[_sel_rows[0]]
         duration_str = _fmt(
             act.get("duration_seconds"),
             lambda v: f"{int(v // 3600)}h {int((v % 3600) // 60)}m" if v >= 3600
                       else f"{int(v // 60)}m",
         )
-        distance_str = _fmt(
-            act.get("distance_meters"),
-            lambda v: f"{v / 1000:.1f} km",
-        )
-        power_str = _fmt(
-            act.get("avg_power_watts"),
-            lambda v: f"{int(v)}w",
-        )
-        hr_str = _fmt(
-            act.get("avg_hr"),
-            lambda v: f"{int(v)} bpm",
-        )
-        tss_str = _fmt(
-            act.get("tss"),
-            lambda v: f"{v:.0f}",
-        )
+        distance_str = _fmt(act.get("distance_meters"), lambda v: f"{v / 1000:.1f} km")
+        power_str = _fmt(act.get("avg_power_watts"), lambda v: f"{int(v)} W")
+        hr_str = _fmt(act.get("avg_hr"), lambda v: f"{int(v)} bpm")
+        tss_str = _fmt(act.get("tss"), lambda v: f"{v:.0f}")
+        elev_str = _fmt(act.get("elevation_gain_meters"), lambda v: f"{int(v)} m")
+        np_str = _fmt(act.get("normalized_power"), lambda v: f"{int(v)} W")
+        if_str = _fmt(act.get("if_value"), lambda v: f"{v:.2f}")
 
         zone_secs = None
         if act.get("zone_time_json"):
             try:
                 z = json.loads(act["zone_time_json"])
-                zone_secs = [z.get(f"z{i}_s", 0) for i in range(1, 6)]
+                zone_secs = [z.get(f"z{i}_s", 0) or 0 for i in range(1, 6)]
             except Exception:
-                pass
+                zone_secs = None
 
-        activity_card(
-            name=act.get("name") or "Untitled",
-            sport_type=act.get("sport_type") or "",
-            activity_date=act.get("date") or "",
-            duration=duration_str,
-            distance=distance_str,
-            power=power_str,
-            hr=hr_str,
-            tss=tss_str,
-            zone_seconds=zone_secs,
-        )
-
-        # Per-activity detail expander
-        with st.expander("Details", expanded=False):
+        with st.container(border=True):
+            st.markdown(f"**{act.get('name') or 'Untitled'}**, {act.get('date') or ''}")
             dc1, dc2 = st.columns([1, 2])
 
             with dc1:
-                # Key metrics
-                elev_str = _fmt(
-                    act.get("elevation_gain_meters"),
-                    lambda v: f"{int(v)} m",
-                )
-                np_str = _fmt(
-                    act.get("normalized_power"),
-                    lambda v: f"{int(v)}w",
-                )
-                if_str = _fmt(
-                    act.get("if_value"),
-                    lambda v: f"{v:.2f}",
-                )
                 rows = [
-                    ("Duration",      duration_str),
-                    ("Distance",      distance_str),
-                    ("Elevation",     elev_str),
-                    ("Avg Power",     power_str),
-                    ("Norm Power",    np_str),
-                    ("Int Factor",    if_str),
-                    ("Avg HR",        hr_str),
-                    ("TSS",           tss_str),
+                    ("Duration",   duration_str),
+                    ("Distance",   distance_str),
+                    ("Elevation",  elev_str),
+                    ("Avg Power",  power_str),
+                    ("Norm Power", np_str),
+                    ("Int Factor", if_str),
+                    ("Avg HR",     hr_str),
+                    ("TSS",        tss_str),
                 ]
-                rows = [(k, v) for k, v in rows if v and v != "—"]
                 tbl = "".join(
-                    f"<tr><td style='color:#5B657D;font-size:0.75rem;"
-                    f"padding:3px 12px 3px 0;white-space:nowrap'>{k}</td>"
-                    f"<td style='color:#CBD5E1;font-size:0.75rem;"
-                    f"font-weight:600;padding:3px 0'>{v}</td></tr>"
-                    for k, v in rows
+                    f"<tr><td class='k'>{html.escape(k)}</td>"
+                    f"<td class='v'>{html.escape(v)}</td></tr>"
+                    for k, v in rows if v
                 )
-                st.markdown(
-                    f"<table style='border-collapse:collapse'>{tbl}</table>",
-                    unsafe_allow_html=True,
-                )
+                if tbl:
+                    st.markdown(f"<table class=\"kv-table\">{tbl}</table>",
+                                unsafe_allow_html=True)
+                else:
+                    st.caption("No metrics recorded for this ride.")
 
             with dc2:
                 if zone_secs and sum(zone_secs) > 0:
                     total_s = sum(zone_secs)
-                    z_colors = ["#9ecae1", "#41ab5d", "#fdae6b", "#e6550d", "#bd0026"]
-                    z_full   = [
+                    z_full = [
                         "Z1 Active Recovery", "Z2 Endurance",
                         "Z3 Tempo", "Z4 Threshold", "Z5 VO2 Max",
                     ]
@@ -506,15 +473,14 @@ if activities:
                         mins_total = int(s // 60)
                         h_part = mins_total // 60
                         m_part = mins_total % 60
-                        t_str = (f"{h_part}h {m_part:02d}m" if h_part
-                                 else f"{m_part}m")
+                        t_str = f"{h_part}h {m_part:02d}m" if h_part else f"{m_part}m"
                         pct = s / total_s * 100
                         zfig.add_trace(go.Bar(
                             name=z_full[i],
                             x=[s / 3600],
                             y=["Zones"],
                             orientation="h",
-                            marker_color=z_colors[i],
+                            marker_color=theme.ZONE_COLORS[i],
                             marker_line_width=0,
                             hovertemplate=(
                                 f"<b>{z_full[i]}</b><br>"
@@ -523,60 +489,35 @@ if activities:
                                 "<extra></extra>"
                             ),
                         ))
-                    zfig.update_layout(
-                        barmode="stack",
-                        height=90,
-                        paper_bgcolor="rgba(0,0,0,0)",
-                        plot_bgcolor="rgba(0,0,0,0)",
-                        margin=dict(l=0, r=0, t=0, b=0),
-                        showlegend=False,
-                        xaxis=dict(
-                            showgrid=False, zeroline=False,
-                            showticklabels=False,
-                        ),
-                        yaxis=dict(showgrid=False, showticklabels=False),
-                    )
-                    st.plotly_chart(zfig, width="stretch",
-                                    config={"displayModeBar": False})
+                    charts.apply_theme(zfig, height=80, legend="none")
+                    zfig.update_layout(barmode="stack", margin=dict(l=0, r=0, t=4, b=4))
+                    zfig.update_xaxes(visible=False)
+                    zfig.update_yaxes(visible=False)
+                    charts.show(zfig, key="dash_ride_zones")
 
-                    # Zone breakdown table
                     ztbl = "".join(
-                        "<tr>"
-                        f"<td style='padding:2px 10px 2px 0;"
-                        f"font-size:0.72rem;font-weight:700;"
-                        f"color:{z_colors[i]}'>"
-                        f"{'Z'+str(i+1)}</td>"
-                        f"<td style='padding:2px 10px 2px 0;"
-                        f"font-size:0.72rem;color:#CBD5E1'>"
-                        f"{int(zone_secs[i]//60)}m</td>"
-                        f"<td style='font-size:0.72rem;color:#5B657D'>"
-                        f"{zone_secs[i]/total_s*100:.0f}%</td>"
-                        "</tr>"
+                        f"<tr><td class='k'><span style='color:{theme.ZONE_COLORS[i]};"
+                        f"font-weight:700'>Z{i + 1}</span></td>"
+                        f"<td class='v'>{int(zone_secs[i] // 60)}m, "
+                        f"{zone_secs[i] / total_s * 100:.0f}%</td></tr>"
                         for i in range(5) if zone_secs[i] > 30
                     )
-                    st.markdown(
-                        f"<table style='border-collapse:collapse'>{ztbl}</table>",
-                        unsafe_allow_html=True,
-                    )
+                    if ztbl:
+                        st.markdown(f"<table class=\"kv-table\">{ztbl}</table>",
+                                    unsafe_allow_html=True)
                 else:
                     st.caption(
                         "Zone breakdown not available. "
-                        "Click 'Recalculate TSS' in the sidebar to estimate zones."
+                        "Use Recalculate TSS in Settings to estimate zones."
                     )
 else:
-    st.info("No activities yet. Connect Strava or Garmin in the sidebar to sync your rides.")
-
-st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    st.info("No activities yet. Connect Strava or Garmin in Settings to sync your rides.")
 
 # ── Power & HR Zones + FTP History ───────────────────────────────────────────
 with st.expander("Power & HR Zones"):
     z1, z2 = st.columns(2)
     with z1:
-        st.markdown(
-            "<p style='font-size:0.85rem;font-weight:700;color:#374151;"
-            "margin-bottom:8px;'>Power Zones</p>",
-            unsafe_allow_html=True,
-        )
+        st.markdown("**Power Zones**")
         zones = get_power_zones(ftp)
         if zones:
             zdf = pd.DataFrame(zones)[["zone", "name", "min_watts", "max_watts"]]
@@ -592,11 +533,7 @@ with st.expander("Power & HR Zones"):
         else:
             st.info("Set FTP above to see power zones.")
     with z2:
-        st.markdown(
-            "<p style='font-size:0.85rem;font-weight:700;color:#374151;"
-            "margin-bottom:8px;'>HR Zones</p>",
-            unsafe_allow_html=True,
-        )
+        st.markdown("**HR Zones**")
         hrzones = get_hr_zones(lthr)
         if hrzones:
             hzdf = pd.DataFrame(hrzones)[["zone", "name", "min_bpm", "max_bpm"]]
@@ -616,24 +553,16 @@ with st.expander("Power & HR Zones"):
     from db.queries import get_ftp_history
     ftp_hist = get_ftp_history()
     if len(ftp_hist) > 1:
-        st.markdown("---")
+        st.divider()
+        st.markdown("**FTP History**")
         ftp_fig = go.Figure(go.Scatter(
             x=[r["date"] for r in ftp_hist],
             y=[r["ftp_watts"] for r in ftp_hist],
             mode="lines+markers",
-            line=dict(color="#4D9FFF", width=2),
+            line=dict(color=theme.ACCENT, width=2),
             marker=dict(size=7),
-            hovertemplate="<b>%{x}</b><br>FTP: %{y}W<extra></extra>",
+            hovertemplate="<b>%{x}</b><br>FTP: %{y} W<extra></extra>",
         ))
-        ftp_fig.update_layout(
-            title=dict(text="FTP History", font=dict(size=12, color="#94A3B8")),
-            height=180,
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            margin=dict(l=0, r=0, t=28, b=0),
-            xaxis=dict(showgrid=False, tickfont=dict(size=10, color="#9CA3AF")),
-            yaxis=dict(showgrid=True, gridcolor="rgba(150,150,150,0.15)",
-                       tickfont=dict(size=10, color="#9CA3AF")),
-            font=dict(color="#9CA3AF"),
-        )
-        st.plotly_chart(ftp_fig, width="stretch")
+        charts.apply_theme(ftp_fig, height=220, legend="none")
+        ftp_fig.update_yaxes(title_text="FTP (W)")
+        charts.show(ftp_fig, key="dash_ftp_history")
