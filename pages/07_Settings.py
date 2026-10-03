@@ -10,6 +10,9 @@ from config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, GARMIN_EMAIL, GARMIN_
 import auth.strava as strava_auth
 import auth.garmin as garmin_auth
 from components import ftp_help
+from components.units import unit_switch, weight_input
+from metrics.explain import (DEFAULT_GENDER, GENDER_LABELS, GENDER_PROFILE_TABLE,
+                             age_from_birth_year)
 from components.cards import page_header
 from components.explain import setting_help
 from components.onboarding import GOAL_EXAMPLES, goal_keys_to_labels, infer_goal_keys, parse_goal_keys
@@ -32,6 +35,17 @@ with tab_profile:
         height=90, placeholder="In your own words. " + "; ".join(GOAL_EXAMPLES[:3]),
         help="Anything you want from riding. Your coach plans around what you write.",
     )
+    g_col, a_col = st.columns(2)
+    saved_gender = get_setting("gender", "") or DEFAULT_GENDER
+    gender_label = g_col.selectbox(
+        "Gender", list(GENDER_LABELS), index=list(GENDER_LABELS.values()).index(saved_gender),
+        help="Used only to pick typical power ranges, which differ between women and men. Non-binary and "
+                 "Prefer not to say use an average of the two. You can change it any time in Settings.")
+    saved_age = age_from_birth_year(get_setting("birth_year", ""))
+    age = a_col.number_input("Age", min_value=12, max_value=95, value=saved_age, step=1,
+                             placeholder="Optional",
+                             help="Power and heart rate change with age. Used for the starting estimates "
+                                  "of FTP and threshold heart rate. Only your birth year is stored.")
     t1, t2 = st.columns(2)
     weekly_hours = t1.slider("Hours a week to train", 1, 20,
                              int(float(get_setting("weekly_hours_target", 6) or 6)))
@@ -45,11 +59,9 @@ with tab_profile:
             value=int(get_setting("ftp_watts", 200) or 200), step=5,
             help=setting_help("ftp"),
         )
-        weight = st.number_input(
-            "Weight (kg)", min_value=30.0, max_value=200.0,
-            value=float(get_setting("weight_kg", 70) or 70), step=0.5,
-            help=setting_help("weight"),
-        )
+        unit = unit_switch("settings_unit")
+        weight = weight_input("Weight", float(get_setting("weight_kg", 70) or 70), key="settings_weight",
+                              unit=unit, min_kg=30.0, max_kg=200.0, help=setting_help("weight"))
     with col2:
         lthr = st.number_input(
             "LTHR (bpm)", min_value=0, max_value=220,
@@ -67,8 +79,14 @@ with tab_profile:
         old_lthr = int(get_setting("lthr", 0) or 0)
         set_setting("ftp_watts", ftp)
         set_setting("weight_kg", weight)
+        set_setting("weight_unit", unit)
         set_setting("lthr", lthr)
         set_setting("ctl_start", init_ctl)
+        if age:
+            set_setting("birth_year", date.today().year - int(age))
+        set_setting("gender", GENDER_LABELS[gender_label])
+        if GENDER_LABELS[gender_label] in GENDER_PROFILE_TABLE:
+            set_setting("power_profile_table", GENDER_PROFILE_TABLE[GENDER_LABELS[gender_label]])
         set_setting("goal_text", goal_text.strip())
         set_setting("primary_goal", ",".join(infer_goal_keys(goal_text)))
         set_setting("weekly_hours_target", weekly_hours)

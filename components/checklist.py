@@ -27,7 +27,8 @@ def current_state() -> dict:
     since = [a for a in rides if first_plan and first_plan <= a["date"] <= date.today().isoformat()]
     return {
         "connected": garmin_auth.is_connected() or strava_auth.is_connected(),
-        "ftp_confirmed": get_setting("ftp_estimated", "") == "0",
+        # Chosen on purpose: a known FTP, or "estimate it for me". Either way there is nothing left to do.
+        "ftp_confirmed": get_setting("ftp_estimated", "") == "0" or get_setting("ftp_choice", "") == "estimate",
         "rides": len(rides), "workouts": len(workouts), "rides_since_plan": len(since),
     }
 

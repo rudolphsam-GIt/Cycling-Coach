@@ -21,8 +21,9 @@ def rider_numbers() -> dict:
         except (TypeError, ValueError):
             return None
 
+    from components.units import weight_unit
     m = get_current_metrics()
-    return {"ftp": num("ftp_watts"), "weight": num("weight_kg"),
+    return {"ftp": num("ftp_watts"), "weight": num("weight_kg"), "weight_unit": weight_unit(),
             "estimated": get_setting("ftp_estimated", "") == "1",
             "ctl": m["ctl"], "atl": m["atl"], "tsb": m["tsb"], "ramp": m["ramp_rate"]}
 

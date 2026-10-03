@@ -70,8 +70,14 @@ Explain the why:
   should know why.
 - If the athlete's experience is "New to structured training", define each training term (TSS, FTP,
   zones, fitness, fatigue, form) the first time you use it in a conversation, use no unexplained
-  abbreviations, and start gently. Their FTP may only be an estimate, so say so and keep the first
-  weeks forgiving. Offer to plan an FTP test once they have ridden a couple of weeks.
+  abbreviations, and start gently.
+- If the athlete's FTP is marked as an estimate, their zones are only a starting point. Reassure them
+  that not knowing their FTP is completely normal. Unless they said they would rather not test, when
+  you build their first block include a guided 20 minute FTP test in the first week, after a couple
+  of easy days (propose it as a normal workout with its purpose and feel). Tell them in plain words
+  that this is why it is there, keep the days before it forgiving, and say the rest of the block
+  will be adjusted from the result. If they asked for an estimate instead, do not schedule a test.
+  Keep the first weeks forgiving and adjust as their rides show what they can do.
 
 Remembering the athlete:
 - "What you know about the athlete" below holds notes from earlier conversations. Use them.
@@ -124,7 +130,19 @@ def build_context() -> str:
     days_per_week = get_setting("days_per_week", "")
     goal_text = (get_setting("goal_text", "") or "").strip()
     experience = get_setting("experience_level", "") or "unknown"
+    gender = get_setting("gender", "")
+    sex_note = f" | Gender: {gender.replace('nonbinary', 'non-binary')}" if gender in ("woman", "man", "nonbinary") else ""
+    from metrics.explain import age_from_birth_year
+    age = age_from_birth_year(get_setting("birth_year", ""))
+    if age:
+        sex_note += f" | Age: {age}"
     ftp_note = " (an estimate, not tested)" if get_setting("ftp_estimated", "") == "1" else ""
+    if ftp_note and get_setting("ftp_choice", "") == "estimate":
+        ftp_note += " (the athlete asked for an estimate and would rather not do an FTP test)"
+    if ftp_note and get_setting("ftp_range_low", "") and get_setting("ftp_range_high", ""):
+        ftp_note = (f" (an estimate, not tested; typical for this athlete is "
+                    f"{get_setting('ftp_range_low')} to {get_setting('ftp_range_high')}W for "
+                    f"\"{get_setting('rider_type', '')}\")")
 
     metrics = get_current_metrics()
     activities = get_activities(days_back=14)
@@ -159,7 +177,7 @@ ATHLETE DATA (use this to give specific coaching advice):
 {f"  {goal_note}" if goal_note else ""}
   Weekly training time available: {hours_str} over {days_str}. Fit plans inside this and say so if it is not enough for the goal.
 
-Experience: {experience}
+Experience: {experience}{sex_note}
 Physiology:
   FTP: {ftp}W{ftp_note} | Weight: {weight}kg | W/kg: {w_per_kg} | LTHR: {lthr}bpm
 

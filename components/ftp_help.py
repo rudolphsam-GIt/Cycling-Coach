@@ -27,6 +27,23 @@ def _next_free_day(today: date) -> date:
     return day
 
 
+def plan_test_in_block(block_dates: list[str]) -> int | None:
+    """Add the FTP test on the first rest day among the block's first week, or
+    None if every day that week is taken. Returns the new workout's id."""
+    if not block_dates:
+        return None
+    first = date.fromisoformat(min(block_dates))
+    taken = set(block_dates)
+    day = first + timedelta(days=1)          # never the very first day, ease in first
+    while day < first + timedelta(days=7):
+        if day.isoformat() not in taken:
+            has_power = any(a.get("avg_power_watts") for a in get_activities(days_back=60))
+            return add_workout({**explain.ftp_test_workout(day, has_power, gentle=_is_new_rider()),
+                                "structured_json": None, "notes": "", "phase": None})
+        day += timedelta(days=1)
+    return None
+
+
 def _use_ftp(ftp: int) -> None:
     set_setting("ftp_watts", ftp)
     set_setting("ftp_estimated", "0")
@@ -35,9 +52,14 @@ def _use_ftp(ftp: int) -> None:
     st.toast(f"FTP set to {ftp} W")
 
 
+def _is_new_rider() -> bool:
+    return get_setting("experience_level", "") == "New to structured training"
+
+
 def _plan_test(has_power: bool) -> None:
     day = _next_free_day(date.today())
-    add_workout({**explain.ftp_test_workout(day, has_power), "structured_json": None, "notes": ""})
+    add_workout({**explain.ftp_test_workout(day, has_power, gentle=_is_new_rider()),
+                 "structured_json": None, "notes": ""})
     st.session_state["ftp_test_day"] = day.isoformat()
 
 
@@ -57,9 +79,12 @@ def render(key: str = "ftp_help") -> None:
     has_power = any(a.get("avg_power_watts") for a in get_activities(days_back=60))
     with st.container(border=True):
         if estimated:
-            st.markdown("**Your FTP is an estimate.** The app guessed it from your weight and experience. "
-                        "Every zone and training stress number is based on it, so a better value makes "
-                        "everything more accurate.")
+            st.markdown("**Your FTP is an estimate, and that is completely fine.** The app picked a starting "
+                        "point from what you told it. Every zone and training stress number is based on it, "
+                        "so a better value makes everything more accurate.")
+            low, high = get_setting("ftp_range_low", ""), get_setting("ftp_range_high", "")
+            if low and high:
+                st.caption(explain.ftp_reassurance(float(low), float(high)))
         else:
             st.markdown("**Your FTP may be out of date.**")
         if differs:

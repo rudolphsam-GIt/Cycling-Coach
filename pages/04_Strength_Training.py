@@ -5,6 +5,8 @@ import pandas as pd
 import json
 from datetime import date, timedelta
 from components import section_header, page_header, theme, charts
+from components.units import unit_switch, weight_input
+from metrics.units import from_kg
 
 from db.schema import run_migrations
 from db.queries import (add_strength_session, get_strength_sessions,
@@ -13,6 +15,8 @@ from db.queries import (add_strength_session, get_strength_sessions,
 run_migrations()
 
 page_header("Strength", "Phase based gym work that supports your riding")
+
+unit = unit_switch("strength_unit")
 
 # ── Cycling-specific strength plans ──────────────────────────────────────────
 
@@ -139,9 +143,9 @@ if planned:
                     if ex.get("notes"):
                         st.caption(ex["notes"])
                     if "bodyweight" not in (ex.get("intensity") or "").lower():
-                        ps_weights[i] = st.number_input(
-                            "Weight used (kg)", min_value=0.0, max_value=300.0,
-                            value=0.0, step=2.5, key=f"pw_{ps['id']}_{i}")
+                        ps_weights[i] = weight_input(
+                            "Weight used", 0.0, key=f"pw_{ps['id']}_{i}", unit=unit,
+                            min_kg=0.0, max_kg=300.0, step_lb=5.0, step_kg=2.5)
                 ps_notes = st.text_area("Notes", key=f"pn_{ps['id']}",
                                         placeholder="How did it go? Any PRs?")
                 if st.form_submit_button("Save Session", icon=":material/save:"):
@@ -196,9 +200,8 @@ with col_log:
             weights = {}
             for ex in exercises:
                 if ex.get("intensity") not in ("Bodyweight",) and "%" not in ex.get("intensity", ""):
-                    w = st.number_input(f"{ex['name']} — weight used (kg)",
-                                        min_value=0.0, max_value=300.0,
-                                        value=0.0, step=2.5, key=f"w_{ex['name']}")
+                    w = weight_input(f"{ex['name']}, weight used", 0.0, key=f"w_{ex['name']}",
+                                     unit=unit, min_kg=0.0, max_kg=300.0, step_lb=5.0, step_kg=2.5)
                     weights[ex["name"]] = w
 
             if st.form_submit_button("Save Session", icon=":material/save:"):
@@ -265,12 +268,12 @@ if lift_data:
     lift_df = pd.DataFrame(lift_data[selected_lift]).sort_values("date")
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=lift_df["date"], y=lift_df["weight_kg"],
+    fig.add_trace(go.Scatter(x=lift_df["date"], y=[from_kg(w, unit) for w in lift_df["weight_kg"]],
                               mode="lines+markers", name=selected_lift,
                               line=dict(color=theme.STRENGTH, width=2),
                               marker=dict(size=8, color=theme.STRENGTH)))
     charts.apply_theme(fig, height=280, legend="none")
-    fig.update_layout(yaxis_title="Weight (kg)", xaxis_title="Date")
+    fig.update_layout(yaxis_title=f"Weight ({unit})", xaxis_title="Date")
     charts.show(fig, key="strength_progress")
 else:
     st.info("Log sessions with weights to see your strength progress over time.")

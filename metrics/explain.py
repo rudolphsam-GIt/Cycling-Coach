@@ -390,10 +390,12 @@ def your_profile(category=None, **_) -> str | None:
     return f"Your strongest bar is in the {category} range." if category else None
 
 
-def your_wkg(ftp=None, weight=None, **_) -> str | None:
+def your_wkg(ftp=None, weight=None, weight_unit="kg", **_) -> str | None:
     if not ftp or not weight:
         return None
-    return f"Your FTP of {_w(ftp)} at {float(weight):g} kg is {float(ftp) / float(weight):.2f} W/kg."
+    from metrics.units import fmt_weight
+    return (f"Your FTP of {_w(ftp)} at {fmt_weight(weight, weight_unit)} is "
+            f"{float(ftp) / float(weight):.2f} W/kg.")
 
 
 PERSONAL = {
@@ -490,6 +492,137 @@ TAPER_NOTE = {"focus": "Taper before the race.",
 
 # ── FTP help ──────────────────────────────────────────────────────────────────
 
+# ── A friendly starting FTP ───────────────────────────────────────────────────
+# Rough typical FTP in watts per kilo for each kind of rider, so a newcomer who
+# does not know their FTP gets a believable range instead of a blank. These are
+# deliberately modest rules of thumb, and the first block's FTP test replaces them.
+
+# One question covers both "how experienced are you" and "how long have you ridden".
+# `wkg` is the typical FTP range in watts per kilo for a man at that level.
+RIDER_TYPES = {
+    "New to cycling": {
+        "experience": "New to structured training", "wkg": (1.2, 1.8),
+        "detail": "I'm just starting out, or getting back on a bike after a long break."},
+    "I ride, but without a plan": {
+        "experience": "New to structured training", "wkg": (2.0, 2.7),
+        "detail": "I ride fairly regularly for fun or fitness, but I don't follow a training plan."},
+    "I've followed a training plan": {
+        "experience": "Some structured training experience", "wkg": (2.6, 3.3),
+        "detail": "I've done structured training before, with intervals or power or heart rate zones."},
+    "I race or have raced": {
+        "experience": "Experienced racer", "wkg": (3.2, 4.0),
+        "detail": "I train seriously and race, or used to."},
+}
+DEFAULT_RIDER_TYPE = "New to cycling"
+
+# Typical power per kilo for women is lower than for men. The published Allen and Coggan
+# tables put it at about 0.81 to 0.89 of the male values, and 0.85 suits the beginner range
+# used here. This is only about picking a typical range, not about anyone's identity.
+# Non-binary riders, and anyone who would rather not say, get the middle of the two.
+GENDER_LABELS = {"Woman": "woman", "Man": "man", "Non-binary": "nonbinary",
+                 "Prefer not to say": "unspecified"}
+GENDER_FACTOR = {"man": 1.0, "woman": 0.85, "nonbinary": 0.925, "unspecified": 0.925}
+GENDER_PROFILE_TABLE = {"man": "Men", "woman": "Women"}      # others pick on the Dashboard
+DEFAULT_GENDER = "unspecified"
+
+
+def experience_for(rider_type: str | None) -> str:
+    """The app's experience level (new, some, experienced) for a rider type."""
+    return RIDER_TYPES.get(rider_type or DEFAULT_RIDER_TYPE, RIDER_TYPES[DEFAULT_RIDER_TYPE])["experience"]
+
+
+ACTIVITY_LEVEL = {
+    "Mostly inactive": -0.2,
+    "Lightly active": 0.0,
+    "Moderately active": 0.15,
+    "Very active": 0.35,
+}
+# What each level means in plain numbers, shown under the option so nobody has to guess.
+ACTIVITY_DETAILS = {
+    "Mostly inactive": "Little or no planned exercise. Under 1 hour a week, mostly walking day to day.",
+    "Lightly active": "1 to 3 sessions a week, about 1 to 3 hours in total, at an easy to moderate effort. "
+                      "For example walks, easy rides or light gym.",
+    "Moderately active": "3 to 4 sessions a week, about 3 to 5 hours in total, with some harder efforts "
+                         "where you get properly out of breath. For example jogging, sport or the gym.",
+    "Very active": "5 or more sessions a week, 6 or more hours in total, with regular hard efforts. "
+                   "For example training for a sport or race.",
+}
+DEFAULT_ACTIVITY = "Lightly active"
+
+
+def _round5(w: float) -> int:
+    return int(round(w / 5.0) * 5)
+
+
+# Age. Power falls by roughly 1 percent a year in the masters years, and maximum heart
+# rate falls with age too. Both are rules of thumb for a starting point, not for judging anyone.
+PRIME_UNTIL_AGE = 35
+FTP_LOSS_PER_YEAR = 0.008
+FTP_AGE_FLOOR = 0.65
+YOUTH_FACTOR = 0.9           # under 18, still developing
+MIN_AGE, MAX_AGE = 12, 95
+
+
+def age_from_birth_year(birth_year: int | None, today: date | None = None) -> int | None:
+    """Age this year, or None when the birth year is missing or not believable."""
+    try:
+        age = (today or date.today()).year - int(birth_year)
+    except (TypeError, ValueError):
+        return None
+    return age if MIN_AGE <= age <= MAX_AGE else None
+
+
+def age_factor(age: float | None) -> float:
+    """How much of a prime age rider's power to expect. 1.0 from 18 to 35, about 8 percent
+    less at 45, 20 percent less at 60. No age means no adjustment."""
+    if not age:
+        return 1.0
+    if age < 18:
+        return YOUTH_FACTOR
+    if age <= PRIME_UNTIL_AGE:
+        return 1.0
+    return max(1 - FTP_LOSS_PER_YEAR * (age - PRIME_UNTIL_AGE), FTP_AGE_FLOOR)
+
+
+def max_hr_from_age(age: float) -> int:
+    """Estimated maximum heart rate, from the Tanaka formula (208 minus 0.7 x age)."""
+    return round(208 - 0.7 * float(age))
+
+
+def lthr_from_age(age: float) -> int:
+    """A starting threshold heart rate, about 89 percent of the estimated maximum."""
+    return round(0.89 * max_hr_from_age(age))
+
+
+def starting_ftp_range(weight_kg: float, rider_type: str | None = None, activity: str | None = None,
+                       gender: str | None = None, age: float | None = None) -> dict:
+    """A typical FTP range and a starting value for someone who doesn't know theirs.
+    From what kind of rider they are, how active they are, gender (woman, man,
+    nonbinary or unspecified), age (optional) and weight. Returns {low, high, start} in watts and
+    {low_wkg, high_wkg, start_wkg}."""
+    base_low, base_high = RIDER_TYPES.get(rider_type or DEFAULT_RIDER_TYPE,
+                                          RIDER_TYPES[DEFAULT_RIDER_TYPE])["wkg"]
+    adj = ACTIVITY_LEVEL.get(activity or DEFAULT_ACTIVITY, 0.0)
+    factor = GENDER_FACTOR.get(gender or DEFAULT_GENDER, GENDER_FACTOR[DEFAULT_GENDER]) * age_factor(age)
+    low_wkg = max((base_low + adj) * factor, 0.9)
+    high_wkg = max((base_high + adj) * factor, 1.3)
+    mid_wkg = (low_wkg + high_wkg) / 2
+    low, high, start = (_round5(weight_kg * x) for x in (low_wkg, high_wkg, mid_wkg))
+    low, high = min(low, start), max(high, start)
+    return {"low": low, "high": high, "start": start,
+            "low_wkg": round(low_wkg, 2), "high_wkg": round(high_wkg, 2), "start_wkg": round(mid_wkg, 2)}
+
+
+def ftp_reassurance(low: float, high: float, start: float | None = None) -> str:
+    """A kind explanation of the starting range, for a rider who doesn't know their FTP."""
+    out = f"People like you usually start somewhere between {low:.0f} and {high:.0f} watts."
+    if start:
+        out += f" We have started you at {start:.0f} W."
+    out += (" That is only a starting point, and being well below what you will reach in a few months is "
+            "completely normal. Everyone starts somewhere, and your first block will find your real number.")
+    return out
+
+
 def suggest_ftp(peak_rows: list, today: date, days: int = 42) -> dict | None:
     """95% of the best 20 minute power in the last `days`, with the ride it came
     from. None when there is no 20 minute power in that window."""
@@ -506,8 +639,10 @@ def suggest_ftp(peak_rows: list, today: date, days: int = 42) -> dict | None:
             "date": str(best["date"])[:10], "name": best.get("name") or "Ride"}
 
 
-def ftp_test_workout(day: date, has_power: bool = True) -> dict:
-    """A guided 20 minute FTP test, as a workout dict ready for the planner."""
+def ftp_test_workout(day: date, has_power: bool = True, gentle: bool = False) -> dict:
+    """A guided 20 minute FTP test, as a workout dict ready for the planner.
+    `gentle` is for newcomers. The effort is the same one steady 20 minutes but described
+    as a pace they can hold, with no pass or fail."""
     if has_power:
         steps = ("Warm up 15 minutes easy, then 3 x 1 minute at a hard cadence with 1 minute easy between. "
                  "Ride 5 minutes easy. Then 20 minutes as hard as you can hold evenly, starting a little "
@@ -521,9 +656,13 @@ def ftp_test_workout(day: date, has_power: bool = True) -> dict:
         "date": day.isoformat(), "name": "FTP test (20 minutes)", "workout_type": "Threshold",
         "description": f"{steps} {use}", "tss_planned": 75.0,
         "purpose": "Finds your FTP so every zone and training stress number in the app fits you. "
-                   "Do it fresh, after an easy day or two.",
-        "feel": "10 out of 10 effort across the 20 minutes, but even. If you blow up in the first "
-                "5 minutes you started too hard.",
+                   "Do it fresh, after an easy day or two."
+                   + (" There is no pass or fail, and any result is a good starting point." if gentle else ""),
+        "feel": ("Hard but steady, about 8 out of 10, a pace you could just about hold for 20 minutes. "
+                 "It is one steady effort, not a race. Start a little easier than feels necessary, and "
+                 "if you can, finish a touch stronger than you began.") if gentle else
+                ("10 out of 10 effort across the 20 minutes, but even. If you blow up in the first "
+                 "5 minutes you started too hard."),
     }
 
 
@@ -538,7 +677,8 @@ def checklist(state: dict) -> list[dict]:
          "So your rides come in on their own and your numbers stay up to date.",
          bool(state.get("connected"))),
         ("ftp", "Set your FTP",
-         "Every zone and training stress number is based on it. An estimate is fine to start.",
+         "Every zone and training stress number is based on it. Don't know it? No problem, "
+         "your first block includes an FTP test to find it.",
          bool(state.get("ftp_confirmed"))),
         ("rides", "Sync your first rides",
          "Fitness, fatigue and form need a few weeks of rides to mean anything.",
@@ -555,7 +695,8 @@ def checklist(state: dict) -> list[dict]:
 
 def first_block_message(*, goals: list[str], experience: str, hours: float | None,
                         ftp: float | None, ftp_estimated: bool, race: dict | None = None,
-                        name: str | None = None, days: float | None = None) -> str:
+                        name: str | None = None, days: float | None = None,
+                        skip_test: bool = False) -> str:
     """The first message sent to the coach for a new rider."""
     goal_text = "; ".join(goals) if goals else "general fitness"
     time = ""
@@ -574,7 +715,14 @@ def first_block_message(*, goals: list[str], experience: str, hours: float | Non
         lines.append(f"My main race is {race.get('name') or 'a race'} on {race.get('date')}.")
     if ftp:
         lines.append(f"My FTP is set to {float(ftp):.0f} W"
-                     + (", but that is only an estimate, so please keep the first weeks forgiving." if ftp_estimated else "."))
+                     + (", but that is only an estimate because I do not know my real one." if ftp_estimated else "."))
+    if ftp_estimated and skip_test:
+        lines.append("I would rather not do an FTP test, so please plan around the estimate and keep the first "
+                     "weeks forgiving. Say how the plan will be refined as my rides come in.")
+    elif ftp_estimated:
+        lines.append("Please build a guided 20 minute FTP test into the first week, after a couple of easy "
+                     "days, and tell me how the rest of the block will be adjusted once we know the result. "
+                     "Keep the days before the test forgiving.")
     lines.append(
         "Please build me a first training block of about four weeks, starting easy. Explain in plain "
         "words what the block is trying to build and why, what each week is for, and for every "

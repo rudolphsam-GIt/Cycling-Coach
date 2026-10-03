@@ -18,7 +18,9 @@ from db.queries import (get_activities_between, get_ftp_history, get_hr_peaks_be
                         get_peaks_between, get_races, get_recovery_range, get_setting,
                         get_workouts, set_setting)
 from db.schema import run_migrations
+from components.units import weight_unit
 from metrics import analysis as an
+from metrics.units import fmt_weight
 from metrics.training_load import compute_pmc
 
 run_migrations()
@@ -311,7 +313,8 @@ def power_profile_chart() -> None:
         span = st.segmented_control("Rides", ["Selected dates", "All time"], default="Selected dates",
                                     key="dsh_profile_span") or "Selected dates"
     with c2:
-        table = _saved_choice("Chart", ["Men", "Women"], "power_profile_table", "dsh_profile_table")
+        table = _saved_choice("Reference table", ["Men", "Women"], "power_profile_table",
+                              "dsh_profile_table")
 
     if span == "All time":
         best = an.peak_curve(get_peaks_between(*ALL_DATES))
@@ -336,8 +339,8 @@ def power_profile_chart() -> None:
         fig.add_hline(y=i, line_color=theme.BORDER, line_width=1)
     fig.update_layout(bargap=0.45, margin=dict(l=8, r=8, t=12, b=8))
     charts.show(fig, key="dsh_profile", zoom=None)
-    st.caption(f"{table}'s chart from Allen and Coggan, Training and Racing with a Power Meter, using "
-               f"your weight of {weight:g} kg. The 20 minute bar uses 95% of your 20 minute power as an "
+    st.caption(f"The {table.lower()} reference table from Allen and Coggan, Training and Racing with a Power Meter, using "
+               f"your weight of {fmt_weight(weight, weight_unit())}. The 20 minute bar uses 95% of your 20 minute power as an "
                "estimate of threshold. The 60 minute bar is read against threshold directly.")
 
 

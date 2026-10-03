@@ -9,7 +9,7 @@ from datetime import date, timedelta
 from PIL import Image
 from components import page_header
 from components import calendar as plan_cal
-from components import plan_impact_ui
+from components import ftp_help, plan_impact_ui
 
 from db.schema import run_migrations
 from db.queries import (get_workouts, add_workout, update_workout, delete_workout,
@@ -794,6 +794,10 @@ def render_quick_generate() -> None:
             }) for w in drafted]
             save_phase_notes([{"name": w["phase"], **w["phase_note"]}
                               for w in drafted if w.get("phase") and w.get("phase_note")])
+            if get_setting("ftp_estimated", "") == "1" and get_setting("ftp_choice", "") != "estimate":
+                test_id = ftp_help.plan_test_in_block([w["date"] for w in drafted])
+                if test_id:
+                    new_ids.append(test_id)
             st.session_state["wizard_generated_ids"] = new_ids
             st.session_state["wizard_msg"] = (f"Generated {len(drafted)} workouts over {weeks_out} "
                                               f"weeks, targeting CTL {target_ctl} before the taper.")
