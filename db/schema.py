@@ -114,6 +114,20 @@ CREATE TABLE IF NOT EXISTS coach_memory (
     active INTEGER DEFAULT 1
 );
 
+CREATE TABLE IF NOT EXISTS activity_peaks (
+    activity_id INTEGER NOT NULL,
+    duration_s INTEGER NOT NULL,
+    watts REAL NOT NULL,
+    PRIMARY KEY (activity_id, duration_s)
+);
+
+CREATE TABLE IF NOT EXISTS activity_hr_peaks (
+    activity_id INTEGER NOT NULL,
+    duration_s INTEGER NOT NULL,
+    bpm REAL NOT NULL,
+    PRIMARY KEY (activity_id, duration_s)
+);
+
 CREATE TABLE IF NOT EXISTS ai_conversations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp TEXT NOT NULL,

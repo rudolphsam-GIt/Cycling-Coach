@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import html
-import json
 import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -14,7 +13,7 @@ from db.queries import (get_activities, get_setting, get_races, get_workouts,
                         get_recovery_range, is_ride)
 from metrics.training_load import compute_pmc, get_current_metrics
 from metrics.zones import get_power_zones, get_hr_zones
-from components import charts, theme
+from components import charts, ride_detail, theme
 from components.cards import metric_card, section_header, tsb_banner, page_header
 
 run_migrations()
@@ -299,7 +298,7 @@ if any(w["rides"] > 0 or w["planned_tss"] > 0 for w in weekly):
         tss_fig.update_layout(barmode="group")
         tss_fig.update_xaxes(showgrid=False)
         tss_fig.update_yaxes(title_text="TSS")
-        charts.show(tss_fig, key="dash_weekly_tss")
+        charts.show(tss_fig, key="dash_weekly_tss", zoom=None)
 
     if col_zone is not None:
         with col_zone:
@@ -333,7 +332,7 @@ if any(w["rides"] > 0 or w["planned_tss"] > 0 for w in weekly):
             zone_fig.update_layout(barmode="stack")
             zone_fig.update_xaxes(showgrid=False)
             zone_fig.update_yaxes(title_text="Hours")
-            charts.show(zone_fig, key="dash_weekly_zones")
+            charts.show(zone_fig, key="dash_weekly_zones", zoom=None)
     else:
         st.caption("Zone distribution will appear after syncing rides and using Recalculate TSS in Settings.")
 else:
@@ -344,172 +343,12 @@ section_header("Recent Activities", "Last 30 days. Select a ride to see its deta
 
 activities = get_activities(days_back=30)
 if activities:
-    def _num(val):
-        """Return a float, or None when the value is missing or NaN."""
-        try:
-            if val is None or val != val:
-                return None
-            return float(val)
-        except (TypeError, ValueError):
-            return None
-
-    def _fmt(val, fn):
-        v = _num(val)
-        if v is None:
-            return ""
-        try:
-            return fn(v)
-        except Exception:
-            return ""
-
-    def _hm(seconds):
-        s = _num(seconds)
-        if s is None:
-            return None
-        return f"{int(s // 3600)}:{int((s % 3600) // 60):02d}"
-
     activities = sorted(activities, key=lambda a: a.get("date") or "", reverse=True)
-    ride_df = pd.DataFrame([
-        {
-            "Date": a.get("date") or "",
-            "Name": a.get("name") or "Untitled",
-            "Duration": _hm(a.get("duration_seconds")),
-            "Distance km": (_num(a.get("distance_meters")) / 1000
-                            if _num(a.get("distance_meters")) is not None else None),
-            "Avg W": _num(a.get("avg_power_watts")),
-            "NP": _num(a.get("normalized_power")),
-            "Avg HR": _num(a.get("avg_hr")),
-            "TSS": _num(a.get("tss")),
-            "IF": _num(a.get("if_value")),
-        }
-        for a in activities
-    ])
-
-    ride_event = st.dataframe(
-        ride_df,
-        hide_index=True,
-        width="stretch",
-        height=min(38 + 35 * len(ride_df), 420),
-        key="dash_recent_rides",
-        on_select="rerun",
-        selection_mode="single-row",
-        column_config={
-            "Date": st.column_config.TextColumn("Date", width="small"),
-            "Name": st.column_config.TextColumn("Name", width="large"),
-            "Duration": st.column_config.TextColumn("Duration", width="small"),
-            "Distance km": st.column_config.NumberColumn("Distance km", format="%.1f", width="small"),
-            "Avg W": st.column_config.NumberColumn("Avg W", format="%d", width="small"),
-            "NP": st.column_config.NumberColumn("NP", format="%d", width="small"),
-            "Avg HR": st.column_config.NumberColumn("Avg HR", format="%d", width="small"),
-            "TSS": st.column_config.NumberColumn("TSS", format="%d", width="small"),
-            "IF": st.column_config.NumberColumn("IF", format="%.2f", width="small"),
-        },
-    )
-
-    _sel_rows = list(ride_event.selection.rows) if ride_event and ride_event.selection else []
-    if not _sel_rows or _sel_rows[0] >= len(activities):
-        st.caption("Select a ride to see its details.")
+    picked = ride_detail.ride_table(activities, key="dash_recent_rides")
+    if picked:
+        ride_detail.ride_detail(picked, key="dash_ride")
     else:
-        act = activities[_sel_rows[0]]
-        duration_str = _fmt(
-            act.get("duration_seconds"),
-            lambda v: f"{int(v // 3600)}h {int((v % 3600) // 60)}m" if v >= 3600
-                      else f"{int(v // 60)}m",
-        )
-        distance_str = _fmt(act.get("distance_meters"), lambda v: f"{v / 1000:.1f} km")
-        power_str = _fmt(act.get("avg_power_watts"), lambda v: f"{int(v)} W")
-        hr_str = _fmt(act.get("avg_hr"), lambda v: f"{int(v)} bpm")
-        tss_str = _fmt(act.get("tss"), lambda v: f"{v:.0f}")
-        elev_str = _fmt(act.get("elevation_gain_meters"), lambda v: f"{int(v)} m")
-        np_str = _fmt(act.get("normalized_power"), lambda v: f"{int(v)} W")
-        if_str = _fmt(act.get("if_value"), lambda v: f"{v:.2f}")
-
-        zone_secs = None
-        if act.get("zone_time_json"):
-            try:
-                z = json.loads(act["zone_time_json"])
-                zone_secs = [z.get(f"z{i}_s", 0) or 0 for i in range(1, 6)]
-            except Exception:
-                zone_secs = None
-
-        with st.container(border=True):
-            st.markdown(f"**{act.get('name') or 'Untitled'}**, {act.get('date') or ''}")
-            dc1, dc2 = st.columns([1, 2])
-
-            with dc1:
-                rows = [
-                    ("Duration",   duration_str),
-                    ("Distance",   distance_str),
-                    ("Elevation",  elev_str),
-                    ("Avg Power",  power_str),
-                    ("Norm Power", np_str),
-                    ("Int Factor", if_str),
-                    ("Avg HR",     hr_str),
-                    ("TSS",        tss_str),
-                ]
-                tbl = "".join(
-                    f"<tr><td class='k'>{html.escape(k)}</td>"
-                    f"<td class='v'>{html.escape(v)}</td></tr>"
-                    for k, v in rows if v
-                )
-                if tbl:
-                    st.markdown(f"<table class=\"kv-table\">{tbl}</table>",
-                                unsafe_allow_html=True)
-                else:
-                    st.caption("No metrics recorded for this ride.")
-
-            with dc2:
-                if zone_secs and sum(zone_secs) > 0:
-                    total_s = sum(zone_secs)
-                    z_full = [
-                        "Z1 Active Recovery", "Z2 Endurance",
-                        "Z3 Tempo", "Z4 Threshold", "Z5 VO2 Max",
-                    ]
-                    zfig = go.Figure()
-                    for i in range(5):
-                        s = zone_secs[i]
-                        if s <= 0:
-                            continue
-                        mins_total = int(s // 60)
-                        h_part = mins_total // 60
-                        m_part = mins_total % 60
-                        t_str = f"{h_part}h {m_part:02d}m" if h_part else f"{m_part}m"
-                        pct = s / total_s * 100
-                        zfig.add_trace(go.Bar(
-                            name=z_full[i],
-                            x=[s / 3600],
-                            y=["Zones"],
-                            orientation="h",
-                            marker_color=theme.ZONE_COLORS[i],
-                            marker_line_width=0,
-                            hovertemplate=(
-                                f"<b>{z_full[i]}</b><br>"
-                                f"Time: {t_str}<br>"
-                                f"Share: {pct:.1f}%"
-                                "<extra></extra>"
-                            ),
-                        ))
-                    charts.apply_theme(zfig, height=80, legend="none")
-                    zfig.update_layout(barmode="stack", margin=dict(l=0, r=0, t=4, b=4))
-                    zfig.update_xaxes(visible=False)
-                    zfig.update_yaxes(visible=False)
-                    charts.show(zfig, key="dash_ride_zones")
-
-                    ztbl = "".join(
-                        f"<tr><td class='k'><span style='color:{theme.ZONE_COLORS[i]};"
-                        f"font-weight:700'>Z{i + 1}</span></td>"
-                        f"<td class='v'>{int(zone_secs[i] // 60)}m, "
-                        f"{zone_secs[i] / total_s * 100:.0f}%</td></tr>"
-                        for i in range(5) if zone_secs[i] > 30
-                    )
-                    if ztbl:
-                        st.markdown(f"<table class=\"kv-table\">{ztbl}</table>",
-                                    unsafe_allow_html=True)
-                else:
-                    st.caption(
-                        "Zone breakdown not available. "
-                        "Use Recalculate TSS in Settings to estimate zones."
-                    )
+        st.caption("Select a ride to see its details.")
 else:
     st.info("No activities yet. Connect Strava or Garmin in Settings to sync your rides.")
 

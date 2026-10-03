@@ -176,6 +176,29 @@ table.kv-table td { padding: 7px 4px; vertical-align: baseline; background: tran
 table.kv-table td.k { color: var(--text-2); }
 table.kv-table td.v { color: var(--text-1); font-weight: 600; text-align: right; }
 
+/* Fitness history tables (Dashboard, History tab) */
+.hist-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; margin: 0.25rem 0 1rem; }
+table.hist-table {
+    width: 100%; border-collapse: collapse; font-size: 0.92rem;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+table.hist-table th {
+    background: var(--raised); color: var(--text-1); font-weight: 650; text-align: right;
+    padding: 8px 10px; border: none; border-bottom: 1px solid var(--border);
+}
+table.hist-table th:first-child, table.hist-table td:first-child { text-align: left; }
+table.hist-table td {
+    padding: 5px 10px; text-align: right; color: var(--text-1); border: none;
+    border-bottom: 1px solid rgba(255,255,255,0.04); background: transparent;
+}
+table.hist-table td.pk { color: var(--accent); font-weight: 600; }
+table.hist-table tr.cur td { color: var(--text-3); font-style: italic; font-weight: 400; }
+table.hist-table tr.sec td {
+    background: var(--raised); color: var(--text-1); font-weight: 650; text-align: left;
+    padding: 6px 10px;
+}
+table.hist-table tr.all td { border-top: 2px solid var(--border); font-weight: 700; }
+
 /* Calendar legend */
 .cal-legend { display: flex; flex-wrap: wrap; gap: 8px 10px; margin: 8px 0 4px; }
 .cal-chip {

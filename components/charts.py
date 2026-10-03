@@ -40,8 +40,34 @@ def apply_theme(fig: go.Figure, height: int = 300, legend: str = "top",
     return fig
 
 
-def show(fig: go.Figure, key: str | None = None, **kwargs):
+def _bump_zoom(counter_key: str) -> None:
+    st.session_state[counter_key] = st.session_state.get(counter_key, 0) + 1
+
+
+def show(fig: go.Figure, key: str | None = None, *, zoom: str | None = "x", **kwargs):
     """Render a themed figure. Extra keyword arguments (on_select, selection_mode)
-    pass straight to st.plotly_chart, whose return value is passed back."""
-    return st.plotly_chart(fig, theme=None, width="stretch", key=key,
-                           config={"displayModeBar": False}, **kwargs)
+    pass straight to st.plotly_chart, whose return value is passed back.
+
+    zoom="x" (the default, for charts over time): drag across the dates you want
+    and only the dates zoom, the values fit themselves. A Reset zoom button above
+    the chart (and a double click on it) goes back to the full range. The button
+    works by giving the chart a fresh key. zoom=None turns zooming off, for charts
+    that aren't over time."""
+    config = {"displayModeBar": False}
+    if zoom is None:
+        fig.update_layout(dragmode=False)
+        fig.update_xaxes(fixedrange=True)
+        fig.update_yaxes(fixedrange=True)
+        return st.plotly_chart(fig, theme=None, width="stretch", key=key, config=config, **kwargs)
+
+    fig.update_layout(dragmode="zoom")
+    fig.update_yaxes(fixedrange=True)
+    config["doubleClick"] = "reset"
+    if key:
+        counter = f"_zoom_{key}"
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            st.button("Reset zoom", key=f"{key}_reset", icon=":material/refresh:",
+                      type="tertiary", on_click=_bump_zoom, args=(counter,),
+                      help="Drag across the dates you want to zoom in. This puts the full range back.")
+        key = f"{key}_{st.session_state.get(counter, 0)}"
+    return st.plotly_chart(fig, theme=None, width="stretch", key=key, config=config, **kwargs)

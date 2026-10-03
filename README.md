@@ -103,6 +103,25 @@ The Plan page has three tabs.
 
 **Manage.** Lists of this week's workouts and everything upcoming. From here you can send a whole week to Garmin or download a whole week as `.fit` files. Quick Generate is also here. It builds a training block toward a race from your current fitness and a target peak fitness, without any conversation. It adds workouts straight to your plan, and you can edit or remove them afterward.
 
+### Dashboard
+
+Charts for any date range, in the spirit of the TrainingPeaks dashboard. Pick a range at the top (7 days up to a year, all time, or custom dates), and optionally search or filter rides. Summary tiles show rides, time, distance, climbing, training stress, work, average intensity factor and average efficiency factor, each compared with the period of the same length just before. Below that are four tabs.
+
+1. Load. The performance chart (fitness, fatigue, form and daily training stress), weekly volume as training stress, hours, distance or climbing, and planned versus done per week.
+2. Power. Your peak power curve (best 5 seconds up to 2 hours) against the period before or your all time best, a table of key durations in watts and W/kg, power and intensity per ride, efficiency factor over time, FTP history and time in zones.
+3. History. Fitness history tables like the ones in TrainingPeaks, one for peak power and one for peak heart rate. Rows are the current week and the three before it, the current month and the twelve before it, and an All time row. Columns are moving time, distance (switch between km and mi), training stress, work in kJ, and your best 5 seconds, 1, 5, 20 and 60 minutes. The week and month still in progress are in grey. Below them is your power profile, your best power per kilo at those durations placed on the Allen and Coggan categories from Untrained up to World class, for the selected dates or all time, on the men's or women's chart.
+4. Recovery. HRV, resting heart rate, sleep and readiness from Garmin, with form behind them so you can read recovery against load.
+
+The search and filters change the tiles and the ride charts. Fitness, fatigue and form always count every ride, since all of it is load. The page only loads when you open it, and each tab only draws when you select it.
+
+Peak power comes from Garmin's ride summaries. Peak heart rate is worked out from each ride's file, which the app downloads from Garmin, with stops cut out the way TrainingPeaks does it. New rides get both when they sync. For older rides, open Settings, Connections, and use Load peak power and heart rate history. It fills in the last year for rides already in the app, adds no rides, and takes a minute or two the first time. `.fit` files you import by hand get both too. Rides that only came from Strava have neither.
+
+### Data
+
+Search and filter your rides. Type words from a ride name (every word has to match, in any order), and use More filters for ride type (road, indoor, gravel, mountain), training stress, intensity factor, moving time, distance, and only rides with power or heart rate. The same summary tiles as the Dashboard sit above a sortable table of the rides. Select a row to open the ride, or download the list as a CSV file. Your search carries over to the Dashboard and back. Clear resets everything except the date range.
+
+**Zooming charts.** On any chart over time, drag across the dates you want to look at and the chart zooms to them. Only the dates zoom, so the vertical scale stays the same. Press Reset zoom above the chart, or double click the chart, to see the full range again.
+
 ### Strength
 
 Gym plans for cyclists, in three phases (off season and base, build, and race season maintenance). Pick a phase to see the sessions and exercises, then log a session you completed with the weights you used.
@@ -129,7 +148,7 @@ Scouting for races on the OBRA calendar. You load a field of riders from an OBRA
 Three tabs.
 
 1. Profile. Your goals, FTP, threshold heart rate, weight and starting fitness.
-2. Connections. Connect and sync Garmin and Strava, and import `.fit` or `.csv` files by hand.
+2. Connections. Connect and sync Garmin and Strava, import `.fit` or `.csv` files by hand, and load peak power and heart rate history from Garmin.
 3. Data tools. Recalculate training stress for every ride (useful after you change your FTP) and remove duplicate rides that came in from both Garmin and Strava.
 
 ## Using the calendar
@@ -235,7 +254,7 @@ Python, Streamlit, SQLite, Plotly, and the Anthropic Claude API (model `claude-o
 
 ```
 app.py                    Entry point, setup and welcome gates, navigation
-pages/                    Today, Plan, Strength, Races, Competitors, Settings
+pages/                    Today, Plan, Dashboard, Data, Strength, Races, Competitors, Settings
 planning.py               Training block generator used by Quick Generate
 garmin_workouts.py        Turns workouts into Garmin steps and .fit files
 claude_client.py          Claude calls, streaming, tool loop, error handling
@@ -247,14 +266,20 @@ auth/                     Garmin and Strava sign in and sync, .fit and .csv impo
 metrics/training_load.py  Fitness, fatigue and form (CTL, ATL, TSB)
 metrics/plan_impact.py    What a change to the plan does to those numbers, plus plan warnings
 metrics/zones.py          Power and heart rate zone estimates
+metrics/analysis.py       Search filters, totals, weekly volume, efficiency, peak power curve, history and power profile
+metrics/peaks.py          Best average power and heart rate by duration from a ride file
 research/                 OBRA schedule and race results
 components/               Shared interface pieces
 components/calendar.py    Calendar data, moves and undo for the Plan page
 components/calendar_dnd.py  The interactive grid (drag, click, hover)
 components/plan_impact_ui.py  The Plan impact panel and undo bar
+components/data_filters.py  Date range, search and filters shared by Dashboard and Data
+components/ride_detail.py   Rides table and ride detail used by Today and Data
+components/history_table.py  The fitness history tables on the Dashboard
+components/charts.py      Chart styling, drag to zoom and Reset zoom
 scripts/garmin_setup.py   Terminal fallback for connecting Garmin
 scripts/seed_demo_db.py   Builds a demo database
-tests/                    Tests for the calendar, moves and plan impact (python -m unittest discover -s tests)
+tests/                    Tests for the calendar, moves, plan impact, analysis, peaks and history (python -m unittest discover -s tests)
 .streamlit/config.toml    Dark theme
 ```
 

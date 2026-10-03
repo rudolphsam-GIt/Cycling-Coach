@@ -146,7 +146,7 @@ def upsert_activity(data: dict):
             conn.commit()
         # Either way, don't insert a second row
         conn.close()
-        return
+        return dup["id"]
 
     conn.execute(
         """INSERT INTO activities
@@ -166,7 +166,103 @@ def upsert_activity(data: dict):
         data,
     )
     conn.commit()
+    row = conn.execute("SELECT id FROM activities WHERE external_id = ?",
+                       (data.get("external_id"),)).fetchone()
     conn.close()
+    return row["id"] if row else None
+
+
+def match_activity_id(data: dict) -> int | None:
+    """The id of the stored ride this record describes (same external id, or the
+    same ride from another source), without writing anything."""
+    conn = get_conn()
+    row = conn.execute("SELECT id FROM activities WHERE external_id = ?",
+                       (data.get("external_id"),)).fetchone()
+    if not row:
+        row = _find_cross_source_duplicate(conn, data)
+    conn.close()
+    return row["id"] if row else None
+
+
+# ── Peak power (best average power per duration, per ride) ────────────────────
+
+def save_peaks(activity_id: int, peaks: dict) -> None:
+    """Store best average power by duration in seconds. Keeps the higher value if
+    a ride already has one for that duration (another source may differ slightly)."""
+    if not activity_id or not peaks:
+        return
+    conn = get_conn()
+    conn.executemany(
+        """INSERT INTO activity_peaks (activity_id, duration_s, watts) VALUES (?, ?, ?)
+           ON CONFLICT(activity_id, duration_s) DO UPDATE SET watts = MAX(watts, excluded.watts)""",
+        [(activity_id, int(d), float(w)) for d, w in peaks.items()],
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_peaks_between(start: str, end: str) -> list:
+    """Rows of {activity_id, date, name, duration_s, watts} for rides in the range."""
+    conn = get_conn()
+    rows = conn.execute(
+        """SELECT p.activity_id, a.date, a.name, p.duration_s, p.watts
+           FROM activity_peaks p JOIN activities a ON a.id = p.activity_id
+           WHERE a.date BETWEEN ? AND ? ORDER BY a.date""",
+        (start, end),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_activities_between(start: str, end: str) -> list:
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM activities WHERE date BETWEEN ? AND ? ORDER BY date DESC", (start, end)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def save_hr_peaks(activity_id: int, peaks: dict) -> None:
+    """Store best average heart rate by duration in seconds, keeping the higher value."""
+    if not activity_id or not peaks:
+        return
+    conn = get_conn()
+    conn.executemany(
+        """INSERT INTO activity_hr_peaks (activity_id, duration_s, bpm) VALUES (?, ?, ?)
+           ON CONFLICT(activity_id, duration_s) DO UPDATE SET bpm = MAX(bpm, excluded.bpm)""",
+        [(activity_id, int(d), float(b)) for d, b in peaks.items()],
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_hr_peaks_between(start: str, end: str) -> list:
+    """Rows of {activity_id, date, name, duration_s, bpm} for rides in the range."""
+    conn = get_conn()
+    rows = conn.execute(
+        """SELECT p.activity_id, a.date, a.name, p.duration_s, p.bpm
+           FROM activity_hr_peaks p JOIN activities a ON a.id = p.activity_id
+           WHERE a.date BETWEEN ? AND ? ORDER BY a.date""",
+        (start, end),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def has_hr_peaks(activity_id: int) -> bool:
+    conn = get_conn()
+    row = conn.execute("SELECT 1 FROM activity_hr_peaks WHERE activity_id = ? LIMIT 1",
+                       (activity_id,)).fetchone()
+    conn.close()
+    return row is not None
+
+
+def first_activity_date() -> str | None:
+    conn = get_conn()
+    row = conn.execute("SELECT MIN(date) AS d FROM activities").fetchone()
+    conn.close()
+    return row["d"] if row else None
 
 
 def deduplicate_activities() -> int:
@@ -180,6 +276,7 @@ def deduplicate_activities() -> int:
     rows = [dict(r) for r in rows]
 
     to_delete = set()
+    kept_for = {}   # dropped id -> kept id, so peak power moves to the row that stays
     for i, a in enumerate(rows):
         if a["id"] in to_delete:
             continue
@@ -192,10 +289,28 @@ def deduplicate_activities() -> int:
                 # Duplicate found — delete the lower-scoring one
                 keep, drop = (a, b) if _activity_score(a) >= _activity_score(b) else (b, a)
                 to_delete.add(drop["id"])
+                kept_for[drop["id"]] = keep["id"]
                 if drop is a:
                     break
 
     if to_delete:
+        for drop_id, keep_id in kept_for.items():
+            conn.execute(
+                """INSERT INTO activity_peaks (activity_id, duration_s, watts)
+                   SELECT ?, duration_s, watts FROM activity_peaks WHERE activity_id = ?
+                   ON CONFLICT(activity_id, duration_s) DO UPDATE SET watts = MAX(watts, excluded.watts)""",
+                (keep_id, drop_id))
+        for drop_id, keep_id in kept_for.items():
+            conn.execute(
+                """INSERT INTO activity_hr_peaks (activity_id, duration_s, bpm)
+                   SELECT ?, duration_s, bpm FROM activity_hr_peaks WHERE activity_id = ?
+                   ON CONFLICT(activity_id, duration_s) DO UPDATE SET bpm = MAX(bpm, excluded.bpm)""",
+                (keep_id, drop_id))
+        for table in ("activity_peaks", "activity_hr_peaks"):
+            conn.execute(
+                f"DELETE FROM {table} WHERE activity_id IN ({','.join('?' * len(to_delete))})",
+                list(to_delete),
+            )
         conn.execute(
             f"DELETE FROM activities WHERE id IN ({','.join('?' * len(to_delete))})",
             list(to_delete),

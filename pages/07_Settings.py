@@ -135,6 +135,22 @@ with tab_connections:
                     _, msg = garmin_auth.sync(days_back=30)
                 st.session_state["garmin_sync_msg"] = msg
                 st.rerun()
+            if st.button("Load peak power and heart rate history (1 year)", icon=":material/bolt:",
+                         width="stretch",
+                         help="Reads your best power and heart rate for 5 s up to 2 h from Garmin for rides "
+                              "already in the app, for the Dashboard. Adds no rides. Heart rate needs each "
+                              "ride's file, so the first run takes a minute or two."):
+                bar = st.progress(0.0, text="Reading rides from Garmin…")
+                try:
+                    updated, seen = garmin_auth.backfill_peaks(
+                        days_back=365,
+                        progress=lambda done, total: bar.progress(done / max(total, 1),
+                                                                  text=f"Ride {done} of {total}"))
+                    msg = f"Synced peak power and heart rate for {updated} of {seen} Garmin rides."
+                except Exception as e:
+                    msg = garmin_auth.friendly_error(e)
+                st.session_state["garmin_sync_msg"] = msg
+                st.rerun()
             if st.button("Disconnect Garmin", width="stretch"):
                 garmin_auth.disconnect()
                 st.rerun()

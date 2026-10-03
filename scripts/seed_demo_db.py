@@ -55,27 +55,46 @@ WEEK = {1: ("Threshold", "Threshold 4x8", 90), 2: ("Endurance", "Endurance Z2", 
         6: ("Recovery", "Recovery spin", 30)}
 
 
-def add_ride(day: date, tss: float, name: str) -> None:
+# Best power by duration for a fresh 250 W rider; each ride gets a scaled copy.
+BASE_PEAKS = {1: 950, 2: 900, 5: 820, 10: 700, 20: 560, 30: 480, 60: 400, 120: 340, 300: 300,
+              600: 280, 1200: 265, 1800: 255, 3600: 240, 7200: 215}
+
+
+def add_ride(day: date, tss: float, name: str, sport: str = "ride") -> None:
     intensity = min(max(0.5 + tss / 260, 0.55), 1.0)
     hours = tss / (intensity ** 2 * 100)
     shares = [0.25, 0.45, 0.15, 0.1, 0.05] if tss > 70 else [0.4, 0.5, 0.1, 0.0, 0.0]
     secs = int(hours * 3600)
-    q.upsert_activity({
+    indoor = sport == "virtual_ride"
+    aid = q.upsert_activity({
         "source": "demo", "external_id": f"demo-{day.isoformat()}-{name}",
-        "date": day.isoformat(), "name": name, "sport_type": "ride",
+        "date": day.isoformat(), "name": name, "sport_type": sport,
         "duration_seconds": secs, "elapsed_seconds": secs + 240,
-        "distance_meters": hours * 3600 * 8.2, "elevation_gain_meters": hours * 280,
+        "distance_meters": hours * 3600 * (9.0 if indoor else 8.2),
+        "elevation_gain_meters": 0 if indoor else hours * rng.uniform(150, 450),
         "avg_power_watts": round(intensity * FTP * 0.88), "avg_hr": int(115 + intensity * 45),
         "max_hr": 178, "normalized_power": round(intensity * FTP), "tss": round(tss),
         "if_value": round(intensity, 2), "raw_json": "{}",
         "zone_time_json": json.dumps({f"z{i + 1}_s": int(secs * s) for i, s in enumerate(shares)}
                                      | {"source": "estimated"}),
     })
+    # Fitness improves a little over the months, harder rides hit higher peaks.
+    form = 0.9 + 0.1 * (1 + (day - today).days / 180) + 0.15 * (intensity - 0.7)
+    q.save_peaks(aid, {d: round(w * form * rng.uniform(0.9, 1.03)) for d, w in BASE_PEAKS.items()
+                       if d <= secs})
+    avg_hr = int(115 + intensity * 45)
+    q.save_hr_peaks(aid, {d: min(186, avg_hr + bump + rng.randint(-2, 2))
+                          for d, bump in ((5, 26), (10, 25), (30, 23), (60, 21), (120, 18), (300, 14),
+                                          (600, 11), (1200, 8), (1800, 6), (3600, 3)) if d <= secs})
 
+
+UNPLANNED = [("Morning coffee ride", "ride"), ("Hill repeats", "ride"), ("Saturday group ride", "ride"),
+             ("Zwift recovery", "virtual_ride"), ("Gravel loop", "gravel_cycling"),
+             ("Road ride", "ride")]
 
 outcomes = ["done", "done", "done", "short", "done", "missed", "done", "marked"]
 k = 0
-for offset in range(-90, 22):
+for offset in range(-180, 22):
     day = today + timedelta(days=offset)
     plan = WEEK.get(day.weekday())
     planned_here = plan is not None and offset >= -28
@@ -103,7 +122,15 @@ for offset in range(-90, 22):
     elif offset < 0:
         busy = day.weekday() not in (0, 4)
         if rng.random() < (0.7 if busy else 0.25):  # sometimes an unplanned ride on a rest day
-            add_ride(day, rng.uniform(40, 120), "Road ride")
+            add_ride(day, rng.uniform(40, 120), *rng.choice(UNPLANNED))
+
+for offset in range(-120, 1):
+    day = today + timedelta(days=offset)
+    q.upsert_recovery(day.isoformat(), {
+        "sleep_hours": round(rng.uniform(6.2, 8.4), 1), "sleep_score": rng.randint(60, 92),
+        "hrv_ms": round(62 + 6 * rng.uniform(-1, 1) + offset / 40, 1), "hrv_status": "BALANCED",
+        "resting_hr": rng.randint(44, 52), "readiness": rng.randint(45, 90),
+        "body_battery": rng.randint(40, 95)})
 
 for offset, name in ((2, "Lower body A"), (5, "Lower body B")):
     q.add_strength_session({

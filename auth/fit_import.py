@@ -5,7 +5,7 @@ import io
 import json
 from datetime import datetime, timezone
 
-from db.queries import get_setting, upsert_activity
+from db.queries import get_setting, upsert_activity, save_peaks, save_hr_peaks
 from metrics.zones import estimate_zone_seconds
 
 CYCLING_SPORT = {
@@ -21,6 +21,20 @@ def _field(record, name, default=None):
         return v if v is not None else default
     except Exception:
         return default
+
+
+def _save_file_peaks(activity_id, raw: bytes) -> None:
+    """Best power and heart rate by duration from the file's second by second data."""
+    from metrics.analysis import PEAK_DURATIONS
+    from metrics.peaks import HR_DURATIONS, fit_streams, mean_max
+    if not activity_id:
+        return
+    try:
+        hr, power = fit_streams(raw)
+    except Exception:
+        return
+    save_peaks(activity_id, mean_max(power, PEAK_DURATIONS))
+    save_hr_peaks(activity_id, mean_max(hr, HR_DURATIONS, zero_is_missing=True))
 
 
 def import_fit_files(uploaded_files) -> tuple[int, str]:
@@ -102,7 +116,7 @@ def import_fit_files(uploaded_files) -> tuple[int, str]:
 
             external_id = f"fit_{start_time.strftime('%Y%m%dT%H%M%S')}"
 
-            upsert_activity({
+            activity_id = upsert_activity({
                 "source": "fit_import",
                 "external_id": external_id,
                 "date": date_str,
@@ -121,6 +135,7 @@ def import_fit_files(uploaded_files) -> tuple[int, str]:
                 "zone_time_json": json.dumps(zones) if zones else None,
                 "raw_json": json.dumps({"source_file": uf.name}),
             })
+            _save_file_peaks(activity_id, raw)
             count += 1
 
         except Exception as e:
