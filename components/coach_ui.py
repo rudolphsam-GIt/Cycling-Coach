@@ -11,7 +11,7 @@ import streamlit as st
 
 import claude_client
 import coach_tools
-from db.queries import add_workout, add_strength_session
+from db.queries import add_workout, add_strength_session, save_phase_notes
 
 # Jumping to the Plan page's calendar. The Plan page copies PLAN_JUMP_KEY into its
 # tab bar state before drawing the tabs and maps the value to its own tab label.
@@ -96,6 +96,16 @@ def jump_to_calendar(day_iso: str, on_plan_page: bool = False) -> None:
         st.switch_page(PLAN_PAGE)
 
 
+def _ride_frame(items: list) -> pd.DataFrame:
+    """The proposed rides as a table, with why and how it should feel when given."""
+    df = pd.DataFrame(items).rename(columns={
+        "date": "Date", "name": "Workout", "workout_type": "Type", "description": "Details",
+        "tss_planned": "TSS", "week_number": "Week", "purpose": "Why", "feel": "Feel"})
+    cols = [c for c in ["Week", "Date", "Workout", "Type", "Why", "Feel", "Details", "TSS"]
+            if c in df.columns and df[c].notna().any()]
+    return df[cols]
+
+
 def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
     """
     Show workouts and/or strength sessions proposed by the coach, stored in
@@ -141,30 +151,23 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
         st.markdown("**Proposed plan** · review before adding to your calendar")
 
         if rides:
+            by_phase: dict[str, list] = {}
+            for r in rides:
+                by_phase.setdefault(r.get("phase") or "Workouts", list()).append(r)
             has_phases = any(r.get("phase") for r in rides)
-            if has_phases:
-                by_phase: dict[str, list] = {}
-                for r in rides:
-                    by_phase.setdefault(r.get("phase") or "Workouts", list()).append(r)
-                for phase_name, items in by_phase.items():
+            for phase_name, items in by_phase.items():
+                if has_phases:
                     phase_tss = sum(i.get("tss_planned") or 0 for i in items)
-                    df = pd.DataFrame(items).rename(columns={
-                        "date": "Date", "name": "Workout", "workout_type": "Type",
-                        "description": "Details", "tss_planned": "TSS", "week_number": "Week"})
-                    cols = [c for c in ["Week", "Date", "Workout", "Type", "Details", "TSS"]
-                            if c in df.columns]
                     # A plain heading rather than an expander, so this card can
                     # sit inside the Weekly Check In expander without nesting.
                     st.markdown(f"**{phase_name}** · {len(items)} rides · {phase_tss:.0f} TSS")
-                    st.dataframe(df[cols], hide_index=True, width="stretch")
-            else:
-                st.dataframe(
-                    pd.DataFrame(rides).rename(columns={
-                        "date": "Date", "name": "Workout", "workout_type": "Type",
-                        "description": "Details", "tss_planned": "TSS"})[
-                        ["Date", "Workout", "Type", "Details", "TSS"]],
-                    hide_index=True, width="stretch",
-                )
+                    note = next((i["phase_note"] for i in items if i.get("phase_note")), None)
+                    if note:
+                        st.markdown(f"**Focus.** {note['focus']}  \n{note['why']}")
+                st.dataframe(_ride_frame(items), hide_index=True, width="stretch",
+                             column_config={"Why": st.column_config.TextColumn(width="large"),
+                                            "Feel": st.column_config.TextColumn(width="medium"),
+                                            "Details": st.column_config.TextColumn(width="medium")})
 
         if strength:
             st.markdown(f"**Strength · {len(strength)} session{'s' if len(strength) > 1 else ''}**")
@@ -172,6 +175,8 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
                 ex_names = ", ".join(e["name"] for e in s.get("exercises", [])[:4])
                 more = f" +{len(s['exercises']) - 4} more" if len(s.get("exercises", [])) > 4 else ""
                 st.caption(f"{s['date']} · **{s['name']}** · {ex_names}{more}")
+                if s.get("purpose"):
+                    st.caption(f"Why. {s['purpose']}")
 
         c1, c2 = st.columns(2)
         if c1.button("Add to Training Planner", type="primary", width="stretch",
@@ -182,14 +187,17 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
                     "description": w["description"], "structured_json": None,
                     "tss_planned": w["tss_planned"], "notes": "Planned by AI Coach",
                     "phase": w.get("phase"), "week_number": w.get("week_number"),
+                    "purpose": w.get("purpose"), "feel": w.get("feel"),
                 })
+            save_phase_notes([{"name": w["phase"], **w["phase_note"]} for w in rides
+                              if w.get("phase") and w.get("phase_note")])
             for s in strength:
                 add_strength_session({
                     "date": s["date"], "plan_week": s.get("week_number"),
                     "exercises_json": json.dumps(s["exercises"]),
                     "duration_minutes": s.get("duration_minutes"),
                     "notes": f"{s['name']} | Planned by AI Coach",
-                    "phase": s.get("phase"),
+                    "phase": s.get("phase"), "purpose": s.get("purpose"),
                 })
             dates = [p["date"] for p in rides + strength]
             st.session_state.pop(state_key)

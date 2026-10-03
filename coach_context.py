@@ -55,6 +55,24 @@ Building a multi-week plan:
 - If the plan should include gym work, call propose_strength_sessions too, in the same
   conversation. A plan built only from rides when the athlete also wants to lift is incomplete.
 
+Explain the why:
+- Every workout you propose needs a purpose and a feel, and every multi-week block needs phases.
+  Write them for someone who may be new to structured training, in plain words.
+- The purpose says what the workout trains and how that serves THIS athlete's goal and race, not
+  a generic description. "Builds the steady base that lets you ride the long hilly stage without
+  fading" beats "Improves aerobic fitness".
+- The feel is how it should feel, as effort out of 10 and a talk test, so it can be ridden
+  correctly without a power meter.
+- Open a block by saying what it is building and why, then give each phase a focus and a reason
+  it comes at that point. Say what the athlete should focus on during the key workouts, such as
+  smooth pedalling, staying seated, or finishing the last interval as strong as the first.
+- Explain when you ease off as well as when you push. A lighter week is on purpose, and the athlete
+  should know why.
+- If the athlete's experience is "New to structured training", define each training term (TSS, FTP,
+  zones, fitness, fatigue, form) the first time you use it in a conversation, use no unexplained
+  abbreviations, and start gently. Their FTP may only be an estimate, so say so and keep the first
+  weeks forgiving. Offer to plan an FTP test once they have ridden a couple of weeks.
+
 Remembering the athlete:
 - "What you know about the athlete" below holds notes from earlier conversations. Use them.
 - When the athlete tells you something that will still matter weeks from now (an injury, a
@@ -103,6 +121,10 @@ def build_context() -> str:
     w_per_kg = round(float(ftp) / float(weight), 2) if (ftp and weight and ftp != "unknown" and weight != "unknown") else "unknown"
     goal_keys = parse_goal_keys(get_setting("primary_goal", ""))
     weekly_hours = get_setting("weekly_hours_target", "")
+    days_per_week = get_setting("days_per_week", "")
+    goal_text = (get_setting("goal_text", "") or "").strip()
+    experience = get_setting("experience_level", "") or "unknown"
+    ftp_note = " (an estimate, not tested)" if get_setting("ftp_estimated", "") == "1" else ""
 
     metrics = get_current_metrics()
     activities = get_activities(days_back=14)
@@ -128,14 +150,18 @@ def build_context() -> str:
     goal_notes = [GOAL_COACHING_NOTES[k] for k in goal_keys if k in GOAL_COACHING_NOTES]
     goal_note = "\n  ".join(goal_notes)
     hours_str = f"{weekly_hours} hrs/week" if weekly_hours else "unknown"
+    days_str = f"{days_per_week} days/week" if days_per_week else "unknown"
+    goal_words = f'  In the athlete\'s own words, their goals are: "{goal_text}"' if goal_text else ""
 
     return f"""
 ATHLETE DATA (use this to give specific coaching advice):
+{goal_words}
 {f"  {goal_note}" if goal_note else ""}
-  Weekly training time available: {hours_str}
+  Weekly training time available: {hours_str} over {days_str}. Fit plans inside this and say so if it is not enough for the goal.
 
+Experience: {experience}
 Physiology:
-  FTP: {ftp}W | Weight: {weight}kg | W/kg: {w_per_kg} | LTHR: {lthr}bpm
+  FTP: {ftp}W{ftp_note} | Weight: {weight}kg | W/kg: {w_per_kg} | LTHR: {lthr}bpm
 
 Current Training Load:
   CTL (Fitness): {metrics['ctl']:.1f}

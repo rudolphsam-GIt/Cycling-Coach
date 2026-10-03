@@ -57,7 +57,8 @@ def _date_ticks(fig) -> None:
 # ── Load ──────────────────────────────────────────────────────────────────────
 
 def performance_chart(pmc: pd.DataFrame) -> None:
-    section_header("Performance chart", "Fitness (CTL), fatigue (ATL), form (TSB) and daily TSS")
+    section_header("Performance chart", "Fitness (CTL), fatigue (ATL), form (TSB) and daily TSS",
+                   explain="performance_chart")
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     fig.add_trace(go.Bar(x=pmc["date"], y=pmc["tss"], name="Daily TSS",
                          marker_color=_rgba(theme.TEXT3, 0.35), marker_line_width=0,
@@ -84,7 +85,7 @@ def performance_chart(pmc: pd.DataFrame) -> None:
 
 
 def weekly_volume() -> None:
-    section_header("Weekly volume", "Totals per week for the rides you selected")
+    section_header("Weekly volume", "Totals per week for the rides you selected", explain="weekly_volume")
     metric = st.segmented_control("Show", list(an.WEEKLY_METRICS), default="TSS",
                                   key="dsh_week_metric", label_visibility="collapsed") or "TSS"
     weeks = an.weekly(ctx["rides"], metric, f.start, f.end)
@@ -101,7 +102,8 @@ def planned_vs_done() -> None:
     workouts = get_workouts(f.start.isoformat(), f.end.isoformat())
     if not workouts:
         return
-    section_header("Planned vs done", "Planned TSS against ridden TSS per week, every ride counted")
+    section_header("Planned vs done", "Planned TSS against ridden TSS per week, every ride counted",
+                   explain="planned_vs_done")
     weeks = an.planned_vs_done(workouts, ctx["all"], f.start, f.end)
     x = [w["week"] for w in weeks]
     fig = go.Figure()
@@ -118,7 +120,7 @@ def planned_vs_done() -> None:
 # ── Power ─────────────────────────────────────────────────────────────────────
 
 def peak_power() -> None:
-    section_header("Peak power", "Best average power for each duration")
+    section_header("Peak power", "Best average power for each duration", explain="peak_power")
     ride_ids = {r["id"] for r in ctx["rides"]}
     now_rows = get_peaks_between(f.start.isoformat(), f.end.isoformat())
     curve = an.peak_curve(now_rows, ride_ids)
@@ -183,7 +185,7 @@ def power_per_ride() -> None:
     if not rows:
         return
     rows.sort(key=lambda r: r["date"])
-    section_header("Power per ride", "Normalized and average power, with intensity factor")
+    section_header("Power per ride", "Normalized and average power, with intensity factor", explain="np")
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     names = [r.get("name") or "Ride" for r in rows]
     for key, label, color in (("normalized_power", "NP", theme.FATIGUE),
@@ -207,7 +209,8 @@ def efficiency_chart() -> None:
     pts = an.efficiency(ctx["rides"])
     if not pts:
         return
-    section_header("Efficiency factor", "NP divided by average heart rate. Rising means fitter at the same effort.")
+    section_header("Efficiency factor", "NP divided by average heart rate. Rising means fitter at the same effort.",
+                   explain="ef")
     fig = go.Figure()
     fig.add_scatter(x=[p["date"] for p in pts], y=[p["ef"] for p in pts], mode="markers", name="Ride",
                     marker=dict(color=theme.GOOD, size=7, opacity=0.6), customdata=[p["name"] for p in pts],
@@ -224,7 +227,7 @@ def ftp_and_zones() -> None:
     left, right = st.columns(2)
     with left:
         hist = [h for h in get_ftp_history(limit=100) if str(h["date"]) <= f.end.isoformat()]
-        section_header("FTP history", "Your FTP over time")
+        section_header("FTP history", "Your FTP over time", explain="ftp")
         if len(hist) >= 2:
             x = [str(h["date"])[:10] for h in hist] + [f.end.isoformat()]
             y = [h["ftp_watts"] for h in hist] + [hist[-1]["ftp_watts"]]
@@ -241,7 +244,7 @@ def ftp_and_zones() -> None:
         else:
             st.caption("No FTP history yet. Set your FTP in Settings.")
     with right:
-        section_header("Time in zones", "Estimated heart rate zones")
+        section_header("Time in zones", "Estimated heart rate zones", explain="hr_zones")
         hours = an.zone_hours(ctx["rides"])
         if sum(hours) <= 0:
             st.caption("No zone estimates for these rides. Use Recalculate TSS in Settings.")
@@ -275,7 +278,7 @@ def fitness_history() -> None:
     head, unit_col = st.columns([4, 1.2], vertical_alignment="bottom")
     with head:
         section_header("Fitness history", "Every ride, whatever the search. The week and month "
-                                          "still in progress are in grey.")
+                                          "still in progress are in grey.", explain="history")
     with unit_col:
         unit = _saved_choice("Distance", ["km", "mi"], "distance_unit", "dsh_unit")
 
@@ -297,7 +300,8 @@ def fitness_history() -> None:
 
 
 def power_profile_chart() -> None:
-    section_header("Power profile", "Your best power per kilo against the Allen and Coggan categories")
+    section_header("Power profile", "Your best power per kilo against the Allen and Coggan categories",
+                   explain="power_profile")
     weight = float(get_setting("weight_kg", 0) or 0)
     if not weight:
         st.info("Add your weight in Settings to see your power profile.", icon=":material/scale:")
@@ -348,7 +352,8 @@ def recovery(pmc: pd.DataFrame) -> None:
     df = pd.DataFrame(rows)
     df["date"] = pd.to_datetime(df["date"])
 
-    section_header("HRV and resting heart rate", "With form (TSB) behind them, to read recovery against load")
+    section_header("HRV and resting heart rate", "With form (TSB) behind them, to read recovery against load",
+                   explain="hrv")
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     if not pmc.empty:
         fig.add_trace(go.Scatter(x=pmc["date"], y=pmc["tsb"], name="Form (TSB)", fill="tozeroy",

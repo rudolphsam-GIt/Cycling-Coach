@@ -9,8 +9,10 @@ from db.queries import (get_setting, set_setting, log_ftp_history,
 from config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, GARMIN_EMAIL, GARMIN_PASSWORD
 import auth.strava as strava_auth
 import auth.garmin as garmin_auth
+from components import ftp_help
 from components.cards import page_header
-from components.onboarding import GOALS, parse_goal_keys, goal_keys_to_labels
+from components.explain import setting_help
+from components.onboarding import GOAL_EXAMPLES, goal_keys_to_labels, infer_goal_keys, parse_goal_keys
 
 run_migrations()
 
@@ -22,46 +24,60 @@ tab_profile, tab_connections, tab_data = st.tabs([":material/person: Profile", "
 with tab_profile:
     st.subheader("Athlete Profile")
 
-    _current_goal_keys = parse_goal_keys(get_setting("primary_goal", ""))
-    _current_labels = goal_keys_to_labels(_current_goal_keys)
-    goal_labels = st.multiselect(
-        "Goals", list(GOALS.keys()),
-        default=_current_labels,
-        help="Used to tailor AI Coach recommendations — pick one or more",
+    ftp_help.render("settings_ftp")
+
+    goal_text = st.text_area(
+        "Your goals", value=get_setting("goal_text", "") or "; ".join(
+            goal_keys_to_labels(parse_goal_keys(get_setting("primary_goal", "")))),
+        height=90, placeholder="In your own words. " + "; ".join(GOAL_EXAMPLES[:3]),
+        help="Anything you want from riding. Your coach plans around what you write.",
     )
+    t1, t2 = st.columns(2)
+    weekly_hours = t1.slider("Hours a week to train", 1, 20,
+                             int(float(get_setting("weekly_hours_target", 6) or 6)))
+    days_per_week = t2.slider("Days a week to train", 1, 7,
+                              int(float(get_setting("days_per_week", 4) or 4)))
 
     col1, col2 = st.columns(2)
     with col1:
         ftp = st.number_input(
             "FTP (watts)", min_value=0, max_value=600,
             value=int(get_setting("ftp_watts", 200) or 200), step=5,
-            help="Functional Threshold Power — used for TSS, IF, and zone calculations",
+            help=setting_help("ftp"),
         )
         weight = st.number_input(
             "Weight (kg)", min_value=30.0, max_value=200.0,
             value=float(get_setting("weight_kg", 70) or 70), step=0.5,
+            help=setting_help("weight"),
         )
     with col2:
         lthr = st.number_input(
             "LTHR (bpm)", min_value=0, max_value=220,
             value=int(get_setting("lthr", 155) or 155), step=1,
-            help="Lactate Threshold Heart Rate — used for HR-based TSS and zone estimates",
+            help=setting_help("lthr"),
         )
         init_ctl = st.number_input(
             "Starting CTL", min_value=0.0, max_value=200.0,
             value=float(get_setting("ctl_start", 0) or 0), step=1.0,
-            help="Set this if you have prior training history. Leave at 0 to build from scratch.",
+            help=setting_help("ctl_start"),
         )
 
     if st.button("Save Profile", type="primary", icon=":material/save:"):
         old_ftp = int(get_setting("ftp_watts", 0) or 0)
+        old_lthr = int(get_setting("lthr", 0) or 0)
         set_setting("ftp_watts", ftp)
         set_setting("weight_kg", weight)
         set_setting("lthr", lthr)
         set_setting("ctl_start", init_ctl)
-        set_setting("primary_goal", ",".join(GOALS[g] for g in goal_labels))
+        set_setting("goal_text", goal_text.strip())
+        set_setting("primary_goal", ",".join(infer_goal_keys(goal_text)))
+        set_setting("weekly_hours_target", weekly_hours)
+        set_setting("days_per_week", days_per_week)
         if ftp != old_ftp and ftp > 0:
             log_ftp_history(ftp)
+            set_setting("ftp_estimated", "0")   # the rider set it themselves
+        if lthr != old_lthr:
+            set_setting("lthr_estimated", "0")
         st.success("Profile saved!")
 
 # ── Tab 2: Connections ────────────────────────────────────────────────────────

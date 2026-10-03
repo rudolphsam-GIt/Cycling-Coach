@@ -12,8 +12,10 @@ from datetime import date
 import streamlit as st
 
 from components import charts, theme
+from components.explain import help_icon
 from components.calendar import LAST_MOVE_KEY, undo_last_move
 from metrics import plan_impact as pi
+from metrics.explain import TIPS
 
 
 def _day(iso: str) -> str:
@@ -94,7 +96,8 @@ def _cards(result: dict, show_delta: bool) -> None:
                                    (c3, "Form (TSB)", "tsb", "normal")):
         delta = result["delta"][key]
         col.metric(label, f"{result['after'][key]:.1f}",
-                   delta=f"{delta:+.1f}" if show_delta and delta else None, delta_color=color)
+                   delta=f"{delta:+.1f}" if show_delta and delta else None, delta_color=color,
+                   help=TIPS[key])
 
 
 def render_impact_panel(state: dict) -> None:
@@ -103,7 +106,10 @@ def render_impact_panel(state: dict) -> None:
     today, plan = state["today"], state["plan"]
     last = st.session_state.get(LAST_MOVE_KEY)
     with st.container(border=True):
-        st.subheader("Plan impact")
+        title, helper = st.columns([3, 1.6], vertical_alignment="center")
+        title.subheader("Plan impact")
+        with helper:
+            help_icon("plan_impact", "plan_impact", label="What is this?")
         if not _has_plan(plan, today):
             st.caption("Nothing is planned yet. Add workouts or ask your coach to build a block, "
                        "and the projected fitness, fatigue and form appear here.")

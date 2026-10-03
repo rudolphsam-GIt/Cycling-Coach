@@ -236,6 +236,11 @@ def to_garmin_json(workout: dict, steps: list) -> dict:
 
     sport = {"sportTypeId": 2, "sportTypeKey": "cycling", "displayOrder": 2}
     description = (workout.get("description") or "").strip()
+    # What the workout is for and how it should feel travel with it to the bike computer.
+    extra = [f"{label}. {text.strip()}" for label, text in
+             (("How it should feel", workout.get("feel")), ("Why", workout.get("purpose")))
+             if text and text.strip()]
+    description = "\n\n".join([p for p in [description, *extra] if p])
     return {
         "workoutName": workout["name"][:80],
         "description": f"{description}\n\n{APP_TAG}".strip(),

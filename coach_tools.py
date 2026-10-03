@@ -118,7 +118,9 @@ TOOLS = [
                        "until the athlete confirms, so call this whenever they ask you to plan, "
                        "schedule or import workouts, then tell them to review and confirm below. "
                        "For a multi-week block, tag each workout with phase and week_number so the "
-                       "athlete sees it grouped sensibly instead of as one long flat list.",
+                       "athlete sees it grouped sensibly instead of as one long flat list, and "
+                       "describe every phase in phases. Every workout needs a purpose and a feel, "
+                       "written for someone who may be new to structured training.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -133,13 +135,38 @@ TOOLS = [
                             "description": {"type": "string",
                                             "description": "Structure with durations and power targets"},
                             "tss_planned": {"type": "number"},
+                            "purpose": {"type": "string",
+                                        "description": "One or two plain sentences. What this workout "
+                                                       "trains and how it serves this athlete's goal. "
+                                                       "No unexplained jargon."},
+                            "feel": {"type": "string",
+                                     "description": "How it should feel, such as effort out of 10 and "
+                                                    "a talk test, for example '4 out of 10, you can chat "
+                                                    "in full sentences'"},
                             "phase": {"type": "string",
                                      "description": "Optional — e.g. 'Base / Endurance', only for "
                                                     "multi-week blocks, groups the proposal in the UI"},
                             "week_number": {"type": "integer",
                                            "description": "Optional — 1-based week within the block"},
                         },
-                        "required": ["date", "name", "workout_type", "description", "tss_planned"],
+                        "required": ["date", "name", "workout_type", "description", "tss_planned",
+                                     "purpose", "feel"],
+                    },
+                },
+                "phases": {
+                    "type": "array",
+                    "description": "For a multi-week block, one entry for every phase named in the "
+                                   "workouts, explaining what that phase is building and why.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string", "description": "Exactly as used in the workouts' phase"},
+                            "focus": {"type": "string", "description": "One short line, what this phase builds"},
+                            "why": {"type": "string",
+                                    "description": "Two or three plain sentences, why this phase comes "
+                                                   "now and how it serves the athlete's goal"},
+                        },
+                        "required": ["name", "focus", "why"],
                     },
                 },
             },
@@ -176,10 +203,13 @@ TOOLS = [
                                 },
                             },
                             "duration_minutes": {"type": "integer"},
+                            "purpose": {"type": "string",
+                                        "description": "One or two plain sentences. What this session is "
+                                                       "for and how it helps this athlete's riding"},
                             "phase": {"type": "string", "description": "Optional, as in propose_workouts"},
                             "week_number": {"type": "integer", "description": "Optional, as in propose_workouts"},
                         },
-                        "required": ["date", "name", "exercises", "duration_minutes"],
+                        "required": ["date", "name", "exercises", "duration_minutes", "purpose"],
                     },
                 },
             },
@@ -349,6 +379,39 @@ def _optional_int(w: dict, key: str, where: str) -> int | None:
     return value
 
 
+def _text(w: dict, key: str, where: str, limit: int) -> str:
+    """A required, non empty string of at most `limit` characters."""
+    value = w.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ToolInputError(f"{where} needs a {key}, written in plain words for the athlete")
+    if len(value.strip()) > limit:
+        raise ToolInputError(f"{where} {key} must be at most {limit} characters")
+    return value.strip()
+
+
+PURPOSE_MAX, FEEL_MAX, FOCUS_MAX, WHY_MAX = 400, 250, 150, 500
+
+
+def _phases(args: dict) -> dict:
+    """{phase name: {focus, why}} from the optional phases argument."""
+    phases = args.get("phases")
+    if phases is None:
+        return {}
+    if not isinstance(phases, list) or len(phases) > 20:
+        raise ToolInputError("phases must be a list of at most 20 entries")
+    out = {}
+    for i, p in enumerate(phases):
+        where = f"phase {i}"
+        if not isinstance(p, dict):
+            raise ToolInputError(f"{where} must be an object")
+        name = p.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ToolInputError(f"{where} needs a name")
+        out[name.strip()] = {"focus": _text(p, "focus", where, FOCUS_MAX),
+                             "why": _text(p, "why", where, WHY_MAX)}
+    return out
+
+
 def _propose(args: dict, proposals: list[dict]) -> str:
     workouts = args.get("workouts")
     if not isinstance(workouts, list) or not workouts:
@@ -356,6 +419,7 @@ def _propose(args: dict, proposals: list[dict]) -> str:
     if len(workouts) > 60:
         raise ToolInputError("propose at most 60 workouts at a time")
 
+    phases = _phases(args)
     checked = []
     for i, w in enumerate(workouts):
         if not isinstance(w, dict):
@@ -371,10 +435,19 @@ def _propose(args: dict, proposals: list[dict]) -> str:
             raise ToolInputError(f"{where} needs a name and description")
         if not isinstance(tss, (int, float)) or isinstance(tss, bool) or not 0 <= tss <= 500:
             raise ToolInputError(f"{where} tss_planned must be a number from 0 to 500")
+        phase = _optional_str(w, "phase", where)
+        if phase is not None:
+            phase = phase.strip() or None
+        if phase and phase not in phases:
+            raise ToolInputError(f"{where} is in phase '{phase}', which is missing from phases. "
+                                 "Describe every phase you use in phases.")
         checked.append({"kind": "ride", "date": day.isoformat(), "name": name.strip(),
                         "workout_type": w["workout_type"], "description": desc.strip(),
-                        "tss_planned": float(tss), "phase": _optional_str(w, "phase", where),
-                        "week_number": _optional_int(w, "week_number", where)})
+                        "tss_planned": float(tss), "phase": phase,
+                        "week_number": _optional_int(w, "week_number", where),
+                        "purpose": _text(w, "purpose", where, PURPOSE_MAX),
+                        "feel": _text(w, "feel", where, FEEL_MAX),
+                        "phase_note": phases.get(phase) if phase else None})
 
     proposals.extend(checked)
     return (f"{len(checked)} rides are shown to the athlete with a confirm button. "
@@ -413,6 +486,7 @@ def _propose_strength(args: dict, proposals: list[dict]) -> str:
             raise ToolInputError(f"{where} duration_minutes must be a whole number from 5 to 180")
         checked.append({"kind": "strength", "date": day.isoformat(), "name": name.strip(),
                         "exercises": exercises, "duration_minutes": duration,
+                        "purpose": _text(s, "purpose", where, PURPOSE_MAX),
                         "phase": _optional_str(s, "phase", where),
                         "week_number": _optional_int(s, "week_number", where)})
 
@@ -437,4 +511,9 @@ def _generate_block(args: dict) -> list[dict]:
     if (race_date - start).days > 104 * 7:
         raise ToolInputError("that's more than 2 years out — generate a shorter block and extend it later")
     current_ctl = get_current_metrics()["ctl"]
-    return planning.generate_block(current_ctl, float(target_ctl), race_date, phase_focus, start)
+    try:
+        days = int(float(get_setting("days_per_week", 0) or 0)) or None
+    except (TypeError, ValueError):
+        days = None
+    return planning.generate_block(current_ctl, float(target_ctl), race_date, phase_focus, start,
+                                   days_per_week=days)

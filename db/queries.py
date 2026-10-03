@@ -355,10 +355,11 @@ def add_workout(data: dict) -> int:
     conn = get_conn()
     cur = conn.execute(
         """INSERT INTO workouts (date, name, workout_type, description,
-           structured_json, tss_planned, notes, phase, week_number)
+           structured_json, tss_planned, notes, phase, week_number, purpose, feel)
            VALUES (:date,:name,:workout_type,:description,:structured_json,:tss_planned,:notes,
-                   :phase,:week_number)""",
-        {**data, "phase": data.get("phase"), "week_number": data.get("week_number")},
+                   :phase,:week_number,:purpose,:feel)""",
+        {**data, "phase": data.get("phase"), "week_number": data.get("week_number"),
+         "purpose": data.get("purpose"), "feel": data.get("feel")},
     )
     conn.commit()
     wid = cur.lastrowid
@@ -383,11 +384,12 @@ def update_workout(wid: int, data: dict):
         """UPDATE workouts SET name=:name, workout_type=:workout_type,
            description=:description, tss_planned=:tss_planned,
            completed=:completed, notes=:notes,
+           purpose=COALESCE(:purpose, purpose), feel=COALESCE(:feel, feel),
            -- Garmin steps are rebuilt from the new description on the next send
            structured_json=CASE WHEN description IS :description AND name IS :name
                                 THEN structured_json ELSE NULL END
            WHERE id=:id""",
-        {**data, "id": wid},
+        {**data, "purpose": data.get("purpose"), "feel": data.get("feel"), "id": wid},
     )
     conn.commit()
     conn.close()
@@ -411,6 +413,32 @@ def move_workout(wid: int, new_date: str) -> dict | None:
     conn.commit()
     conn.close()
     return dict(row)
+
+
+# ── Why a block is built the way it is ────────────────────────────────────────
+
+def save_phase_notes(phases: list) -> None:
+    """Store the focus and reason for each named phase of a plan. A later plan
+    that reuses a phase name replaces its note."""
+    rows = [(p["name"], p.get("focus"), p.get("why"), datetime.utcnow().isoformat())
+            for p in phases or [] if p.get("name")]
+    if not rows:
+        return
+    conn = get_conn()
+    conn.executemany(
+        """INSERT INTO plan_phases (phase, focus, why, updated_at) VALUES (?, ?, ?, ?)
+           ON CONFLICT(phase) DO UPDATE SET focus=excluded.focus, why=excluded.why,
+           updated_at=excluded.updated_at""", rows)
+    conn.commit()
+    conn.close()
+
+
+def get_phase_notes() -> dict:
+    """{phase name: {focus, why}} for every stored phase."""
+    conn = get_conn()
+    rows = conn.execute("SELECT phase, focus, why FROM plan_phases").fetchall()
+    conn.close()
+    return {r["phase"]: {"focus": r["focus"], "why": r["why"]} for r in rows}
 
 
 def get_workout(wid: int) -> dict | None:
@@ -594,9 +622,10 @@ def add_strength_session(data: dict) -> int:
     conn = get_conn()
     cur = conn.execute(
         """INSERT INTO strength_sessions (date, plan_week, exercises_json,
-           duration_minutes, notes, phase, completed) VALUES (:date,:plan_week,
-           :exercises_json,:duration_minutes,:notes,:phase,:completed)""",
-        {**data, "phase": data.get("phase"), "completed": data.get("completed", 0)},
+           duration_minutes, notes, phase, completed, purpose) VALUES (:date,:plan_week,
+           :exercises_json,:duration_minutes,:notes,:phase,:completed,:purpose)""",
+        {**data, "phase": data.get("phase"), "completed": data.get("completed", 0),
+         "purpose": data.get("purpose")},
     )
     conn.commit()
     sid = cur.lastrowid

@@ -92,6 +92,7 @@ def _strength_row(row: dict) -> dict:
         "planned": (not row.get("completed")) and "Planned by AI Coach" in notes,
         "duration_minutes": row.get("duration_minutes"),
         "exercises": exercises,
+        "purpose": row.get("purpose"),
     }
 
 
@@ -241,6 +242,10 @@ def day_tooltip(day: DayData) -> str:
             desc = _short(w.get("description"), 120)
             if desc:
                 parts.append("<i>" + _wrap(desc) + "</i>")
+            if w.get("purpose"):
+                parts.append("<b>Why.</b> " + _wrap(_short(w["purpose"], 170)))
+            if w.get("feel"):
+                parts.append("<b>Feel.</b> " + _wrap(_short(w["feel"], 110)))
         if len(day.planned) > 3:
             parts.append(f"+{len(day.planned) - 3} more")
 
@@ -266,6 +271,8 @@ def day_tooltip(day: DayData) -> str:
             more = len(s["exercises"]) - 4
             names = ", ".join(_short(x, 24) for x in s["exercises"][:4])
             parts.append(_esc(names + (f" and {more} more" if more > 0 else "")))
+        if s.get("purpose"):
+            parts.append("<b>Why.</b> " + _wrap(_short(s["purpose"], 170)))
 
     for r in day.races:
         parts.append("<b>Race</b>")
@@ -604,7 +611,8 @@ def render_month_calendar(key: str = "cal"):
     calendar_dnd.render_grid(build_payload(days, sel, today), key=grid_key,
                              on_event=_cb_grid)
     st.markdown(_legend_html(), unsafe_allow_html=True)
-    st.caption("Drag an upcoming workout to another day. Click a workout to open and edit it.")
+    st.caption("Drag an upcoming workout to another day. Click a workout to open and edit it. "
+               "The number on each workout is its planned TSS, the training stress it should add.")
 
     pick_key = f"{key}_pick"
     st.session_state[pick_key] = date.fromisoformat(sel) if sel else today

@@ -13,7 +13,8 @@ from db.queries import (get_activities, get_setting, get_races, get_workouts,
                         get_recovery_range, is_ride)
 from metrics.training_load import compute_pmc, get_current_metrics
 from metrics.zones import get_power_zones, get_hr_zones
-from components import charts, ride_detail, theme
+from components import charts, checklist, ftp_help, ride_detail, theme
+from components.explain import help_icon, tip
 from components.cards import metric_card, section_header, tsb_banner, page_header
 
 run_migrations()
@@ -47,6 +48,8 @@ page_header(f"{_greeting}{', ' + _first_name if _first_name else ''}",
 
 from components.onboarding import render_onboarding_welcome_banner
 render_onboarding_welcome_banner()
+
+checklist.render()
 
 tsb_banner(tsb, ctl)
 
@@ -129,20 +132,25 @@ with col_feel:
             st.rerun()
 
 # ── Key numbers ───────────────────────────────────────────────────────────────
+_gap, _help = st.columns([3, 2])
+with _help:
+    help_icon("key_numbers", "today_numbers", label="What do these mean?")
 col1, col2, col3, col4, col5 = st.columns(5)
 with col1:
     metric_card("Fitness", f"{ctl:.1f}", delta=f"{ramp:+.1f} /wk" if ramp is not None else None,
-                tone="var(--fitness)", hint="CTL")
+                tone="var(--fitness)", hint="CTL", tip=tip("ctl"))
 with col2:
-    metric_card("Fatigue", f"{atl:.1f}", tone="var(--fatigue)", hint="ATL")
+    metric_card("Fatigue", f"{atl:.1f}", tone="var(--fatigue)", hint="ATL", tip=tip("atl"))
 with col3:
     metric_card("Form", f"{tsb:+.1f}",
                 tone="var(--good)" if tsb >= 5 else "var(--bad)" if tsb <= -20 else "var(--warn)",
-                hint="TSB")
+                hint="TSB", tip=tip("tsb"))
 with col4:
-    metric_card("FTP", f"{ftp:.0f} W", small_value=True, tone="var(--text-1)")
+    metric_card("FTP", f"{ftp:.0f} W", small_value=True, tone="var(--text-1)", tip=tip("ftp"))
 with col5:
-    metric_card("W / kg", f"{w_per_kg:.2f}", small_value=True, tone="var(--text-1)")
+    metric_card("W / kg", f"{w_per_kg:.2f}", small_value=True, tone="var(--text-1)", tip=tip("wkg"))
+
+ftp_help.render("today_ftp")
 
 # ── Coach: latest ride review and weekly check in ────────────────────────────
 import coach_reports
@@ -172,7 +180,8 @@ if date.today().weekday() in (5, 6, 0) and not get_report("weekly", _week.isofor
             "Open **Plan** to run it.")
 
 # ── PMC Chart ────────────────────────────────────────────────────────────────
-section_header("Performance Management Chart", "120-day CTL, ATL, TSB and daily TSS")
+section_header("Performance Management Chart", "120-day CTL, ATL, TSB and daily TSS",
+               explain="performance_chart")
 
 start = date.today() - timedelta(days=120)
 end = date.today()
@@ -258,7 +267,8 @@ fig.update_yaxes(title_text="TSB (form)", secondary_y=True,
 charts.show(fig, key="dash_pmc")
 
 # ── Weekly Training Summary ───────────────────────────────────────────────────
-section_header("Weekly Summary", "Planned vs actual TSS and zone distribution")
+section_header("Weekly Summary", "Planned vs actual TSS and zone distribution",
+               explain="planned_vs_done")
 
 weekly = get_weekly_tss_summary(weeks=5)
 
@@ -354,6 +364,11 @@ else:
 
 # ── Power & HR Zones + FTP History ───────────────────────────────────────────
 with st.expander("Power & HR Zones"):
+    _zh, _zb = st.columns(2)
+    with _zh:
+        help_icon("zones", "today_zones", label="What are zones?")
+    with _zb:
+        help_icon("hr_zones", "today_hr_zones", label="What are heart rate zones?")
     z1, z2 = st.columns(2)
     with z1:
         st.markdown("**Power Zones**")

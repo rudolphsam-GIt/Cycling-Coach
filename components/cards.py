@@ -5,6 +5,7 @@ Requires inject_styles() to have been called on the page first.
 from __future__ import annotations
 
 import html
+import zlib
 from typing import Optional
 
 import streamlit as st
@@ -21,6 +22,7 @@ def metric_card(
     small_value: bool = False,
     tone: Optional[str] = None,
     hint: Optional[str] = None,
+    tip: Optional[str] = None,
 ) -> None:
     """
     Render a styled metric card.
@@ -46,6 +48,8 @@ def metric_card(
         CSS color for the value (defaults to the theme accent color).
     hint:
         Optional muted line under the value (e.g. "fitness").
+    tip:
+        Optional plain words shown when hovering over the card.
     """
     icon_html = f'<div class="metric-icon">{icon}</div>' if icon else ""
 
@@ -73,15 +77,17 @@ def metric_card(
 
     tone_style = f' style="--tone:{tone}"' if tone else ""
     hint_html = f'<div class="metric-hint">{hint}</div>' if hint else ""
+    title_attr = f' title="{html.escape(tip, quote=True)}"' if tip else ""
     st.markdown(
-        f'<div class="metric-card"{tone_style}>{icon_html}'
+        f'<div class="metric-card"{tone_style}{title_attr}>{icon_html}'
         f'<div class="metric-label">{label}</div>'
         f'<div class="{value_class}">{value}</div>{delta_html}{hint_html}</div>',
         unsafe_allow_html=True,
     )
 
 
-def section_header(title: str, subtitle: Optional[str] = None) -> None:
+def section_header(title: str, subtitle: Optional[str] = None, explain: Optional[str] = None,
+                   **numbers) -> None:
     """
     Render a styled section header (title with an optional muted subtitle).
 
@@ -91,7 +97,18 @@ def section_header(title: str, subtitle: Optional[str] = None) -> None:
         Main heading text.
     subtitle:
         Optional secondary line shown below the title in muted text.
+    explain:
+        Optional term from metrics.explain.TERMS. Adds a help icon at the right
+        that explains it. Extra keyword arguments override the rider's numbers.
     """
+    if explain:
+        from components.explain import help_icon
+        left, right = st.columns([12, 1], vertical_alignment="center")
+        with left:
+            section_header(title, subtitle)
+        with right:
+            help_icon(explain, key=f"sh_{explain}_{zlib.crc32(title.encode()) % 10**6}", **numbers)
+        return
     sub_html = (
         f'<div class="section-header-subtitle">{subtitle}</div>'
         if subtitle
@@ -142,23 +159,25 @@ def tsb_banner(tsb: float, ctl: float) -> None:
     ctl:
         Current Chronic Training Load (fitness score).
     """
-    if tsb >= 10 and ctl > 20:
+    from metrics.explain import form_state
+    state = form_state(tsb, ctl)
+    if state == "fresh":
         css_class = "tsb-banner tsb-banner-fresh"
         message = (
             f"<strong>Fresh</strong> · form {tsb:+.1f}. "
-            "A good day to race or go hard."
+            "You have more fitness than fatigue, so it is a good day to race or go hard."
         )
-    elif tsb <= -30:
+    elif state == "fatigued":
         css_class = "tsb-banner tsb-banner-fatigued"
         message = (
             f"<strong>Fatigued</strong> · form {tsb:+.1f}. "
-            "Take an easy day or rest before hard efforts."
+            "Recent training is catching up with you, so take an easy day or rest before hard efforts."
         )
     else:
         css_class = "tsb-banner tsb-banner-building"
         message = (
             f"<strong>Building</strong> · form {tsb:+.1f}. "
-            "A productive training zone. Keep an eye on fatigue."
+            "You are carrying some fatigue, which is normal while building. Keep an eye on it."
         )
 
     st.markdown(

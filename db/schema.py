@@ -121,6 +121,13 @@ CREATE TABLE IF NOT EXISTS activity_peaks (
     PRIMARY KEY (activity_id, duration_s)
 );
 
+CREATE TABLE IF NOT EXISTS plan_phases (
+    phase TEXT PRIMARY KEY,
+    focus TEXT,
+    why TEXT,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS activity_hr_peaks (
     activity_id INTEGER NOT NULL,
     duration_s INTEGER NOT NULL,
@@ -166,6 +173,9 @@ def run_migrations():
         "ALTER TABLE workouts ADD COLUMN phase TEXT",
         "ALTER TABLE workouts ADD COLUMN week_number INTEGER",
         "ALTER TABLE strength_sessions ADD COLUMN phase TEXT",
+        "ALTER TABLE workouts ADD COLUMN purpose TEXT",
+        "ALTER TABLE workouts ADD COLUMN feel TEXT",
+        "ALTER TABLE strength_sessions ADD COLUMN purpose TEXT",
     ]:
         try:
             conn.execute(col_sql)

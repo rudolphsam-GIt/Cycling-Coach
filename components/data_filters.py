@@ -15,6 +15,7 @@ from datetime import date, timedelta
 import streamlit as st
 
 from metrics import analysis as an
+from metrics.explain import TIPS
 
 PRESETS = {"7 days": 7, "4 weeks": 28, "3 months": 91, "6 months": 182, "1 year": 365,
            "All": None, "Custom": "custom"}
@@ -149,14 +150,15 @@ def summary_tiles(ctx: dict) -> None:
     before = an.summary(ctx["previous"]) if ctx["previous"] is not None else None
     diff = an.deltas(now, before) if before else {}
 
-    def tile(col, label, key, fmt, dfmt):
+    def tile(col, label, key, fmt, dfmt, term=None):
         d = diff.get(key)
         shown = dfmt(d) if d else None
         if shown and not any(ch in "123456789" for ch in shown):
             shown = None   # rounds to zero, so no arrow
+        meaning = TIPS.get(term or key, "")
         col.metric(label, fmt(now[key]) if now[key] is not None else "–",
                    delta=shown,
-                   help="Change against the period of the same length just before" if before else None)
+                   help=(meaning + (" " + TIPS["compare"] if before else "")).strip() or None)
 
     r1 = st.columns(4)
     tile(r1[0], "Rides", "rides", lambda v: f"{v}", lambda d: f"{d:+.0f}")
@@ -164,7 +166,7 @@ def summary_tiles(ctx: dict) -> None:
          lambda v: f"{v:,.0f} h" if v >= 100 else f"{int(v)}h {int(v % 1 * 60):02d}m",
          lambda d: f"{d:+.1f} h")
     tile(r1[2], "Distance km", "km", lambda v: f"{v:,.0f}", lambda d: f"{d:+,.0f}")
-    tile(r1[3], "Climbing m", "climb_m", lambda v: f"{v:,.0f}", lambda d: f"{d:+,.0f}")
+    tile(r1[3], "Climbing m", "climb_m", lambda v: f"{v:,.0f}", lambda d: f"{d:+,.0f}", term="climb")
     r2 = st.columns(4)
     tile(r2[0], "TSS", "tss", lambda v: f"{v:,.0f}", lambda d: f"{d:+,.0f}")
     tile(r2[1], "Work kJ", "kj", lambda v: f"{v:,.0f}", lambda d: f"{d:+,.0f}")

@@ -42,6 +42,31 @@ def goal_keys_to_labels(keys: list[str]) -> list[str]:
     return [rev[k] for k in keys if k in rev]
 
 
+GOAL_EXAMPLES = [
+    "Ride my first 100 mile day",
+    "Get faster for road races next spring",
+    "Lose 10 pounds and feel stronger",
+    "Keep up with my Saturday group ride",
+    "Finish a gran fondo with friends",
+]
+
+_KEYWORDS = {
+    "race": ("race", "racing", "crit", "criterium", "cat 3", "cat 4", "cat 5", "time trial", "omnium"),
+    "speed": ("faster", "speed", "power", "ftp", "stronger", "climb", "keep up", "sprint"),
+    "endurance": ("endurance", "century", "100 mile", "gran fondo", "granfondo", "long ride", "distance",
+                  "finish", "centuries", "stamina"),
+    "weight_loss": ("weight", "lose", "pounds", "lbs", "kilos", "slim", "fat"),
+}
+
+
+def infer_goal_keys(text: str) -> list[str]:
+    """Rough goal categories from a rider's own words, so the coach's built in
+    guidance still applies. The words themselves are always sent to the coach too."""
+    t = (text or "").lower()
+    keys = [k for k, words in _KEYWORDS.items() if any(w in t for w in words)]
+    return keys or ["general_fitness"]
+
+
 def render_onboarding():
     st.markdown(
         '<div class="hero">'
@@ -57,20 +82,32 @@ def render_onboarding():
         with st.form("onboarding_form"):
             name = st.text_input("What's your name?", placeholder="e.g. Sam")
 
-            goal_labels = st.multiselect(
-                "What are your main goals right now? (pick one or more)",
-                list(GOALS.keys()),
-                default=[list(GOALS.keys())[0]],
+            goal_text = st.text_area(
+                "What are your goals?",
+                placeholder="Write it however you like, a sentence or two is plenty.",
+                height=100,
+                help="Anything you want from riding, big or small. Your coach plans around what you write.",
             )
+            st.caption("Ideas to get you thinking: " + ", ".join(GOAL_EXAMPLES) + ".")
 
             experience_label = st.radio(
                 "How would you describe your training experience?",
                 list(EXPERIENCE.keys()),
+                help="Sets your starting numbers and how much the app and your coach explain. "
+                     "Choose the first one if you have never followed a structured plan.",
             )
 
             weekly_hours = st.slider(
-                "How many hours per week can you realistically train?",
+                "How many hours a week do you have to train?",
                 min_value=1, max_value=20, value=6,
+                help="Be realistic. A plan you can keep up beats an ambitious one you skip.",
+            )
+
+            days_per_week = st.slider(
+                "How many days a week can you train?",
+                min_value=1, max_value=7, value=4,
+                help="Count the days you can ride or lift. Rest days are part of the plan, so you "
+                     "do not need to pick seven.",
             )
 
             weight = st.number_input(
@@ -97,12 +134,12 @@ def render_onboarding():
 
             submitted = st.form_submit_button("Get Started", type="primary", width="stretch")
 
-        if submitted and not goal_labels:
-            st.error("Pick at least one goal before continuing.")
+        if submitted and not goal_text.strip():
+            st.error("Tell us a little about your goals before continuing. A sentence is plenty.")
 
-        if submitted and goal_labels:
+        if submitted and goal_text.strip():
             exp = EXPERIENCE[experience_label]
-            goal_key_list = [GOALS[g] for g in goal_labels]
+            goal_key_list = infer_goal_keys(goal_text)
             goal_keys_str = ",".join(goal_key_list)
 
             final_ftp = ftp_input if ftp_input else round(weight * exp["w_per_kg"])
@@ -110,6 +147,8 @@ def render_onboarding():
 
             set_setting("athlete_name", name or "")
             set_setting("primary_goal", goal_keys_str)
+            set_setting("goal_text", goal_text.strip())
+            set_setting("days_per_week", days_per_week)
             set_setting("experience_level", experience_label)
             set_setting("weekly_hours_target", weekly_hours)
             set_setting("weight_kg", weight)
@@ -133,6 +172,53 @@ def render_onboarding():
             st.rerun()
 
 
+NEW_RIDER = "New to structured training"
+
+
+def _goals_for_message(get_setting) -> list[str]:
+    """The rider's own words if they gave any, else the older category labels."""
+    text = (get_setting("goal_text", "") or "").strip()
+    if text:
+        return [text]
+    return goal_keys_to_labels(parse_goal_keys(get_setting("primary_goal", "")))
+
+
+def build_first_block_message() -> str:
+    """The first message to the coach, written from the rider's own settings."""
+    from db.queries import get_races, get_setting
+    from metrics.explain import first_block_message
+
+    def num(key):
+        try:
+            return float(get_setting(key, 0) or 0) or None
+        except (TypeError, ValueError):
+            return None
+
+    races = get_races(upcoming_only=True)
+    return first_block_message(
+        goals=_goals_for_message(get_setting),
+        days=num("days_per_week"),
+        experience=get_setting("experience_level", "") or NEW_RIDER,
+        hours=num("weekly_hours_target"), ftp=num("ftp_watts"),
+        ftp_estimated=get_setting("ftp_estimated", "") == "1",
+        race=races[0] if races else None, name=get_setting("athlete_name", "") or None)
+
+
+def _go_first_block() -> None:
+    from components import coach_ui
+    st.session_state["pending_message"] = build_first_block_message()
+    st.session_state[coach_ui.PLAN_JUMP_KEY] = "coach"
+    st.switch_page(coach_ui.PLAN_PAGE)
+
+
+def first_block_button(key: str) -> None:
+    """Opens the coach with a first block request already written."""
+    if st.button("Build my first block", key=key, type="primary", icon=":material/auto_awesome:",
+                 help="Opens your coach with a request for a four week starting block, "
+                      "written from your goals and hours"):
+        _go_first_block()
+
+
 def render_onboarding_welcome_banner():
     """Shown once on the Dashboard right after onboarding completes."""
     goal_key_list = st.session_state.pop("onboarding_just_finished", None)
@@ -141,3 +227,10 @@ def render_onboarding_welcome_banner():
     blurbs = [GOAL_BLURB[k] for k in goal_key_list if k in GOAL_BLURB]
     blurb_str = " ".join(blurbs)
     st.success(f"You're all set! {blurb_str} Head to **Settings** anytime to refine your FTP, LTHR, or goals.")
+    from db.queries import get_setting
+    if get_setting("experience_level", "") == NEW_RIDER:
+        st.info("New to structured training? Look for the small help icons and the question mark "
+                "tooltips next to numbers and charts. They explain what each one is, why it matters, "
+                "and what your own number means. The checklist below walks you through setting up.",
+                icon=":material/school:")
+    first_block_button("welcome_first_block")

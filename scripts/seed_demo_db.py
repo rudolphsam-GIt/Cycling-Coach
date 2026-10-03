@@ -34,11 +34,17 @@ os.environ["CYCLING_COACH_DB"] = str(target)  # must be set before the db module
 
 from db.schema import run_migrations  # noqa: E402
 from db import queries as q  # noqa: E402
+from metrics import explain  # noqa: E402
 
 run_migrations()
 for key, value in {"ftp_watts": 250, "weight_kg": 72, "lthr": 165, "ctl_start": 40,
-                   "primary_goal": "speed", "weekly_hours_target": 8,
-                   "onboarding_complete": "1"}.items():
+                   "primary_goal": "speed", "weekly_hours_target": 8, "days_per_week": 5,
+                   "goal_text": "Get faster for road races next spring",
+                   "onboarding_complete": "1",
+                   # The empty database looks like a rider who has just finished onboarding.
+                   "experience_level": "New to structured training" if args.empty
+                   else "Some structured training experience",
+                   "ftp_estimated": "1" if args.empty else "0"}.items():
     q.set_setting(key, value)
 q.log_ftp_history(250, "Demo")
 
@@ -46,6 +52,7 @@ if args.empty:
     print(f"Wrote empty demo database to {target}")
     sys.exit(0)
 
+q.save_phase_notes([{"name": "Build / Threshold", **explain.PHASE_NOTES["Build / Threshold"]}])
 rng = random.Random(7)
 today = date.today()
 FTP = 250
@@ -108,8 +115,9 @@ for offset in range(-180, 22):
             completed = 1 if outcome == "marked" else 0
         q.add_workout({"date": day.isoformat(), "name": wname, "workout_type": wtype,
                        "description": f"{wname} at planned intensity", "structured_json": None,
-                       "tss_planned": float(wtss), "notes": "demo", "phase": "Build",
-                       "week_number": 1 + (offset + 28) // 7})
+                       "tss_planned": float(wtss), "notes": "demo", "phase": "Build / Threshold",
+                       "week_number": 1 + (offset + 28) // 7,
+                       "purpose": explain.PURPOSE.get(wtype), "feel": explain.feel_for(wtype)})
         if completed:
             wid = q.get_workouts(day.isoformat(), day.isoformat())[0]["id"]
             q.update_workout(wid, {"name": wname, "workout_type": wtype,
@@ -135,6 +143,8 @@ for offset in range(-120, 1):
 for offset, name in ((2, "Lower body A"), (5, "Lower body B")):
     q.add_strength_session({
         "date": (today + timedelta(days=offset)).isoformat(), "plan_week": 1, "phase": "Build",
+        "purpose": "Builds the leg strength that lets you push a bigger gear up climbs and stay "
+                   "stable late in a race.",
         "exercises_json": json.dumps([
             {"name": "Back squat", "sets": 3, "reps": "6", "intensity": "RPE 7"},
             {"name": "Romanian deadlift", "sets": 3, "reps": "8", "intensity": "RPE 7"},

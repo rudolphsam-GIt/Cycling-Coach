@@ -6,6 +6,24 @@ It also has an AI coach you can chat with. The coach sees your real training num
 
 Your training history stays in a local database on your machine. Nothing is stored in the cloud by this app.
 
+## New to structured training?
+
+You do not need to know any of the jargon to start. Here are the five ideas the app is built on, in plain words.
+
+1. **FTP** is the most power you can hold for about an hour. It is your yardstick. If you do not know it, the app starts with an estimate and can suggest a better one from your best 20 minutes, or plan a guided test.
+2. **Zones** are effort bands based on your FTP. Zone 2 is steady, comfortable riding and should make up most of your time. Higher zones are harder and make you faster, but only a little of your riding should be there.
+3. **TSS (training stress score)** is one number for how big a ride was, counting both how long and how hard. One hour at your FTP is 100. It lets you add up a week and see how much you are asking of your body.
+4. **Fitness and fatigue.** Fitness (CTL) is your training load averaged over about six weeks. It rises when you train consistently. Fatigue (ATL) is the same over about a week, so it jumps after hard days.
+5. **Form** is fitness minus fatigue. Slightly negative is normal and productive while you train. You want to be positive when you race, and very negative for weeks is a warning.
+
+How the app helps you learn.
+
+- **Help icons and tooltips.** Look for the small question mark icons and the hover tips next to numbers and charts. Each one says what it is, why it matters, and what your own number means right now.
+- **Your coach explains the why.** Every workout the coach plans says what it is for in terms of your goals, what to focus on, and how it should feel (effort out of 10 and a talk test). Every block explains what each phase is building. On the calendar, hover or open a workout to read it. The same text goes to your Garmin if you send the workout.
+- **Getting started checklist.** On the Today page, a short list of the steps to set up, which ticks itself off from your data.
+- **Build my first block.** One button that asks the coach for a gentle four week starting block. Setup asks for your goals in your own words (with examples to get you thinking), how many hours a week and how many days a week you can train, and the plan is built to fit them. You can change all three later in Settings.
+- **Help finding your FTP.** The Today page and Settings tell you when your FTP is only an estimate, offer 95% of your best 20 minutes once rides are in, and can add a guided 20 minute test to your plan.
+
 ## What you need
 
 1. A Mac or Linux computer.
@@ -268,18 +286,22 @@ metrics/plan_impact.py    What a change to the plan does to those numbers, plus 
 metrics/zones.py          Power and heart rate zone estimates
 metrics/analysis.py       Search filters, totals, weekly volume, efficiency, peak power curve, history and power profile
 metrics/peaks.py          Best average power and heart rate by duration from a ride file
+metrics/explain.py        All the plain language wording, in one place
 research/                 OBRA schedule and race results
 components/               Shared interface pieces
 components/calendar.py    Calendar data, moves and undo for the Plan page
 components/calendar_dnd.py  The interactive grid (drag, click, hover)
 components/plan_impact_ui.py  The Plan impact panel and undo bar
+components/explain.py     Help icons and tooltips that explain a number in plain words
+components/ftp_help.py    FTP estimate note, suggestion from best 20 minutes, guided test
+components/checklist.py   Getting started checklist on Today
 components/data_filters.py  Date range, search and filters shared by Dashboard and Data
 components/ride_detail.py   Rides table and ride detail used by Today and Data
 components/history_table.py  The fitness history tables on the Dashboard
 components/charts.py      Chart styling, drag to zoom and Reset zoom
 scripts/garmin_setup.py   Terminal fallback for connecting Garmin
 scripts/seed_demo_db.py   Builds a demo database
-tests/                    Tests for the calendar, moves, plan impact, analysis, peaks and history (python -m unittest discover -s tests)
+tests/                    Tests for the calendar, moves, plan impact, analysis, peaks, history and wording (python -m unittest discover -s tests)
 .streamlit/config.toml    Dark theme
 ```
 

@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+from metrics import explain
+
 DAY_TEMPLATES = {
     "Endurance": [
         ("Mon", "Recovery",  0.45), ("Tue", "Endurance", 0.85),
@@ -39,17 +41,33 @@ PHASE_LABELS = {
     "Threshold": "Build / Threshold",
     "Peak": "Peak / Sharpening",
 }
+TAPER_LABEL = "Taper"
+PHASE_NOTES = {**explain.PHASE_NOTES, TAPER_LABEL: explain.TAPER_NOTE}
+
+
+def _fit_to_days(template: list, days_per_week: int | None) -> list:
+    """The week's template cut down to the riding days the athlete has. The biggest
+    sessions are kept, the smallest dropped first, and the days stay in order."""
+    if not days_per_week:
+        return template
+    active = [(i, wt) for i, (_, t, wt) in enumerate(template) if t and wt > 0]
+    if days_per_week >= len(active):
+        return template
+    keep = {i for i, _ in sorted(active, key=lambda x: -x[1])[:max(int(days_per_week), 1)]}
+    return [(d, t if i in keep else None, wt if i in keep else 0.0)
+            for i, (d, t, wt) in enumerate(template)]
 
 
 def generate_block(current_ctl: float, target_ctl: float, race_date: date,
-                    phase_key: str, start_date: date | None = None) -> list[dict]:
+                    phase_key: str, start_date: date | None = None,
+                    days_per_week: int | None = None) -> list[dict]:
     """
     Generate a periodized block of ride workouts from start_date (default
     today) to race_date, ramping weekly TSS from current_ctl toward
     target_ctl, with a 1-2 week taper worked into the end. Returns plain
     workout dicts — date, name, workout_type, description, tss_planned, plus
     phase/week_number for grouping a multi-week proposal in the UI. Nothing
-    is written to the database.
+    is written to the database. `days_per_week` limits how many days a week get a ride.
     """
     today = start_date or date.today()
     weeks_out = max(1, (race_date - today).days // 7)
@@ -72,17 +90,17 @@ def generate_block(current_ctl: float, target_ctl: float, race_date: date,
             taper_phase = wk - build_weeks  # 0 or 1
             multiplier = 0.6 if taper_phase == 0 else 0.4
             week_tss = target_weekly_tss * multiplier
-            tmpl = DAY_TEMPLATES["Peak"]
+            tmpl = _fit_to_days(DAY_TEMPLATES["Peak"], days_per_week)
         elif recovery:
             progress = wk / max(build_weeks - 1, 1)
             week_tss = (current_weekly_tss + progress *
                         (target_weekly_tss - current_weekly_tss)) * 0.65
-            tmpl = DAY_TEMPLATES[phase_key]
+            tmpl = _fit_to_days(DAY_TEMPLATES[phase_key], days_per_week)
         else:
             progress = wk / max(build_weeks - 1, 1)
             week_tss = (current_weekly_tss +
                         progress * (target_weekly_tss - current_weekly_tss))
-            tmpl = DAY_TEMPLATES[phase_key]
+            tmpl = _fit_to_days(DAY_TEMPLATES[phase_key], days_per_week)
 
         active_days = [(d, t, wt) for d, t, wt in tmpl if t and wt > 0]
         total_weight = sum(wt for _, _, wt in active_days)
@@ -97,14 +115,22 @@ def generate_block(current_ctl: float, target_ctl: float, race_date: date,
             if w_date >= race_date:
                 break
             label = "(Taper) " if is_taper else ("(Recovery) " if recovery else "")
+            week_phase = TAPER_LABEL if is_taper else phase_label
+            purpose = explain.PURPOSE.get(w_type, explain.PURPOSE["Other"])
+            if recovery:
+                purpose = ("This is a lighter week on purpose. Your body gets stronger while it recovers, "
+                           "so keep it easy. " + purpose)
             workouts.append({
                 "date": w_date.isoformat(),
                 "name": f"{label}{w_type}",
                 "workout_type": w_type,
-                "description": f"Auto-generated · {phase_label} · week {wk + 1}",
+                "description": f"Auto-generated · {week_phase} · week {wk + 1}",
                 "tss_planned": float(day_tss),
-                "phase": phase_label,
+                "phase": week_phase,
                 "week_number": wk + 1,
+                "purpose": purpose,
+                "feel": explain.feel_for(w_type),
+                "phase_note": PHASE_NOTES.get(week_phase),
             })
 
     return workouts

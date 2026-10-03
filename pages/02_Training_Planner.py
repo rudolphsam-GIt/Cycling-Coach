@@ -15,12 +15,13 @@ from db.schema import run_migrations
 from db.queries import (get_workouts, add_workout, update_workout, delete_workout,
                          get_setting, get_races, WORKOUT_TYPES,
                          get_workout, get_strength_session, garmin_status, save_message, get_conversation_history,
-                         get_memories, forget_memory)
+                         get_memories, forget_memory, save_phase_notes, get_phase_notes)
 import auth.garmin as garmin_auth
 import garmin_workouts
 import planning
 from metrics.training_load import get_current_metrics
 from metrics import plan_impact
+from metrics import explain
 from config import ANTHROPIC_API_KEY
 
 run_migrations()
@@ -276,6 +277,17 @@ def workout_summary(w: dict) -> str:
     return " · ".join(bits)
 
 
+def why_block(w: dict) -> None:
+    """What the workout is for, how it should feel, and the phase it belongs to."""
+    if w.get("purpose"):
+        st.markdown(f"**Why.** {w['purpose']}")
+    if w.get("feel"):
+        st.markdown(f"**How it should feel.** {w['feel']}")
+    note = get_phase_notes().get(w.get("phase") or "")
+    if note:
+        st.markdown(f"**Part of {w['phase']}.** {note['focus']} {note['why']}")
+
+
 def workout_form(default_date: date) -> None:
     """The add form. Editing an existing workout happens in workout_dialog."""
     st.markdown("**Add a workout**")
@@ -285,6 +297,10 @@ def workout_form(default_date: date) -> None:
         w_type = st.selectbox("Type", WORKOUT_TYPES)
         w_tss = st.number_input("Planned TSS", min_value=0, max_value=400, value=60, step=5)
         w_desc = st.text_area("Description or notes", placeholder="3x10 min @ 95% FTP, 5 min rest")
+        w_purpose = st.text_input("What is it for? (optional)",
+                                  placeholder="Leave blank to use a standard explanation for the type")
+        w_feel = st.text_input("How should it feel? (optional)",
+                               placeholder="Leave blank to use a standard effort guide for the type")
         submitted = st.form_submit_button("Add to planner", type="primary", icon=":material/save:")
 
     if st.button("Cancel", key="cancel_add", icon=":material/close:"):
@@ -300,6 +316,8 @@ def workout_form(default_date: date) -> None:
         "date": w_date.isoformat(), "name": w_name,
         "workout_type": w_type, "description": w_desc,
         "structured_json": None, "tss_planned": w_tss, "notes": "",
+        "purpose": w_purpose.strip() or explain.PURPOSE.get(w_type, explain.PURPOSE["Other"]),
+        "feel": w_feel.strip() or explain.feel_for(w_type),
     })
     st.session_state.pop("add_workout_date", None)
     st.toast(f"Added {w_name}")
@@ -316,6 +334,7 @@ def planned_row(w: dict) -> None:
         st.caption(workout_summary(w))
         if w.get("description"):
             st.write(w["description"])
+        why_block(w)
         with st.container(horizontal=True):
             if w.get("completed"):
                 st.button("Undo", key=f"cal_undo_{wid}", icon=":material/undo:",
@@ -391,6 +410,7 @@ def workout_dialog(kind: str, item_id, state: dict) -> None:
 
     if not editable:
         st.write(w.get("description") or "No description.")
+        why_block(w)
         st.caption("Done and past workouts can't be edited or moved. You can mark one done or undo that.")
         with st.container(horizontal=True):
             if w.get("completed"):
@@ -415,6 +435,11 @@ def workout_dialog(kind: str, item_id, state: dict) -> None:
                           value=int(w["tss_planned"]) if w.get("tss_planned") is not None else 60)
     desc = st.text_area("Description or notes", value=w.get("description") or "", key="dlg_desc",
                         placeholder="3x10 min @ 95% FTP, 5 min rest")
+    purpose = st.text_area("What is it for?", value=w.get("purpose") or "", key="dlg_purpose", height=80)
+    feel = st.text_input("How should it feel?", value=w.get("feel") or "", key="dlg_feel")
+    note = get_phase_notes().get(w.get("phase") or "")
+    if note:
+        st.caption(f"Part of {w['phase']}. {note['focus']} {note['why']}")
 
     before = _workout_plan(state, w, date_iso=w["date"], tss=float(w.get("tss_planned") or 0))
     after = _workout_plan(state, w, date_iso=new_date.isoformat(), tss=float(tss))
@@ -429,7 +454,8 @@ def workout_dialog(kind: str, item_id, state: dict) -> None:
                 return
             update_workout(w["id"], {"name": name, "workout_type": wtype, "description": desc,
                                      "tss_planned": tss, "completed": w.get("completed", 0),
-                                     "notes": w.get("notes", "")})
+                                     "notes": w.get("notes", ""), "purpose": purpose.strip(),
+                                     "feel": feel.strip()})
             if new_date.isoformat() != w["date"]:
                 err = plan_cal.apply_move("ride", w["id"], new_date.isoformat(), today)
                 if err:
@@ -459,6 +485,8 @@ def strength_dialog(item_id) -> None:
     st.caption(fmt_day(row["date"]) + (f" · {row['duration_minutes']} min" if row.get("duration_minutes") else ""))
     for ex in info["exercises"]:
         st.markdown(f"- {ex}")
+    if row.get("purpose"):
+        st.markdown(f"**Why.** {row['purpose']}")
     st.caption("Strength isn't counted in training load. Log the session itself on the Strength page.")
     if not info["planned"] or row["date"] < today.isoformat():
         st.caption("Done and past sessions can't be moved.")
@@ -709,6 +737,8 @@ def manage_row(w: dict, prefix: str) -> None:
         info, acts = st.columns([3, 8], vertical_alignment="center")
         info.markdown(f"**{fmt_day(w['date'])}** · **{w['name']}**")
         info.caption(workout_summary(w))
+        if w.get("purpose"):
+            info.caption(w["purpose"])
         with acts.container(horizontal=True, horizontal_alignment="right"):
             garmin_button(w, st, f"garmin_{prefix}_{wid}")
             fit_button(w, st, f"fit_{prefix}_{wid}")
@@ -752,13 +782,18 @@ def render_quick_generate() -> None:
 
         if st.button("Generate training block", width="stretch", type="primary",
                      disabled=chosen_race is None):
-            drafted = planning.generate_block(current_ctl, target_ctl, race_date, phase_key)
+            drafted = planning.generate_block(
+                current_ctl, target_ctl, race_date, phase_key,
+                days_per_week=int(float(get_setting("days_per_week", 0) or 0)) or None)
             new_ids = [add_workout({
                 "date": w["date"], "name": w["name"], "workout_type": w["workout_type"],
                 "description": w["description"], "structured_json": None,
                 "tss_planned": w["tss_planned"], "notes": "",
                 "phase": w.get("phase"), "week_number": w.get("week_number"),
+                "purpose": w.get("purpose"), "feel": w.get("feel"),
             }) for w in drafted]
+            save_phase_notes([{"name": w["phase"], **w["phase_note"]}
+                              for w in drafted if w.get("phase") and w.get("phase_note")])
             st.session_state["wizard_generated_ids"] = new_ids
             st.session_state["wizard_msg"] = (f"Generated {len(drafted)} workouts over {weeks_out} "
                                               f"weeks, targeting CTL {target_ctl} before the taper.")

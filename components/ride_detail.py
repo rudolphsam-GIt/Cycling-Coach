@@ -12,7 +12,9 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from components import charts, theme
+from components.explain import help_icon
 from metrics.analysis import ride_kind
+from metrics.explain import TIPS
 
 ZONE_NAMES = ["Z1 Active Recovery", "Z2 Endurance", "Z3 Tempo", "Z4 Threshold", "Z5 VO2 Max"]
 
@@ -85,11 +87,11 @@ def ride_table(activities: list, key: str, *, max_height: int = 420) -> dict | N
             "Duration": st.column_config.TextColumn("Duration", width="small"),
             "Distance km": st.column_config.NumberColumn("Distance km", format="%.1f", width="small"),
             "Climb m": st.column_config.NumberColumn("Climb m", format="%d", width="small"),
-            "Avg W": st.column_config.NumberColumn("Avg W", format="%d", width="small"),
-            "NP": st.column_config.NumberColumn("NP", format="%d", width="small"),
+            "Avg W": st.column_config.NumberColumn("Avg W", format="%d", width="small", help=TIPS["avg_w"]),
+            "NP": st.column_config.NumberColumn("NP", format="%d", width="small", help=TIPS["np"]),
             "Avg HR": st.column_config.NumberColumn("Avg HR", format="%d", width="small"),
-            "TSS": st.column_config.NumberColumn("TSS", format="%d", width="small"),
-            "IF": st.column_config.NumberColumn("IF", format="%.2f", width="small"),
+            "TSS": st.column_config.NumberColumn("TSS", format="%d", width="small", help=TIPS["tss"]),
+            "IF": st.column_config.NumberColumn("IF", format="%.2f", width="small", help=TIPS["if"]),
         },
     )
     rows = list(event.selection.rows) if event and event.selection else []
@@ -124,7 +126,10 @@ def ride_detail(act: dict, key: str) -> None:
             zone_secs = None
 
     with st.container(border=True):
-        st.markdown(f"**{html.escape(act.get('name') or 'Untitled')}**, {act.get('date') or ''}")
+        title, helper = st.columns([3, 2], vertical_alignment="center")
+        title.markdown(f"**{html.escape(act.get('name') or 'Untitled')}**, {act.get('date') or ''}")
+        with helper:
+            help_icon("ride_numbers", f"{key}_numbers", label="What do these mean?")
         dc1, dc2 = st.columns([1, 2])
         with dc1:
             tbl = "".join(
