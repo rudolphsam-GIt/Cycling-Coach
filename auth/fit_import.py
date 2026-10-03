@@ -5,7 +5,7 @@ import io
 import json
 from datetime import datetime, timezone
 
-from db.queries import get_setting, upsert_activity, save_peaks, save_hr_peaks
+from db.queries import get_setting, upsert_activity, save_peaks, save_hr_peaks, save_streams
 from metrics.zones import estimate_zone_seconds
 
 CYCLING_SPORT = {
@@ -34,6 +34,11 @@ def _save_file_peaks(activity_id, raw: bytes) -> None:
     except Exception:
         return
     save_peaks(activity_id, mean_max(power, PEAK_DURATIONS))
+    try:
+        from metrics.streams import from_fit
+        save_streams(activity_id, from_fit(raw), "fit_import")
+    except Exception:
+        pass
     save_hr_peaks(activity_id, mean_max(hr, HR_DURATIONS, zero_is_missing=True))
 
 

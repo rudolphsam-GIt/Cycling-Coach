@@ -9,12 +9,12 @@ from datetime import date, timedelta
 from PIL import Image
 from components import page_header
 from components import calendar as plan_cal
-from components import ftp_help, plan_impact_ui
+from components import ftp_help, plan_impact_ui, ride_analysis
 
 from db.schema import run_migrations
 from db.queries import (get_workouts, add_workout, update_workout, delete_workout,
                          get_setting, get_races, WORKOUT_TYPES,
-                         get_workout, get_strength_session, garmin_status, save_message, get_conversation_history,
+                         get_workout, get_strength_session, delete_strength_session, garmin_status, save_message, get_conversation_history,
                          get_memories, forget_memory, save_phase_notes, get_phase_notes)
 import auth.garmin as garmin_auth
 import garmin_workouts
@@ -352,6 +352,18 @@ def planned_row(w: dict) -> None:
             fit_button(w, st, f"fit_cal_{wid}")
 
 
+def day_strength_actions(info: dict) -> None:
+    """Open and Remove buttons inside each strength session in the day panel."""
+    row = get_strength_session(info["id"]) if info.get("id") else None
+    if not row:
+        return
+    with st.container(horizontal=True):
+        st.button("Open", key=f"day_s_open_{row['id']}", icon=":material/open_in_new:",
+                  on_click=lambda i=row["id"], d=row["date"]: st.session_state.update(
+                      {plan_cal.OPEN_KEY: {"kind": "strength", "id": i}, "cal_sel": d}))
+        strength_remove_controls(row, f"day_s_{row['id']}")
+
+
 def day_panel(sel: str) -> None:
     """Everything about the selected calendar day, with add and edit."""
     d = date.fromisoformat(sel)
@@ -365,7 +377,7 @@ def day_panel(sel: str) -> None:
         for w in planned:
             planned_row(w)
 
-        plan_cal.render_day_readonly(sel)
+        plan_cal.render_day_readonly(sel, strength_actions=day_strength_actions)
 
         planned_tss = float(getattr(day, "planned_tss", 0) or 0)
         actual_tss = float(getattr(day, "actual_tss", 0) or 0)
@@ -474,6 +486,24 @@ def workout_dialog(kind: str, item_id, state: dict) -> None:
         fit_button(w, st, "dlg_fit")
 
 
+def remove_strength(sid: int) -> None:
+    """Callback: remove a strength session from the plan or the log."""
+    removed = delete_strength_session(sid)
+    if removed:
+        st.toast("Removed " + plan_cal._strength_row(removed)["name"])
+
+
+def strength_remove_controls(row: dict, key: str) -> None:
+    """Remove button for a strength session. A session that was already logged needs
+    a tick first, since the record of what was lifted goes with it."""
+    logged = bool(row.get("completed"))
+    sure = st.checkbox("Yes, delete this logged session and its weights", key=f"{key}_sure") if logged else True
+    if st.button("Remove session", key=f"{key}_rm", icon=":material/delete:", disabled=not sure,
+                 help="Takes this session off your calendar"):
+        remove_strength(row["id"])
+        st.rerun()
+
+
 def strength_dialog(item_id) -> None:
     """A planned strength session: what is in it, and which day it is on."""
     row = get_strength_session(int(item_id)) if item_id is not None else None
@@ -490,16 +520,21 @@ def strength_dialog(item_id) -> None:
     st.caption("Strength isn't counted in training load. Log the session itself on the Strength page.")
     if not info["planned"] or row["date"] < today.isoformat():
         st.caption("Done and past sessions can't be moved.")
+        strength_remove_controls(row, "dlg_s")
         return
     new_date = st.date_input("Date", value=date.fromisoformat(row["date"]), min_value=today,
                              key="dlg_s_date")
-    if st.button("Move session", key="dlg_s_save", type="primary", icon=":material/event:",
-                 disabled=new_date.isoformat() == row["date"]):
-        err = plan_cal.apply_move("strength", row["id"], new_date.isoformat(), today)
-        if err:
-            st.warning(err)
-            return
-        st.rerun()
+    with st.container(horizontal=True):
+        if st.button("Move session", key="dlg_s_save", type="primary", icon=":material/event:",
+                     disabled=new_date.isoformat() == row["date"]):
+            err = plan_cal.apply_move("strength", row["id"], new_date.isoformat(), today)
+            if err:
+                st.warning(err)
+                return
+            st.rerun()
+        if st.button("Remove session", key="dlg_s_rm", icon=":material/delete:"):
+            remove_strength(row["id"])
+            st.rerun()
 
 
 def render_calendar_tab() -> None:
@@ -507,7 +542,10 @@ def render_calendar_tab() -> None:
     sel = plan_cal.render_month_calendar("cal")
     plan_impact_ui.render_undo_bar()
     if opened := st.session_state.pop(plan_cal.OPEN_KEY, None):
-        workout_dialog(opened.get("kind"), opened.get("id"), state)
+        if opened.get("kind") == "done":
+            ride_analysis.open_analysis(opened.get("id"))     # a ride that was ridden
+        else:
+            workout_dialog(opened.get("kind"), opened.get("id"), state)
     plan_impact_ui.render_impact_panel(state)
     if sel:
         day_panel(sel)

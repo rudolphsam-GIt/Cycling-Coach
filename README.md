@@ -23,7 +23,7 @@ How the app helps you learn.
 - **Getting started checklist.** On the Today page, a short list of the steps to set up, which ticks itself off from your data.
 - **Build my first block.** One button that asks the coach for a gentle four week starting block. Setup asks for your goals in your own words (with examples to get you thinking), how many hours a week and how many days a week you can train, and the plan is built to fit them. You can change all three later in Settings.
 - **Help finding your FTP, with no pressure.** Not knowing your FTP is completely normal, so setup gives you three choices. 1) I know it, and you type it in. 2) I don't know it, but I'm happy to do a test. 3) I don't know it and would rather not test, so please estimate it for me. For the last two, three short questions pick a typical starting range for someone like you: what kind of rider you are (new to cycling, ride without a plan, followed a training plan, or race), how active you are, and your gender (Woman, Man, Non-binary or Prefer not to say), because typical power per kilo is lower for women than for men (about 15 percent at the beginner level, which is in line with the published Allen and Coggan tables). It is used only to pick typical power ranges. Non-binary and Prefer not to say use an average of the two, and anyone can choose either reference table on the Dashboard power profile. Gender and age sit on one line. Your weight is asked for anyway. Age is optional. Power drops by roughly 1 percent a year after about 35, so a 55 year old starts about 15 percent lower than someone in their thirties, and a younger rider under 18 a little lower too. Age also sets your starting threshold heart rate. Only your birth year is stored, so your age stays current. Activity is spelled out so nobody has to guess (for example moderately active is 3 to 4 sessions and about 3 to 5 hours a week with some harder efforts). A newcomer might see 85 to 125 watts, and the app starts you in the middle. If you choose the test, your first training block includes it, described for newer riders as a steady pace with no pass or fail. If you choose the estimate, no test is scheduled and the estimate is refined from your rides. Either way, once rides are in, the Today page and Settings offer 95% of your best 20 minutes, and you can add the test to your plan whenever you like.
-- **Pounds or kilograms.** A lb and kg switch appears wherever you enter weight (setup, Settings and the Strength page) and your choice is remembered.
+- **Pounds or kilograms, miles or kilometers.** A lb and kg switch appears wherever you enter weight (setup, Settings and the Strength page). A mi and km switch sets distance everywhere: setup, Settings, and the filter bar on the Dashboard and Data pages. Choosing miles also shows climbing in feet and speed in mph, and applies to the calendar hover, ride tables, the ride analysis, the Dashboard tiles and charts, race distances and the pacing planner. Both choices are remembered, and your coach is told so it speaks in the same units.
 
 ## What you need
 
@@ -192,6 +192,10 @@ Strength sessions and races also get their own markers on the day they happen. T
 
 **Opening a workout.** Click a workout on the grid, or use Edit in the Manage tab, to open it in a window. Change the name, type, date, planned training stress or description, then save. Before you save, the window shows what the change would do to your fitness, fatigue and form, and flags problems such as back to back hard days or a big jump in weekly training stress. You can also mark the workout done, remove it, send it to Garmin or download it as a `.fit` file from there.
 
+**Analyzing a ride you have done.** Click a ride you did (the green entries on past days) and a window opens with that ride. At the top are the numbers (time, distance, climbing, TSS, average and normalized power, intensity, variability, heart rate, work and efficiency) and a note on pacing, which compares your power to heart rate ratio in the first and second half of a long ride. Below are tabs. Timeline charts power, heart rate, cadence and elevation, with smoothing you can choose and drag to zoom. Zones and efforts shows your time in each power and heart rate zone and lists the hard stretches. Power curve compares this ride's best power with your best ever. Plan shows what was planned that day next to what you rode, with the purpose and how it should feel. Coach reads the ride against your plan and recovery. The charts need second by second data, which the app fetches from Garmin or Strava the first time you open a ride (or reads from a `.fit` file you imported) and keeps, so each ride is only fetched once. Speed is included, as average and maximum speed in the numbers and as its own row on the timeline. **Zoom in on part of the ride.** Drag across the timeline and the popup zooms to that section and locks it in for everything at once: the timeline itself, the numbers at the top (time, distance, climbing, TSS, power, speed, cadence, heart rate and the rest), the pacing note, the zones and efforts, and the power curve. A banner says exactly which minutes you are looking at and how that compares with the whole ride. Drag again inside it to go deeper, as many times as you like. Back goes up one level and Whole ride returns to the full ride. Without second by second data you still get the numbers and estimated zones. The same window opens from the Data page with Analyze this ride.
+
+**Removing strength sessions.** Open a strength session on the calendar (or from the day panel, the Strength page, or the planned session list) and press Remove. A session you already logged asks you to tick a box first, because the weights you recorded go with it.
+
 **Plan impact.** The panel under the calendar projects your fitness (CTL), fatigue (ATL) and form (TSB) up to your next race, or four weeks out if no race is coming up. It assumes you ride the plan exactly as written, so it is a projection and not a prediction. If your plan stops well before that day, the panel says so, because the numbers then assume rest after the last planned workout. After you move a workout, the cards show what that move changed and the chart shows the before and after. It uses the same method as TrainingPeaks, so the numbers match the Today page. Strength sessions are not counted in training load.
 
 **Working with a day.** Click a day to open it below the calendar. From there you can do the following.
@@ -210,11 +214,12 @@ The Coach tab is where most of the planning happens.
 1. Use the starter questions if you are not sure where to begin. They change depending on whether you have a race coming up.
 2. Be specific about your week. Tell the coach which days you can ride, how long you have, and what your goal is. If you have a race, say so, or add it on the Races page first and the coach will know about it.
 3. Ask for a block. For example, "Build me a six week block toward my race with two strength sessions a week." The coach proposes the rides and strength sessions together.
-4. Nothing is saved until you say so. Proposed workouts appear in a card right under the reply. Read them, then either add them all to your plan or discard them. If something is off, tell the coach what to change and it will propose again. You can open them on the calendar afterward to see where they landed.
-5. Attach a screenshot. You can attach an image of a workout, a training plan or a chart with your message, and the coach will read it. The image is used for that message only and is not kept in the chat history.
-6. Tell the coach about injuries, your schedule or your preferences once. It saves a note in its memory. Open "What your coach remembers" to read the notes and delete any you do not want kept.
-7. Run the weekly check in. The coach looks over your week and drafts the next seven days for you to confirm. Past check ins are kept so you can look back.
-8. Clear the chat when you want a fresh start. This removes the saved conversation but keeps your plan, your memory notes and your ride data.
+4. **Your coach can change your calendar and plan.** Ask it to move a workout, shorten or rename one, skip a day, or drop a strength session ("I'm travelling Thursday, can you rearrange the week?"). It looks up what is on your plan, then shows a list of proposed changes with the reason for each. Nothing changes until you press Apply changes, and only today and later, not yet done, can be changed. A workout that was already sent to Garmin has its old copy removed so you can send it again for the new day.
+5. Nothing is saved until you say so. Proposed workouts appear in a card right under the reply. Read them, then either add them all to your plan or discard them. If something is off, tell the coach what to change and it will propose again. You can open them on the calendar afterward to see where they landed.
+6. Attach a screenshot. You can attach an image of a workout, a training plan or a chart with your message, and the coach will read it. The image is used for that message only and is not kept in the chat history.
+7. Tell the coach about injuries, your schedule or your preferences once. It saves a note in its memory. Open "What your coach remembers" to read the notes and delete any you do not want kept.
+8. Run the weekly check in. The coach looks over your week and drafts the next seven days for you to confirm. Past check ins are kept so you can look back.
+9. Clear the chat when you want a fresh start. This removes the saved conversation but keeps your plan, your memory notes and your ride data.
 
 The coach can look up your full ride history, weekly totals, check ins and FTP history on its own when a question needs it, so you do not need to paste numbers in.
 
@@ -275,18 +280,20 @@ Python, Streamlit, SQLite, Plotly, and the Anthropic Claude API (model `claude-o
 app.py                    Entry point, setup and welcome gates, navigation
 pages/                    Today, Plan, Dashboard, Data, Strength, Races, Competitors, Settings
 planning.py               Training block generator used by Quick Generate
+plan_changes.py           Moves, edits and removals of planned workouts, shared by the coach and the buttons
 garmin_workouts.py        Turns workouts into Garmin steps and .fit files
 claude_client.py          Claude calls, streaming, tool loop, error handling
 coach_tools.py            Tools the coach can call over your data
 coach_context.py          Coach persona and athlete snapshot
 coach_reports.py          Ride review, weekly check in and race plan prompts
 db/                       SQLite schema and queries
-auth/                     Garmin and Strava sign in and sync, .fit and .csv import
+auth/                     Garmin and Strava sign in and sync, .fit and .csv import, ride data fetching
 metrics/training_load.py  Fitness, fatigue and form (CTL, ATL, TSB)
 metrics/plan_impact.py    What a change to the plan does to those numbers, plus plan warnings
 metrics/zones.py          Power and heart rate zone estimates
 metrics/analysis.py       Search filters, totals, weekly volume, efficiency, peak power curve, history and power profile
 metrics/peaks.py          Best average power and heart rate by duration from a ride file
+metrics/streams.py        Second by second ride data: smoothing, zones, efforts, pacing
 metrics/explain.py        All the plain language wording, in one place
 research/                 OBRA schedule and race results
 components/               Shared interface pieces
@@ -295,6 +302,7 @@ components/calendar_dnd.py  The interactive grid (drag, click, hover)
 components/plan_impact_ui.py  The Plan impact panel and undo bar
 components/explain.py     Help icons and tooltips that explain a number in plain words
 components/ftp_help.py    FTP estimate note, suggestion from best 20 minutes, guided test
+components/ride_analysis.py  The ride analysis window
 components/checklist.py   Getting started checklist on Today
 components/data_filters.py  Date range, search and filters shared by Dashboard and Data
 components/ride_detail.py   Rides table and ride detail used by Today and Data

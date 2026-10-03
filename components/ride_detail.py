@@ -13,8 +13,10 @@ import streamlit as st
 
 from components import charts, theme
 from components.explain import help_icon
+from components.units import distance_unit
 from metrics.analysis import ride_kind
 from metrics.explain import TIPS
+from metrics.units import climb_from_m, climb_unit, dist_from_km, fmt_climb, fmt_distance
 
 ZONE_NAMES = ["Z1 Active Recovery", "Z2 Endurance", "Z3 Tempo", "Z4 Threshold", "Z5 VO2 Max"]
 
@@ -46,17 +48,20 @@ def _hm(seconds):
     return f"{int(s // 3600)}:{int((s % 3600) // 60):02d}"
 
 
-def rides_frame(activities: list) -> pd.DataFrame:
-    """One row per ride with the columns the table and the CSV use."""
+def rides_frame(activities: list, unit: str = "km") -> pd.DataFrame:
+    """One row per ride with the columns the table and the CSV use. Distance and climbing
+    are in the rider's units (miles and feet, or kilometers and meters)."""
+    dist, climb = f"Distance {unit}", f"Climb {climb_unit(unit)}"
     return pd.DataFrame([
         {
             "Date": a.get("date") or "",
             "Name": a.get("name") or "Untitled",
             "Type": ride_kind(a),
             "Duration": _hm(a.get("duration_seconds")),
-            "Distance km": (_num(a.get("distance_meters")) / 1000
-                            if _num(a.get("distance_meters")) is not None else None),
-            "Climb m": _num(a.get("elevation_gain_meters")),
+            dist: (dist_from_km(_num(a.get("distance_meters")) / 1000, unit)
+                   if _num(a.get("distance_meters")) is not None else None),
+            climb: (climb_from_m(_num(a.get("elevation_gain_meters")), unit)
+                    if _num(a.get("elevation_gain_meters")) is not None else None),
             "Avg W": _num(a.get("avg_power_watts")),
             "NP": _num(a.get("normalized_power")),
             "Avg HR": _num(a.get("avg_hr")),
@@ -64,14 +69,16 @@ def rides_frame(activities: list) -> pd.DataFrame:
             "IF": _num(a.get("if_value")),
         }
         for a in activities
-    ], columns=["Date", "Name", "Type", "Duration", "Distance km", "Climb m", "Avg W", "NP",
+    ], columns=["Date", "Name", "Type", "Duration", dist, climb, "Avg W", "NP",
                 "Avg HR", "TSS", "IF"])
 
 
 def ride_table(activities: list, key: str, *, max_height: int = 420) -> dict | None:
     """A sortable table of rides with single row selection. Returns the selected
     ride, or None. `activities` should already be sorted the way you want."""
-    df = rides_frame(activities)
+    unit = distance_unit()
+    df = rides_frame(activities, unit)
+    dist, climb = f"Distance {unit}", f"Climb {climb_unit(unit)}"
     event = st.dataframe(
         df,
         hide_index=True,
@@ -85,8 +92,8 @@ def ride_table(activities: list, key: str, *, max_height: int = 420) -> dict | N
             "Name": st.column_config.TextColumn("Name", width="medium"),
             "Type": st.column_config.TextColumn("Type", width="small"),
             "Duration": st.column_config.TextColumn("Duration", width="small"),
-            "Distance km": st.column_config.NumberColumn("Distance km", format="%.1f", width="small"),
-            "Climb m": st.column_config.NumberColumn("Climb m", format="%d", width="small"),
+            dist: st.column_config.NumberColumn(dist, format="%.1f", width="small"),
+            climb: st.column_config.NumberColumn(climb, format="%d", width="small"),
             "Avg W": st.column_config.NumberColumn("Avg W", format="%d", width="small", help=TIPS["avg_w"]),
             "NP": st.column_config.NumberColumn("NP", format="%d", width="small", help=TIPS["np"]),
             "Avg HR": st.column_config.NumberColumn("Avg HR", format="%d", width="small"),
@@ -108,8 +115,8 @@ def ride_detail(act: dict, key: str) -> None:
     )
     rows = [
         ("Duration", duration_str),
-        ("Distance", _fmt(act.get("distance_meters"), lambda v: f"{v / 1000:.1f} km")),
-        ("Elevation", _fmt(act.get("elevation_gain_meters"), lambda v: f"{int(v)} m")),
+        ("Distance", fmt_distance(_num(act.get("distance_meters")), distance_unit())),
+        ("Elevation", fmt_climb(_num(act.get("elevation_gain_meters")), distance_unit())),
         ("Avg Power", _fmt(act.get("avg_power_watts"), lambda v: f"{int(v)} W")),
         ("Norm Power", _fmt(act.get("normalized_power"), lambda v: f"{int(v)} W")),
         ("Int Factor", _fmt(act.get("if_value"), lambda v: f"{v:.2f}")),

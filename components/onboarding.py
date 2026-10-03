@@ -3,7 +3,7 @@ from __future__ import annotations
 import streamlit as st
 from datetime import date
 
-from components.units import unit_switch, weight_input
+from components.units import distance_switch, unit_switch, weight_input
 from db.queries import set_setting, log_ftp_history, add_race
 from metrics.explain import (ACTIVITY_DETAILS, ACTIVITY_LEVEL, DEFAULT_ACTIVITY, RIDER_TYPES,
                              GENDER_LABELS, GENDER_PROFILE_TABLE, DEFAULT_GENDER, experience_for, ftp_reassurance,
@@ -91,7 +91,11 @@ def render_onboarding():
     with col_form:
         # Plain widgets rather than a form, so the weight box converts when the unit changes
         # and the FTP options can show their own fields and the starting range as they answer.
-        unit = unit_switch("onb_unit", default="lb")
+        u1, u2 = st.columns(2)
+        with u1:
+            unit = unit_switch("onb_unit", default="lb")
+        with u2:
+            dist_unit = distance_switch("onb_distance", default="mi")
         name = st.text_input("What's your name?", placeholder="e.g. Sam")
 
         goal_text = st.text_area(
@@ -191,6 +195,7 @@ def render_onboarding():
             set_setting("weekly_hours_target", weekly_hours)
             set_setting("weight_kg", weight)
             set_setting("weight_unit", unit)
+            set_setting("distance_unit", dist_unit)
             set_setting("ftp_watts", final_ftp)
             set_setting("lthr", final_lthr)
             set_setting("ctl_start", exp["ctl_start"])

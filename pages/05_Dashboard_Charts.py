@@ -18,9 +18,9 @@ from db.queries import (get_activities_between, get_ftp_history, get_hr_peaks_be
                         get_peaks_between, get_races, get_recovery_range, get_setting,
                         get_workouts, set_setting)
 from db.schema import run_migrations
-from components.units import weight_unit
+from components.units import distance_unit, weight_unit
 from metrics import analysis as an
-from metrics.units import fmt_weight
+from metrics.units import climb_from_m, climb_unit, dist_from_km, fmt_weight
 from metrics.training_load import compute_pmc
 
 run_migrations()
@@ -88,15 +88,21 @@ def performance_chart(pmc: pd.DataFrame) -> None:
 
 def weekly_volume() -> None:
     section_header("Weekly volume", "Totals per week for the rides you selected", explain="weekly_volume")
-    metric = st.segmented_control("Show", list(an.WEEKLY_METRICS), default="TSS",
-                                  key="dsh_week_metric", label_visibility="collapsed") or "TSS"
+    unit = distance_unit()
+    labels = {"TSS": "TSS", "Hours": "Hours", f"Distance {unit}": "Distance km",
+              f"Climbing {climb_unit(unit)}": "Elevation m"}
+    choice = st.segmented_control("Show", list(labels), default="TSS", key="dsh_week_metric",
+                                  label_visibility="collapsed") or "TSS"
+    metric = labels[choice]
     weeks = an.weekly(ctx["rides"], metric, f.start, f.end)
-    fig = go.Figure(go.Bar(x=[w for w, _ in weeks], y=[v for _, v in weeks], name=metric,
+    scale = (lambda v: dist_from_km(v, unit)) if metric == "Distance km" else \
+            (lambda v: climb_from_m(v, unit)) if metric == "Elevation m" else (lambda v: v)
+    fig = go.Figure(go.Bar(x=[w for w, _ in weeks], y=[scale(v) for _, v in weeks], name=choice,
                            marker_color=theme.ACCENT, marker_line_width=0,
                            hovertemplate="Week of %{x|%b %-d}<br>%{y:,.1f}<extra></extra>"))
     charts.apply_theme(fig, height=280, legend="none")
     _date_ticks(fig)
-    fig.update_yaxes(title_text=metric)
+    fig.update_yaxes(title_text=choice)
     charts.show(fig, key="dsh_weekly")
 
 
@@ -277,12 +283,10 @@ def _saved_choice(label: str, options: list, setting: str, key: str) -> str:
 
 
 def fitness_history() -> None:
-    head, unit_col = st.columns([4, 1.2], vertical_alignment="bottom")
-    with head:
-        section_header("Fitness history", "Every ride, whatever the search. The week and month "
-                                          "still in progress are in grey.", explain="history")
-    with unit_col:
-        unit = _saved_choice("Distance", ["km", "mi"], "distance_unit", "dsh_unit")
+    section_header("Fitness history", "Every ride, whatever the search. The week and month "
+                                      "still in progress are in grey. Change miles or km in the filter bar above.",
+                   explain="history")
+    unit = distance_unit()
 
     rides = get_activities_between(*ALL_DATES)
     power, hr = get_peaks_between(*ALL_DATES), get_hr_peaks_between(*ALL_DATES)

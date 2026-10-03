@@ -55,6 +55,21 @@ Building a multi-week plan:
 - If the plan should include gym work, call propose_strength_sessions too, in the same
   conversation. A plan built only from rides when the athlete also wants to lift is incomplete.
 
+Changing the plan:
+- You can move, edit and remove rides and strength sessions that are already on the athlete's plan
+  with propose_plan_changes. Use it when they ask to move, swap, shorten, rename, skip, cancel or
+  delete something, or when a conversation about their week leads there ("I'm travelling Thursday",
+  "that session was too hard", "drop the Friday gym").
+- Look up the ids first with get_planned_workouts and get_planned_strength. Never guess an id.
+- Nothing changes until the athlete confirms on screen. Say what you are proposing and why, in plain
+  words, then tell them to review and confirm below the chat. Never say a change has been made.
+- Only today or later and not done can change. Done rides and past days stay as they are.
+- When you change one session, think about the week around it. Moving a hard day next to another hard
+  day, or removing the only rest day, is worth a mention or a better change. Keep each workout's
+  purpose and feel true after you edit it.
+- Group related changes into one call and give each a short reason. Use propose_workouts and
+  propose_strength_sessions to add new sessions, not propose_plan_changes.
+
 Explain the why:
 - Every workout you propose needs a purpose and a feel, and every multi-week block needs phases.
   Write them for someone who may be new to structured training, in plain words.
@@ -120,6 +135,19 @@ def memory_block() -> str:
     return "\n".join(f"  - [{m['category']}] {m['note']} (noted {m['created_at'][:10]})" for m in notes)
 
 
+def _units_note() -> str:
+    """How the athlete wants distances and weights spoken, so replies match what they see."""
+    dist = get_setting("distance_unit", "") or "km"
+    weight = get_setting("weight_unit", "") or "kg"
+    parts = []
+    if dist == "mi":
+        parts.append("miles, feet of climbing and mph (your tools return km, metres and km/h, so convert before you speak)")
+    else:
+        parts.append("kilometres, metres of climbing and km/h")
+    parts.append("pounds" if weight == "lb" else "kilograms")
+    return "The athlete prefers " + " and ".join(parts) + "."
+
+
 def build_context() -> str:
     ftp = get_setting("ftp_watts", "unknown")
     weight = get_setting("weight_kg", "unknown")
@@ -132,6 +160,7 @@ def build_context() -> str:
     experience = get_setting("experience_level", "") or "unknown"
     gender = get_setting("gender", "")
     sex_note = f" | Gender: {gender.replace('nonbinary', 'non-binary')}" if gender in ("woman", "man", "nonbinary") else ""
+    units_note = _units_note()
     from metrics.explain import age_from_birth_year
     age = age_from_birth_year(get_setting("birth_year", ""))
     if age:
@@ -178,6 +207,7 @@ ATHLETE DATA (use this to give specific coaching advice):
   Weekly training time available: {hours_str} over {days_str}. Fit plans inside this and say so if it is not enough for the goal.
 
 Experience: {experience}{sex_note}
+Units: {units_note}
 Physiology:
   FTP: {ftp}W{ftp_note} | Weight: {weight}kg | W/kg: {w_per_kg} | LTHR: {lthr}bpm
 

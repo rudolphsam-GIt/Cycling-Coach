@@ -10,7 +10,7 @@ from metrics.units import from_kg
 
 from db.schema import run_migrations
 from db.queries import (add_strength_session, get_strength_sessions,
-                         mark_strength_complete, get_setting)
+                         mark_strength_complete, get_setting, delete_strength_session)
 
 run_migrations()
 
@@ -159,6 +159,11 @@ if planned:
                                            json.dumps(logged))
                     st.success("Session logged!")
                     st.rerun()
+            if st.button("Remove this session", key=f"rm_planned_{ps['id']}", icon=":material/delete:",
+                         help="Takes this planned session off your plan and calendar"):
+                delete_strength_session(ps["id"])
+                st.toast("Removed " + ps_name)
+                st.rerun()
     st.divider()
 
 # ── Phase selector ────────────────────────────────────────────────────────────
@@ -239,6 +244,12 @@ with col_log:
                 ex_names += f" +{len(exercises)-3} more"
             st.markdown(f"**{s['date']}** · {s.get('notes', '')[:50]}")
             st.caption(f"{s.get('duration_minutes', '?')} min · {ex_names}")
+            with st.popover("Remove", icon=":material/delete:", key=f"rm_logged_pop_{s['id']}"):
+                st.caption("This deletes the logged session and the weights you recorded.")
+                if st.button("Yes, delete it", key=f"rm_logged_{s['id']}", type="primary"):
+                    delete_strength_session(s["id"])
+                    st.toast("Removed the session")
+                    st.rerun()
     else:
         st.info("No sessions logged yet.")
 

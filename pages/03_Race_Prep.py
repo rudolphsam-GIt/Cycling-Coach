@@ -5,6 +5,8 @@ from plotly.subplots import make_subplots
 import pandas as pd
 from datetime import date, timedelta
 from components import page_header, theme, charts
+from components.units import climb_input, distance_input, distance_unit, weight_input, weight_unit
+from metrics.units import fmt_climb, fmt_distance, speed_from_kph, speed_unit
 
 from db.schema import run_migrations
 from db.queries import (get_races, add_race, delete_race, get_setting,
@@ -13,6 +15,8 @@ from metrics.training_load import get_current_metrics, project_future
 from research.obra_schedule import get_upcoming_races, DISCIPLINES
 
 run_migrations()
+
+unit = distance_unit()
 
 page_header("Races", "Race day plans, your calendar, taper and pacing")
 
@@ -109,8 +113,8 @@ with tab1:
             st.caption("Or add manually:")
             r_name = st.text_input("Race name", placeholder="e.g. OBRA Road Race #3")
             r_date = st.date_input("Race date", value=date.today() + timedelta(days=30))
-            r_dist = st.number_input("Distance (km)", min_value=1.0, max_value=300.0, value=80.0, step=5.0)
-            r_elev = st.number_input("Elevation gain (m)", min_value=0, max_value=5000, value=800, step=50)
+            r_dist = distance_input("Distance", 80.0, key="race_dist", unit=unit, min_km=1.0, max_km=300.0)
+            r_elev = climb_input("Elevation gain", 800, key="race_elev", unit=unit, min_m=0, max_m=5000)
             r_cat = st.selectbox("Category", ["A", "B", "C", "Open"])
             r_target_h = st.number_input("Target finish time (hours)", 0, 10, 2)
             r_target_m = st.number_input("Target finish time (minutes)", 0, 59, 30)
@@ -140,8 +144,8 @@ with tab1:
             for r in sorted(upcoming, key=lambda x: x["date"]):
                 days_out = (date.fromisoformat(r["date"]) - date.today()).days
                 cat_badge = f"Cat {r['category']}" if r.get("category") else ""
-                dist_str = f"{r['distance_km']} km" if r.get("distance_km") else ""
-                elev_str = f"{r['elevation_gain_meters']:.0f}m gain" if r.get("elevation_gain_meters") else ""
+                dist_str = fmt_distance(r["distance_km"] * 1000, unit) if r.get("distance_km") else ""
+                elev_str = f"{fmt_climb(r['elevation_gain_meters'], unit)} gain" if r.get("elevation_gain_meters") else ""
 
                 if days_out <= 7:
                     st.error(f"**{r['name']}**, {r['date']} · {days_out} days away · {cat_badge} {dist_str} {elev_str}",
@@ -339,15 +343,16 @@ with tab3:
 
     pcol1, pcol2 = st.columns(2)
     with pcol1:
-        p_dist = st.number_input("Race distance (km)", 10.0, 300.0, 80.0, 5.0)
-        p_elev = st.number_input("Total elevation gain (m)", 0, 5000, 800, 50)
+        p_dist = distance_input("Race distance", 80.0, key="pace_dist", unit=unit, min_km=10.0, max_km=300.0)
+        p_elev = climb_input("Total elevation gain", 800, key="pace_elev", unit=unit, min_m=0, max_m=5000)
         p_target_h = st.number_input("Target time (hours)", 0, 10, 2)
         p_target_m = st.number_input("Target time (minutes)", 0, 59, 30)
 
     with pcol2:
         p_ftp = st.number_input("FTP (W)", 50, 600, int(ftp), 5,
                                  help="Defaults to your saved FTP")
-        p_weight = st.number_input("Weight (kg)", 30.0, 150.0, float(weight), 0.5)
+        p_weight = weight_input("Weight", float(weight), key="pace_weight", unit=weight_unit(),
+                                min_kg=30.0, max_kg=150.0)
 
     if st.button("Calculate Pacing Plan", width="stretch"):
         target_s = p_target_h * 3600 + p_target_m * 60
@@ -367,7 +372,7 @@ with tab3:
 
             st.subheader("Pacing Recommendations")
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Target avg speed", f"{speed_kph:.1f} km/h")
+            m1.metric("Target avg speed", f"{speed_from_kph(speed_kph, unit):.1f} {speed_unit(unit)}")
             m2.metric("Est. avg power needed", f"{total_watts:.0f}W")
             m3.metric("Intensity Factor", f"{if_value:.2f}",
                        help="< 0.75 = easy, 0.75-0.85 = moderate, > 0.85 = hard")

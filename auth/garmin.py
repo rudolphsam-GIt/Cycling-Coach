@@ -186,6 +186,20 @@ def peak_powers(act: dict) -> dict[int, float]:
     return peaks
 
 
+def find_garmin_activity_id(api, activity: dict) -> str | None:
+    """The Garmin id of the same ride, for a ride stored from another source, found by date
+    and matched on time and distance the same way duplicate rides are."""
+    from db.queries import _same_ride
+    ftp = float(get_setting("ftp_watts", 0) or 0)
+    lthr = float(get_setting("lthr", 0) or 0)
+    day = str(activity.get("date"))[:10]
+    for act in api.get_activities_by_date(day, day):
+        row = activity_row(act, ftp, lthr)
+        if row and _same_ride(row, activity):
+            return str(act.get("activityId"))
+    return None
+
+
 def _hr_peaks(api, activity_id) -> dict:
     """Best average heart rate by duration, from the ride's original FIT file.
     Empty when the download or parsing fails (sync carries on regardless)."""

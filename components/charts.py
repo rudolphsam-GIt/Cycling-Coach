@@ -44,7 +44,34 @@ def _bump_zoom(counter_key: str) -> None:
     st.session_state[counter_key] = st.session_state.get(counter_key, 0) + 1
 
 
-def show(fig: go.Figure, key: str | None = None, *, zoom: str | None = "x", **kwargs):
+def widget_key(key: str) -> str:
+    """The key a zoomable chart is really drawn under. It changes each time Reset zoom
+    is pressed, which is how the chart is put back to its full range."""
+    return f"{key}_{st.session_state.get(f'_zoom_{key}', 0)}"
+
+
+def clear(key: str) -> None:
+    """Clear a chart's zoom or selection, as its own reset button does. Safe as a callback."""
+    _bump_zoom(f"_zoom_{key}")
+
+
+def selected_range(key: str) -> tuple[float, float] | None:
+    """The left and right edge, in the chart's x units, of the box the rider dragged on a
+    chart drawn with zoom="select". None when nothing is selected. Read from the chart's own
+    state, so it is already up to date at the top of the run that follows a drag."""
+    state = st.session_state.get(widget_key(key))
+    try:
+        boxes = state["selection"]["box"]
+    except (KeyError, TypeError):
+        return None
+    xs = [x for b in boxes for x in (b.get("x") or []) if isinstance(x, (int, float))]
+    if len(xs) < 2 or max(xs) <= min(xs):
+        return None
+    return float(min(xs)), float(max(xs))
+
+
+def show(fig: go.Figure, key: str | None = None, *, zoom: str | None = "x", reset_button: bool = True,
+         **kwargs):
     """Render a themed figure. Extra keyword arguments (on_select, selection_mode)
     pass straight to st.plotly_chart, whose return value is passed back.
 
@@ -52,7 +79,11 @@ def show(fig: go.Figure, key: str | None = None, *, zoom: str | None = "x", **kw
     and only the dates zoom, the values fit themselves. A Reset zoom button above
     the chart (and a double click on it) goes back to the full range. The button
     works by giving the chart a fresh key. zoom=None turns zooming off, for charts
-    that aren't over time."""
+    that aren't over time.
+
+    zoom="select": dragging across highlights that part of the chart and reruns the
+    page, so the numbers around it can describe what is highlighted (see
+    selected_range). The button above the chart then says Clear selection."""
     config = {"displayModeBar": False}
     if zoom is None:
         fig.update_layout(dragmode=False)
@@ -60,14 +91,23 @@ def show(fig: go.Figure, key: str | None = None, *, zoom: str | None = "x", **kw
         fig.update_yaxes(fixedrange=True)
         return st.plotly_chart(fig, theme=None, width="stretch", key=key, config=config, **kwargs)
 
-    fig.update_layout(dragmode="zoom")
+    selecting = zoom == "select"
+    fig.update_layout(dragmode="select" if selecting else "zoom")
+    if selecting:
+        fig.update_layout(selectdirection="h")
+        kwargs.setdefault("on_select", "rerun")
+        kwargs.setdefault("selection_mode", ("box",))
     fig.update_yaxes(fixedrange=True)
     config["doubleClick"] = "reset"
-    if key:
+    if key and not reset_button:
+        key = widget_key(key)
+    elif key:
         counter = f"_zoom_{key}"
         with st.container(horizontal=True, horizontal_alignment="right"):
-            st.button("Reset zoom", key=f"{key}_reset", icon=":material/refresh:",
-                      type="tertiary", on_click=_bump_zoom, args=(counter,),
-                      help="Drag across the dates you want to zoom in. This puts the full range back.")
+            st.button("Clear selection" if selecting else "Reset zoom", key=f"{key}_reset",
+                      icon=":material/refresh:", type="tertiary", on_click=_bump_zoom, args=(counter,),
+                      help=("Drag across the part you want to look at. The numbers follow it. "
+                            "This clears the selection." if selecting else
+                            "Drag across the dates you want to zoom in. This puts the full range back."))
         key = f"{key}_{st.session_state.get(counter, 0)}"
     return st.plotly_chart(fig, theme=None, width="stretch", key=key, config=config, **kwargs)

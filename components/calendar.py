@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 from components import theme
+from metrics.units import fmt_climb, fmt_distance
 
 # A ride that reaches less than this share of its planned TSS counts as short.
 SHORT_RATIO = 0.70
@@ -186,19 +187,19 @@ def _hmm(seconds) -> str:
     return f"{minutes // 60}:{minutes % 60:02d}"
 
 
-def _km(meters) -> str:
-    m = _num(meters)
-    return f"{m / 1000:.1f} km" if m else ""
+def _km(meters, unit: str = "km") -> str:
+    """Distance in the rider's unit, for example 34.2 km or 21.3 mi."""
+    return fmt_distance(_num(meters), unit)
 
 
-def _ride_facts(r: dict) -> list[str]:
+def _ride_facts(r: dict, unit: str = "km") -> list[str]:
     """Ride numbers as short labels, skipping anything missing."""
     facts = []
     dur = _hmm(r.get("duration_seconds") or r.get("elapsed_seconds"))
     if dur:
         facts.append(dur)
-    if _km(r.get("distance_meters")):
-        facts.append(_km(r.get("distance_meters")))
+    if _km(r.get("distance_meters"), unit):
+        facts.append(_km(r.get("distance_meters"), unit))
     if _num(r.get("avg_power_watts")):
         facts.append(f"{round(_num(r['avg_power_watts']))} W avg")
     if _num(r.get("normalized_power")):
@@ -223,7 +224,7 @@ def _fmt_date(iso: str) -> str:
     return f"{d:%a} {d.day} {d:%b %Y}"
 
 
-def day_tooltip(day: DayData) -> str:
+def day_tooltip(day: DayData, unit: str = "km") -> str:
     """Hover text for one day. Every user string is truncated, then escaped."""
     parts = [f"<b>{_esc(_fmt_date(day.date))}</b> ({_esc(theme.STATUS_LABELS.get(day.status, day.status))})"]
 
@@ -252,7 +253,7 @@ def day_tooltip(day: DayData) -> str:
     if day.rides:
         parts.append("<b>Done</b>")
         for r in day.rides[:3]:
-            facts = ", ".join(_ride_facts(r))
+            facts = ", ".join(_ride_facts(r, unit))
             parts.append(_esc(_short(r.get("name") or "Ride", 40) + (f", {facts}" if facts else "")))
         if len(day.rides) > 3:
             parts.append(f"+{len(day.rides) - 3} more")
@@ -280,7 +281,7 @@ def day_tooltip(day: DayData) -> str:
         if r.get("category"):
             bits.append(_short(r["category"], 20))
         if _num(r.get("distance_km")):
-            bits.append(f"{_num(r['distance_km']):g} km")
+            bits.append(fmt_distance(_num(r["distance_km"]) * 1000, unit))
         parts.append(_esc(", ".join(bits)))
 
     if day.planned_tss > 0 and day.actual_tss > 0:
@@ -334,7 +335,7 @@ def _chips(day: DayData, today: date) -> list[dict]:
     return chips
 
 
-def build_payload(days: dict, selected: str | None, today: date) -> dict:
+def build_payload(days: dict, selected: str | None, today: date, unit: str = "km") -> dict:
     """The data the interactive grid draws. Pure, JSON safe. Strings are plain text
     except `tip`, which day_tooltip has already escaped."""
     out = []
@@ -350,7 +351,7 @@ def build_payload(days: dict, selected: str | None, today: date) -> dict:
             "date": iso, "num": d.day, "in_month": day.in_month,
             "tint": _rgba(color, alpha), "today": d == today, "past": d < today,
             "race": (day.races[0].get("name") or "Race") if day.races else None,
-            "tip": day_tooltip(day), "chips": chips[:MAX_CHIPS],
+            "tip": day_tooltip(day, unit), "chips": chips[:MAX_CHIPS],
             "more": max(len(chips) - MAX_CHIPS, 0),
         })
     return {
@@ -578,6 +579,7 @@ def render_month_calendar(key: str = "cal"):
     Returns the selected ISO date or None."""
     import streamlit as st
     from components import calendar_dnd
+    from components.units import distance_unit
 
     today = date.today()
     sel = _valid_iso(st.session_state.get("cal_sel"))
@@ -608,7 +610,7 @@ def render_month_calendar(key: str = "cal"):
     st.caption(_totals_text(month_totals(days, today), label))
 
     grid_key = f"{key}_grid_{year}_{month}"
-    calendar_dnd.render_grid(build_payload(days, sel, today), key=grid_key,
+    calendar_dnd.render_grid(build_payload(days, sel, today, distance_unit()), key=grid_key,
                              on_event=_cb_grid)
     st.markdown(_legend_html(), unsafe_allow_html=True)
     st.caption("Drag an upcoming workout to another day. Click a workout to open and edit it. "
@@ -652,9 +654,12 @@ def _zone_line(ride: dict) -> str:
     return "Time in zones (h:mm) " + ", ".join(bits) + note
 
 
-def render_day_readonly(day_iso: str) -> None:
-    """Rides done, strength and races for one day. Planned workouts are drawn by the page."""
+def render_day_readonly(day_iso: str, strength_actions=None) -> None:
+    """Rides done, strength and races for one day. Planned workouts are drawn by the page.
+    `strength_actions(session_info)`, if given, draws buttons inside each strength session."""
     import streamlit as st
+    from components.units import distance_unit
+    unit = distance_unit()
 
     try:
         day = get_day(day_iso)
@@ -667,9 +672,9 @@ def render_day_readonly(day_iso: str) -> None:
         drew = True
         with st.container(border=True):
             st.markdown(f"**{_md(_short(r.get('name') or 'Ride', 80))}**")
-            facts = _ride_facts(r)
+            facts = _ride_facts(r, unit)
             if _num(r.get("elevation_gain_meters")):
-                facts.append(f"{round(_num(r['elevation_gain_meters']))} m climbing")
+                facts.append(f"{fmt_climb(_num(r['elevation_gain_meters']), unit)} climbing")
             st.caption("  |  ".join(facts) if facts else "No ride numbers recorded")
             zones = _zone_line(r)
             if zones:
@@ -688,6 +693,8 @@ def render_day_readonly(day_iso: str) -> None:
                         + (f", {round(mins)} min" if mins else ""))
             if s["exercises"]:
                 st.caption(", ".join(_md(_short(x, 40)) for x in s["exercises"]))
+            if strength_actions:
+                strength_actions(s)
     for race in day.races:
         drew = True
         with st.container(border=True):
@@ -695,9 +702,9 @@ def render_day_readonly(day_iso: str) -> None:
             if race.get("category"):
                 bits.append(str(race["category"]))
             if _num(race.get("distance_km")):
-                bits.append(f"{_num(race['distance_km']):g} km")
+                bits.append(fmt_distance(_num(race["distance_km"]) * 1000, unit))
             if _num(race.get("elevation_gain_meters")):
-                bits.append(f"{round(_num(race['elevation_gain_meters']))} m climbing")
+                bits.append(f"{fmt_climb(_num(race['elevation_gain_meters']), unit)} climbing")
             st.markdown(f"**Race, {_md(_short(race.get('name') or 'Race', 80))}**")
             if bits:
                 st.caption(_md("  |  ".join(bits)))

@@ -11,6 +11,7 @@ import streamlit as st
 
 import claude_client
 import coach_tools
+import plan_changes
 from db.queries import add_workout, add_strength_session, save_phase_notes
 
 # Jumping to the Plan page's calendar. The Plan page copies PLAN_JUMP_KEY into its
@@ -71,15 +72,23 @@ def stream_reply(system: list[dict], messages: list[dict], effort: str,
     return reply, error
 
 
+def _proposal_key(p: dict) -> tuple:
+    """New items are identified by date and kind, changes by the item they change."""
+    if p.get("kind") == "change":
+        return plan_changes.key(p)
+    return (p.get("kind", "ride"), p["date"])
+
+
 def merge_proposals(existing: list[dict] | None, new: list[dict]) -> list[dict]:
     """
     Combine a new proposal with one the athlete hasn't confirmed yet. Anything
-    new for a date and kind replaces the old entry for that date and kind, so a
-    revised block doesn't duplicate rows while an additive request ("also add a
-    recovery day Friday") keeps everything else already on screen.
+    new for a date and kind replaces the old entry for that date and kind (a change
+    replaces an earlier change to the same workout), so a revised block doesn't
+    duplicate rows while an additive request ("also add a recovery day Friday")
+    keeps everything else already on screen.
     """
-    replaced = {(p.get("kind", "ride"), p["date"]) for p in new}
-    kept = [p for p in (existing or []) if (p.get("kind", "ride"), p["date"]) not in replaced]
+    replaced = {_proposal_key(p) for p in new}
+    kept = [p for p in (existing or []) if _proposal_key(p) not in replaced]
     return sorted(kept + new, key=lambda p: (p["date"], p.get("kind", "ride")))
 
 
@@ -130,15 +139,20 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
             added["shown"] = True
         parts = []
         if added["rides"]:
-            parts.append(f"{added['rides']} ride{'s' if added['rides'] > 1 else ''}")
+            parts.append(f"added {added['rides']} ride{'s' if added['rides'] > 1 else ''}")
         if added["strength"]:
-            parts.append(f"{added['strength']} strength session{'s' if added['strength'] > 1 else ''}")
+            parts.append(f"added {added['strength']} strength session{'s' if added['strength'] > 1 else ''}")
+        for key, verb in (("moved", "moved"), ("updated", "edited"), ("removed", "removed")):
+            if added.get(key):
+                parts.append(f"{verb} {added[key]}")
         if parts:
-            st.success("Added " + " and ".join(parts) + " to your plan.")
-            if added.get("first"):
-                if st.button("View on calendar", key=f"{state_key}_viewcal",
-                             icon=":material/calendar_month:"):
-                    jump_to_calendar(added["first"], on_plan_page)
+            text = ", ".join(parts)
+            st.success(f"Done. {text[0].upper() + text[1:]}.")
+        for skipped in added.get("skipped", []):
+            st.warning(f"Skipped {skipped['name']}. {skipped['why']}.")
+        if parts and added.get("first"):
+            if st.button("View on calendar", key=f"{state_key}_viewcal", icon=":material/calendar_month:"):
+                jump_to_calendar(added["first"], on_plan_page)
 
     proposed = st.session_state.get(state_key)
     if not proposed:
@@ -146,9 +160,20 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
 
     rides = [p for p in proposed if p.get("kind", "ride") == "ride"]
     strength = [p for p in proposed if p.get("kind") == "strength"]
+    changes = [p for p in proposed if p.get("kind") == "change"]
 
     with st.container(border=True):
-        st.markdown("**Proposed plan** · review before adding to your calendar")
+        st.markdown("**Proposed changes** · review before they touch your calendar" if changes and not
+                    (rides or strength) else "**Proposed plan** · review before adding to your calendar")
+
+        if changes:
+            if rides or strength:
+                st.markdown(f"**Changes to your plan · {len(changes)}**")
+            for c in changes:
+                icon = {"remove": ":material/delete:", "move": ":material/event:",
+                        "update": ":material/edit:"}[c["action"]]
+                st.markdown(f"{icon} {plan_changes.describe(c)}")
+                st.caption(f"Why. {c['reason']}")
 
         if rides:
             by_phase: dict[str, list] = {}
@@ -179,8 +204,10 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
                     st.caption(f"Why. {s['purpose']}")
 
         c1, c2 = st.columns(2)
-        if c1.button("Add to Training Planner", type="primary", width="stretch",
-                     key=f"{state_key}_add"):
+        adding = bool(rides or strength)
+        label = ("Add to Training Planner" if adding and not changes else
+                 "Apply changes" if changes and not adding else "Add and apply changes")
+        if c1.button(label, type="primary", width="stretch", key=f"{state_key}_add"):
             for w in rides:
                 add_workout({
                     "date": w["date"], "name": w["name"], "workout_type": w["workout_type"],
@@ -199,9 +226,13 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
                     "notes": f"{s['name']} | Planned by AI Coach",
                     "phase": s.get("phase"), "purpose": s.get("purpose"),
                 })
-            dates = [p["date"] for p in rides + strength]
+            outcome = plan_changes.apply_changes(changes) if changes else {}
+            dates = [p["date"] for p in rides + strength] + ([outcome["first"]] if outcome.get("first") else [])
             st.session_state.pop(state_key)
             st.session_state[added_key] = {"rides": len(rides), "strength": len(strength),
+                                           "moved": outcome.get("moved", 0), "updated": outcome.get("updated", 0),
+                                           "removed": outcome.get("removed", 0),
+                                           "skipped": outcome.get("skipped", []),
                                            "first": min(dates) if dates else None,
                                            "shown": False}
             st.rerun()

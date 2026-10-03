@@ -10,7 +10,7 @@ from config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, GARMIN_EMAIL, GARMIN_
 import auth.strava as strava_auth
 import auth.garmin as garmin_auth
 from components import ftp_help
-from components.units import unit_switch, weight_input
+from components.units import distance_switch, unit_switch, weight_input
 from metrics.explain import (DEFAULT_GENDER, GENDER_LABELS, GENDER_PROFILE_TABLE,
                              age_from_birth_year)
 from components.cards import page_header
@@ -60,6 +60,7 @@ with tab_profile:
             help=setting_help("ftp"),
         )
         unit = unit_switch("settings_unit")
+        distance_switch("settings_distance", label="Distance units (miles also means feet and mph)")
         weight = weight_input("Weight", float(get_setting("weight_kg", 70) or 70), key="settings_weight",
                               unit=unit, min_kg=30.0, max_kg=200.0, help=setting_help("weight"))
     with col2:

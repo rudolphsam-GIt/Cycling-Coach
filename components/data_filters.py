@@ -14,7 +14,9 @@ from datetime import date, timedelta
 
 import streamlit as st
 
+from components.units import distance_switch, distance_unit
 from metrics import analysis as an
+from metrics.units import climb_from_m, climb_unit, dist_from_km, km_from_dist
 from metrics.explain import TIPS
 
 PRESETS = {"7 days": 7, "4 weeks": 28, "3 months": 91, "6 months": 182, "1 year": 365,
@@ -36,14 +38,16 @@ def _k(name: str) -> str:
 def _seed() -> None:
     for name, default in DEFAULTS.items():
         st.session_state.setdefault(f"df_{name}", copy(default))
+        if name == "km":
+            continue   # the distance slider is in the rider's unit and is handled in render
         if _k(name) not in st.session_state:
             st.session_state[_k(name)] = copy(st.session_state[f"df_{name}"])
 
 
 def _store() -> None:
     for name in DEFAULTS:
-        if name == "preset":
-            continue   # handled in render, an empty selection keeps the last preset
+        if name in ("preset", "km"):
+            continue   # handled in render: an empty preset keeps the last one, distance has units
         if _k(name) in st.session_state:
             st.session_state[f"df_{name}"] = st.session_state[_k(name)]
 
@@ -101,18 +105,33 @@ def render() -> dict:
                 st.session_state[_k("custom")] = (today - timedelta(days=90), today)
             st.date_input("From and to", key=_k("custom"), max_value=today)
 
-        search, more = st.columns([4, 1.4], vertical_alignment="bottom")
+        search, units, more = st.columns([3.4, 1.2, 1.4], vertical_alignment="bottom")
         search.text_input("Search rides", key=_k("text"), placeholder="Search rides by name, e.g. zwift race",
                           label_visibility="collapsed")
+        with units:
+            unit = distance_switch("df_distance_unit", collapsed=True)
         with more.popover("More filters", icon=":material/tune:", width="stretch"):
             st.pills("Ride type", KINDS, key=_k("kinds"), selection_mode="multi")
             st.slider("TSS", *RANGES["tss"], key=_k("tss"), step=5)
             st.slider("Intensity factor", *RANGES["intensity"], key=_k("intensity"), step=0.05)
             st.slider("Moving time (minutes)", *RANGES["minutes"], key=_k("minutes"), step=10)
-            st.slider("Distance (km)", *RANGES["km"], key=_k("km"), step=5)
+            dkey = f"{_k('km')}_{unit}"
+            top_dist = round(dist_from_km(RANGES["km"][1], unit))
+            if dkey not in st.session_state:
+                lo_km, hi_km = st.session_state["df_km"]
+                st.session_state[dkey] = (min(round(dist_from_km(lo_km, unit)), top_dist),
+                                          min(round(dist_from_km(hi_km, unit)), top_dist))
+            st.slider(f"Distance ({unit})", 0, top_dist, key=dkey, step=5)
             st.toggle("Only rides with power", key=_k("has_power"))
             st.toggle("Only rides with heart rate", key=_k("has_hr"))
     _store()
+    # The distance slider is in the rider's unit. Keep the filter in kilometers, and keep the
+    # full range exactly the full range so rounding never turns the filter on by itself.
+    if (picked := st.session_state.get(f"{_k('km')}_{unit}")):
+        lo, hi = picked
+        st.session_state["df_km"] = (RANGES["km"][0] if lo <= 0 else km_from_dist(lo, unit),
+                                     RANGES["km"][1] if hi >= round(dist_from_km(RANGES["km"][1], unit))
+                                     else km_from_dist(hi, unit))
 
     start, end = _dates(today)
     if start > end:
@@ -146,6 +165,8 @@ def describe(ctx: dict) -> str:
 
 def summary_tiles(ctx: dict) -> None:
     """Totals for the selected rides, with the change against the period before."""
+    unit = distance_unit()
+    cu = climb_unit(unit)
     now = an.summary(ctx["rides"])
     before = an.summary(ctx["previous"]) if ctx["previous"] is not None else None
     diff = an.deltas(now, before) if before else {}
@@ -165,8 +186,10 @@ def summary_tiles(ctx: dict) -> None:
     tile(r1[1], "Time", "hours",
          lambda v: f"{v:,.0f} h" if v >= 100 else f"{int(v)}h {int(v % 1 * 60):02d}m",
          lambda d: f"{d:+.1f} h")
-    tile(r1[2], "Distance km", "km", lambda v: f"{v:,.0f}", lambda d: f"{d:+,.0f}")
-    tile(r1[3], "Climbing m", "climb_m", lambda v: f"{v:,.0f}", lambda d: f"{d:+,.0f}", term="climb")
+    tile(r1[2], f"Distance {unit}", "km", lambda v: f"{dist_from_km(v, unit):,.0f}",
+         lambda d: f"{dist_from_km(d, unit):+,.0f}")
+    tile(r1[3], f"Climbing {cu}", "climb_m", lambda v: f"{climb_from_m(v, unit):,.0f}",
+         lambda d: f"{climb_from_m(d, unit):+,.0f}", term="climb")
     r2 = st.columns(4)
     tile(r2[0], "TSS", "tss", lambda v: f"{v:,.0f}", lambda d: f"{d:+,.0f}")
     tile(r2[1], "Work kJ", "kj", lambda v: f"{v:,.0f}", lambda d: f"{d:+,.0f}")

@@ -85,6 +85,8 @@ def add_ride(day: date, tss: float, name: str, sport: str = "ride") -> None:
         "zone_time_json": json.dumps({f"z{i + 1}_s": int(secs * s) for i, s in enumerate(shares)}
                                      | {"source": "estimated"}),
     })
+    if (today - day).days <= 45:
+        q.save_streams(aid, fake_streams(name, secs, intensity), "demo")
     # Fitness improves a little over the months, harder rides hit higher peaks.
     form = 0.9 + 0.1 * (1 + (day - today).days / 180) + 0.15 * (intensity - 0.7)
     q.save_peaks(aid, {d: round(w * form * rng.uniform(0.9, 1.03)) for d, w in BASE_PEAKS.items()
@@ -93,6 +95,42 @@ def add_ride(day: date, tss: float, name: str, sport: str = "ride") -> None:
     q.save_hr_peaks(aid, {d: min(186, avg_hr + bump + rng.randint(-2, 2))
                           for d, bump in ((5, 26), (10, 25), (30, 23), (60, 21), (120, 18), (300, 14),
                                           (600, 11), (1200, 8), (1800, 6), (3600, 3)) if d <= secs})
+
+
+def fake_streams(name: str, secs: int, intensity: float) -> dict:
+    """A believable second by second ride for the demo, shaped by the workout name."""
+    import math
+    n = min(secs, 4 * 3600)
+    plan = []                                   # (seconds, fraction of FTP)
+    lower = name.lower()
+    if "threshold" in lower:
+        plan = [(600, 0.6)] + [(480, 0.97), (240, 0.5)] * 4 + [(600, 0.5)]
+    elif "vo2" in lower:
+        plan = [(720, 0.6)] + [(240, 1.18), (240, 0.45)] * 5 + [(600, 0.5)]
+    else:
+        plan = [(n, intensity * 0.85)]
+    power, t = [], 0
+    while len(power) < n:
+        for length, frac in plan:
+            for i in range(length):
+                wobble = 1 + 0.07 * math.sin(i / 7) + rng.uniform(-0.05, 0.05)
+                coast = 0.0 if rng.random() < 0.01 else 1.0
+                power.append(max(0, round(FTP * frac * wobble * coast)))
+            if len(power) >= n:
+                break
+        if len(plan) == 1:
+            break
+    power = power[:n]
+    hr, h = [], 105.0
+    for p in power:
+        target = 105 + 62 * min(p / FTP, 1.25)
+        h += (target - h) * 0.03
+        hr.append(round(h + rng.uniform(-1, 1)))
+    cad = [round(max(0, 88 + 6 * math.sin(i / 40) + rng.uniform(-4, 4)) * (0 if p == 0 else 1))
+           for i, p in enumerate(power)]
+    alt = [round(120 + 45 * math.sin(i / 700) + 25 * math.sin(i / 230), 1) for i in range(n)]
+    speed = [round(max(0, 6 + 4 * min(p / FTP, 1.2)), 2) for p in power]
+    return {"power": power, "hr": hr, "cad": cad, "speed": speed, "alt": alt}
 
 
 UNPLANNED = [("Morning coffee ride", "ride"), ("Hill repeats", "ride"), ("Saturday group ride", "ride"),

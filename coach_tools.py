@@ -58,7 +58,21 @@ TOOLS = [
     },
     {
         "name": "get_planned_workouts",
-        "description": "Workouts already on the athlete's Training Planner between two dates.",
+        "description": "Rides already on the athlete's Training Planner between two dates, each with "
+                       "its id (needed to change or remove it), purpose and feel.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "start_date": {"type": "string", "description": "YYYY-MM-DD"},
+                "end_date": {"type": "string", "description": "YYYY-MM-DD"},
+            },
+            "required": ["start_date", "end_date"],
+        },
+    },
+    {
+        "name": "get_planned_strength",
+        "description": "Strength sessions on the athlete's calendar between two dates, each with its id "
+                       "(needed to change or remove it), whether it is done, and its exercises.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -217,6 +231,56 @@ TOOLS = [
         },
     },
     {
+        "name": "propose_plan_changes",
+        "description": "Move, edit or remove rides and strength sessions that are already on the "
+                       "athlete's plan. Nothing changes until the athlete confirms on screen, so call "
+                       "this whenever they ask to move, swap, shorten, rename, skip, cancel or delete "
+                       "something, or when a conversation about their week leads to a change. Look up "
+                       "the ids first with get_planned_workouts and get_planned_strength. Only today "
+                       "or later and not done can change. Group related changes into one call, give each a "
+                       "short reason, and tell the athlete to review and confirm them below the chat. "
+                       "Use propose_workouts or propose_strength_sessions to add new sessions.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "changes": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "target": {"type": "string", "enum": ["ride", "strength"]},
+                            "id": {"type": "integer", "description": "From get_planned_workouts or get_planned_strength"},
+                            "action": {"type": "string", "enum": ["move", "update", "remove"]},
+                            "reason": {"type": "string", "description": "Why, in a plain sentence the athlete will read"},
+                            "new_date": {"type": "string", "description": "YYYY-MM-DD, for a move (or an update that also moves it)"},
+                            "name": {"type": "string"},
+                            "workout_type": {"type": "string", "enum": WORKOUT_TYPES},
+                            "description": {"type": "string"},
+                            "tss_planned": {"type": "number"},
+                            "purpose": {"type": "string"},
+                            "feel": {"type": "string"},
+                            "duration_minutes": {"type": "integer", "description": "Strength sessions only"},
+                            "exercises": {
+                                "type": "array", "description": "Strength sessions only. Replaces the whole list.",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {"type": "string"}, "sets": {"type": "integer"},
+                                        "reps": {"type": "string"}, "intensity": {"type": "string"},
+                                        "notes": {"type": "string"},
+                                    },
+                                    "required": ["name", "sets", "reps", "intensity"],
+                                },
+                            },
+                        },
+                        "required": ["target", "id", "action", "reason"],
+                    },
+                },
+            },
+            "required": ["changes"],
+        },
+    },
+    {
         "name": "generate_training_block",
         "description": "Generate a draft periodized block of rides from today (or a given start "
                        "date) to a race date, ramping weekly training load toward a target CTL "
@@ -243,6 +307,8 @@ STATUS_LABELS = {
     "get_training_load": "Checking your training load",
     "get_weekly_summary": "Checking your weekly totals",
     "get_planned_workouts": "Checking your planner",
+    "get_planned_strength": "Checking your strength sessions",
+    "propose_plan_changes": "Drafting changes to your plan",
     "get_races": "Checking your race calendar",
     "get_wellness": "Checking your check ins",
     "get_recovery": "Checking your sleep and recovery",
@@ -320,9 +386,17 @@ def run_tool(name: str, args: dict, proposals: list[dict]) -> str:
         start = _iso_date(args.get("start_date"), "start_date")
         end = _iso_date(args.get("end_date"), "end_date")
         result = [
-            {k: w.get(k) for k in ("date", "name", "workout_type", "description", "tss_planned", "completed")}
+            {k: w.get(k) for k in ("id", "date", "name", "workout_type", "description", "tss_planned",
+                                   "completed", "purpose", "feel", "phase")
+             if w.get(k) not in (None, "")}
             for w in get_workouts(start.isoformat(), end.isoformat())
         ]
+    elif name == "get_planned_strength":
+        start = _iso_date(args.get("start_date"), "start_date")
+        end = _iso_date(args.get("end_date"), "end_date")
+        result = _strength_rows(start.isoformat(), end.isoformat())
+    elif name == "propose_plan_changes":
+        result = _propose_changes(args, proposals)
     elif name == "get_races":
         keys = ("name", "date", "distance_km", "elevation_gain_meters", "category", "notes",
                 "placing", "field_size", "race_avg_power", "result_notes")
@@ -360,7 +434,7 @@ def run_tool(name: str, args: dict, proposals: list[dict]) -> str:
     else:
         raise ToolInputError(f"unknown tool {name}")
 
-    if not result and name not in ("propose_workouts", "propose_strength_sessions"):
+    if not result and name not in ("propose_workouts", "propose_strength_sessions", "propose_plan_changes"):
         return "No data found for that period."
     return json.dumps(result, default=str)
 
@@ -493,6 +567,53 @@ def _propose_strength(args: dict, proposals: list[dict]) -> str:
     proposals.extend(checked)
     return (f"{len(checked)} strength sessions are shown to the athlete with a confirm button. "
             "They are not saved yet; tell the athlete to review and confirm them below the chat.")
+
+
+def _strength_rows(start: str, end: str) -> list[dict]:
+    """Strength sessions in a date range, in the shape the coach reads."""
+    from db.queries import get_strength_sessions
+    from components.calendar import _strength_row
+    days_back = max((date.today() - date.fromisoformat(start)).days + 1, 1)
+    rows = []
+    for r in get_strength_sessions(days_back=days_back):
+        if not start <= r["date"] <= end:
+            continue
+        info = _strength_row(r)
+        exercises = []
+        try:
+            for e in json.loads(r.get("exercises_json") or "[]"):
+                exercises.append(f"{e.get('name')} {e.get('sets')}x{e.get('reps')} {e.get('intensity', '')}".strip())
+        except (TypeError, ValueError):
+            pass
+        row = {"id": r["id"], "date": r["date"], "name": info["name"],
+               "done": bool(r.get("completed")), "duration_minutes": r.get("duration_minutes"),
+               "exercises": exercises, "purpose": r.get("purpose")}
+        rows.append({k: v for k, v in row.items() if v not in (None, "", [])})
+    return sorted(rows, key=lambda x: x["date"])
+
+
+def _propose_changes(args: dict, proposals: list[dict]) -> str:
+    import plan_changes
+    changes = args.get("changes")
+    if not isinstance(changes, list) or not changes:
+        raise ToolInputError("changes must be a non empty list")
+    if len(changes) > plan_changes.MAX_CHANGES:
+        raise ToolInputError(f"propose at most {plan_changes.MAX_CHANGES} changes at a time")
+    checked, seen = [], set()
+    for i, raw in enumerate(changes):
+        try:
+            change = plan_changes.validate_change(raw, workout_types=WORKOUT_TYPES)
+        except plan_changes.ChangeError as e:
+            raise ToolInputError(f"change {i}: {e}")
+        k = plan_changes.key(change)
+        if k in seen:
+            raise ToolInputError(f"change {i}: that {change['target']} already has a change in this call. "
+                                 "Combine them into one change")
+        seen.add(k)
+        checked.append(change)
+    proposals.extend(checked)
+    return (f"{len(checked)} changes are shown to the athlete with a confirm button. Nothing has changed "
+            "yet. Tell the athlete what you are proposing and why, and to review and confirm below the chat.")
 
 
 def _generate_block(args: dict) -> list[dict]:

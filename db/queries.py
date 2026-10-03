@@ -223,6 +223,42 @@ def get_activities_between(start: str, end: str) -> list:
     return [dict(r) for r in rows]
 
 
+def save_streams(activity_id: int, streams: dict, source: str = "") -> None:
+    """Keep a ride's second by second data so it only has to be fetched once."""
+    if not activity_id or not streams:
+        return
+    data = json.dumps(streams, separators=(",", ":"))
+    if len(data) > 8_000_000:       # a very long ride, not worth keeping
+        return
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO activity_streams (activity_id, data, source, fetched_at) VALUES (?, ?, ?, ?)
+           ON CONFLICT(activity_id) DO UPDATE SET data=excluded.data, source=excluded.source,
+           fetched_at=excluded.fetched_at""",
+        (activity_id, data, source, datetime.utcnow().isoformat()))
+    conn.commit()
+    conn.close()
+
+
+def get_streams(activity_id: int) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT data FROM activity_streams WHERE activity_id = ?", (activity_id,)).fetchone()
+    conn.close()
+    if not row:
+        return None
+    try:
+        return json.loads(row["data"])
+    except (TypeError, ValueError):
+        return None
+
+
+def get_activity(activity_id: int) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM activities WHERE id = ?", (activity_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
 def save_hr_peaks(activity_id: int, peaks: dict) -> None:
     """Store best average heart rate by duration in seconds, keeping the higher value."""
     if not activity_id or not peaks:
@@ -306,7 +342,12 @@ def deduplicate_activities() -> int:
                    SELECT ?, duration_s, bpm FROM activity_hr_peaks WHERE activity_id = ?
                    ON CONFLICT(activity_id, duration_s) DO UPDATE SET bpm = MAX(bpm, excluded.bpm)""",
                 (keep_id, drop_id))
-        for table in ("activity_peaks", "activity_hr_peaks"):
+        for drop_id, keep_id in kept_for.items():
+            conn.execute(
+                """INSERT OR IGNORE INTO activity_streams (activity_id, data, source, fetched_at)
+                   SELECT ?, data, source, fetched_at FROM activity_streams WHERE activity_id = ?""",
+                (keep_id, drop_id))
+        for table in ("activity_peaks", "activity_hr_peaks", "activity_streams"):
             conn.execute(
                 f"DELETE FROM {table} WHERE activity_id IN ({','.join('?' * len(to_delete))})",
                 list(to_delete),
@@ -649,6 +690,44 @@ def get_strength_session(sid: int) -> dict | None:
     row = conn.execute("SELECT * FROM strength_sessions WHERE id=?", (sid,)).fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+def delete_strength_session(sid: int) -> dict | None:
+    """Remove a strength session, planned or logged. Returns the row that was removed,
+    or None if it doesn't exist."""
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM strength_sessions WHERE id=?", (sid,)).fetchone()
+    if not row:
+        conn.close()
+        return None
+    conn.execute("DELETE FROM strength_sessions WHERE id=?", (sid,))
+    conn.commit()
+    conn.close()
+    return dict(row)
+
+
+def update_strength_session(sid: int, *, name: str | None = None, exercises: list | None = None,
+                            duration_minutes: int | None = None, purpose: str | None = None) -> dict | None:
+    """Change what is in a strength session. Only the fields given are changed. The name
+    lives at the front of the notes ("Lower body | Planned by AI Coach"), so it is rewritten
+    there. Returns the row as it was before, or None if it doesn't exist."""
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM strength_sessions WHERE id=?", (sid,)).fetchone()
+    if not row:
+        conn.close()
+        return None
+    row = dict(row)
+    notes = row.get("notes") or ""
+    if name is not None:
+        rest = notes.split(" | ", 1)[1] if " | " in notes else "Planned by AI Coach"
+        notes = f"{name} | {rest}"
+    conn.execute(
+        """UPDATE strength_sessions SET notes=?, exercises_json=COALESCE(?, exercises_json),
+           duration_minutes=COALESCE(?, duration_minutes), purpose=COALESCE(?, purpose) WHERE id=?""",
+        (notes, json.dumps(exercises) if exercises is not None else None, duration_minutes, purpose, sid))
+    conn.commit()
+    conn.close()
+    return row
 
 
 def move_strength_session(sid: int, new_date: str) -> dict | None:

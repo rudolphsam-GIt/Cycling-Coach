@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from components import data_filters, ride_detail
+from components import data_filters, ride_analysis, ride_detail
+from components.units import distance_unit
 from components.cards import page_header, section_header
 from db.schema import run_migrations
 
@@ -29,13 +30,15 @@ if not rides:
 
 f = ctx["filters"]
 dl.download_button(
-    "Download CSV", data=ride_detail.rides_frame(rides).to_csv(index=False).encode(),
+    "Download CSV", data=ride_detail.rides_frame(rides, distance_unit()).to_csv(index=False).encode(),
     file_name=f"rides_{f.start.isoformat()}_{f.end.isoformat()}.csv", mime="text/csv",
     icon=":material/download:", width="stretch")
 
 # A new key whenever the filters change, so a selected row never points at a different ride.
 picked = ride_detail.ride_table(rides, key=f"data_rides_{abs(hash(repr(f))) % 10**8}", max_height=560)
 if picked:
+    if st.button("Analyze this ride", key="data_analyze", type="primary", icon=":material/query_stats:"):
+        ride_analysis.open_analysis(picked["id"])
     ride_detail.ride_detail(picked, key="data_ride")
 else:
     st.caption("Select a ride to see its details.")

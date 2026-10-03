@@ -121,6 +121,13 @@ CREATE TABLE IF NOT EXISTS activity_peaks (
     PRIMARY KEY (activity_id, duration_s)
 );
 
+CREATE TABLE IF NOT EXISTS activity_streams (
+    activity_id INTEGER PRIMARY KEY,
+    data TEXT NOT NULL,
+    source TEXT,
+    fetched_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS plan_phases (
     phase TEXT PRIMARY KEY,
     focus TEXT,

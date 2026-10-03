@@ -128,17 +128,15 @@ export default function (component) {
       if (c.tss) chip.append(el('span', 'tss', String(c.tss)));
       chip.dataset.kind = c.kind;
       chip.dataset.id = c.id;
-      if (c.kind !== 'done') chip.classList.add('open');
+      chip.classList.add('open');
       if (c.locked) chip.classList.add('locked');
-      if (c.kind !== 'done') {
-        chip.tabIndex = 0;
-        chip.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ' || e.key.toLowerCase() === 'm') {
-            e.preventDefault();
-            fire('open', { kind: c.kind, id: c.id, date: day.date });
-          }
-        });
-      }
+      chip.tabIndex = 0;
+      chip.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ' || e.key.toLowerCase() === 'm') {
+          e.preventDefault();
+          fire('open', { kind: c.kind, id: c.id, date: day.date });
+        }
+      });
       if (!c.locked) {
         chip.draggable = true;
         chip.classList.add('drag');
@@ -157,8 +155,7 @@ export default function (component) {
       }
       chip.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (c.kind === 'done') fire('select', { date: day.date });
-        else fire('open', { kind: c.kind, id: c.id, date: day.date });
+        fire('open', { kind: c.kind, id: c.id, date: day.date });
       });
       chips.append(chip);
     }
