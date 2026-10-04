@@ -63,16 +63,51 @@ def _plan_test(has_power: bool) -> None:
     st.session_state["ftp_test_day"] = day.isoformat()
 
 
-def render(key: str = "ftp_help") -> None:
-    """The FTP help card. Draws nothing when the FTP is a tested value and no
-    better suggestion exists."""
+SNOOZE_DAYS = 14
+SNOOZE_KEY = "ftp_help_snoozed_until"
+
+
+def _snooze() -> None:
+    set_setting(SNOOZE_KEY, (date.today() + timedelta(days=SNOOZE_DAYS)).isoformat())
+    st.session_state.pop("ftp_test_day", None)
+    st.toast(f"Okay, we'll leave your FTP alone for {SNOOZE_DAYS} days.")
+
+
+def _is_snoozed() -> bool:
+    until = get_setting(SNOOZE_KEY, "")
+    return bool(until) and date.today().isoformat() <= until
+
+
+def _save_manual(key: str) -> None:
+    ftp = st.session_state.get(f"{key}_manual")
+    if not ftp:
+        return
+    set_setting("ftp_watts", int(ftp))
+    set_setting("ftp_estimated", "0")
+    set_setting(SNOOZE_KEY, "")
+    log_ftp_history(int(ftp), "Entered manually")
+    st.session_state.pop("ftp_test_day", None)
+    st.toast(f"FTP set to {int(ftp)} W")
+
+
+def render(key: str = "ftp_help", *, snoozable: bool = True, show_lower: bool = False) -> None:
+    """The FTP help card. Draws nothing when the FTP is a tested value and nothing better is on
+    offer, or when the rider chose Not now (on pages with `snoozable`).
+
+    A suggestion from recent rides is only offered when it would raise FTP, unless
+    `show_lower` is set (Settings). A lower number from the last six weeks usually just means no
+    all out effort lately, not that the FTP is wrong, so it is not worth a nag on Today."""
     today = date.today()
     ftp = float(get_setting("ftp_watts", 0) or 0)
     estimated = get_setting("ftp_estimated", "") == "1"
     since = (today - timedelta(days=42)).isoformat()
     suggestion = explain.suggest_ftp(get_peaks_between(since, today.isoformat()), today)
-    differs = bool(suggestion) and abs(suggestion["ftp"] - ftp) >= SUGGEST_DIFF_W
+    higher = bool(suggestion) and suggestion["ftp"] >= ftp + SUGGEST_DIFF_W
+    lower = bool(suggestion) and suggestion["ftp"] <= ftp - SUGGEST_DIFF_W
+    differs = higher or (lower and show_lower)
     planned_day = st.session_state.get("ftp_test_day")
+    if snoozable and _is_snoozed() and not planned_day:
+        return
     if not (estimated or differs or planned_day):
         return
 
@@ -85,12 +120,17 @@ def render(key: str = "ftp_help") -> None:
             low, high = get_setting("ftp_range_low", ""), get_setting("ftp_range_high", "")
             if low and high:
                 st.caption(explain.ftp_reassurance(float(low), float(high)))
-        else:
-            st.markdown("**Your FTP may be out of date.**")
+        elif higher:
+            st.markdown("**Your recent rides point to a higher FTP.**")
+        elif lower:
+            st.markdown("**Your last six weeks don't show your FTP.**")
         if differs:
             st.markdown(f"Your best 20 minutes in the last 6 weeks was {suggestion['watts']} W on "
                         f"{suggestion['date']} ({suggestion['name']}). 95% of that is "
                         f"**{suggestion['ftp']} W**, compared with {ftp:.0f} W now.")
+            if lower:
+                st.caption("That is normal if you haven't done an all out effort lately. Keep your current "
+                           "FTP unless you think it is too high.")
         with st.container(horizontal=True):
             if differs:
                 st.button(f"Use {suggestion['ftp']} W", key=f"{key}_use", type="primary",
@@ -98,6 +138,14 @@ def render(key: str = "ftp_help") -> None:
             st.button("Plan an FTP test", key=f"{key}_test", icon=":material/event:",
                       on_click=_plan_test, args=(has_power,),
                       help="Adds a guided 20 minute test on your next free day")
+            with st.popover("Enter it myself", icon=":material/edit:"):
+                st.number_input("FTP in watts", min_value=50, max_value=600, value=int(ftp) or 200, step=5,
+                                key=f"{key}_manual")
+                st.button("Save FTP", key=f"{key}_save", type="primary", icon=":material/save:",
+                          on_click=_save_manual, args=(key,))
+            if snoozable:
+                st.button("Not now", key=f"{key}_snooze", icon=":material/schedule:", on_click=_snooze,
+                          help=f"Hide this for {SNOOZE_DAYS} days")
         if planned_day:
             st.success(f"A 20 minute FTP test is on your plan for {date.fromisoformat(planned_day):%A %b %-d}.")
             if st.button("View on calendar", key=f"{key}_view", icon=":material/calendar_month:"):

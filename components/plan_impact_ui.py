@@ -31,18 +31,27 @@ def focus_label(state: dict) -> str:
     return f"{_day(focus.isoformat())}, four weeks out"
 
 
-def _has_plan(plan: dict, today: date) -> bool:
-    return any(t > 0 for d, t in plan.items() if d >= today.isoformat())
+def _planned_rides(state: dict) -> list[dict]:
+    """Rides planned from today on. Rides already ridden don't count as a plan."""
+    today = state["today"].isoformat()
+    return [w for w in state["workouts"] if w["date"] >= today and (w.get("tss_planned") or 0) > 0]
+
+
+def _has_plan(state: dict) -> bool:
+    """Whether any ride is planned from today on. Without this, a rider with only gym
+    sessions planned would be told they are about to rest for a month, because today's
+    ride was counted as the plan."""
+    return bool(_planned_rides(state))
 
 
 def plan_end_note(plan: dict, state: dict) -> str | None:
-    """A sentence when the plan stops well before the focus day, since the
-    projection then assumes rest from the last planned day."""
-    last = max((d for d, t in plan.items() if t > 0 and d >= state["today"].isoformat()),
-               default=None)
+    """A sentence when the planned rides stop well before the focus day, since the
+    projection then assumes rest from the last planned ride."""
+    last = max((w["date"] for w in _planned_rides(state)), default=None)
     if last and (state["focus"] - date.fromisoformat(last)).days > 7:
-        return (f"Your plan ends {_day(last)}, so the numbers for {_day(state['focus'].isoformat())} "
-                "assume rest after that. Add more workouts to see a fuller picture.")
+        return (f"Your planned rides end {_day(last)}, so the numbers for "
+                f"{_day(state['focus'].isoformat())} assume rest after that. Add more workouts to see a "
+                "fuller picture.")
     return None
 
 
@@ -110,8 +119,8 @@ def render_impact_panel(state: dict) -> None:
         title.subheader("Plan impact")
         with helper:
             help_icon("plan_impact", "plan_impact", label="What is this?")
-        if not _has_plan(plan, today):
-            st.caption("Nothing is planned yet. Add workouts or ask your coach to build a block, "
+        if not _has_plan(state):
+            st.caption("No rides are planned from today on. Add workouts or ask your coach to build a block, "
                        "and the projected fitness, fatigue and form appear here.")
             return
 

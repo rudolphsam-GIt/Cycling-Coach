@@ -877,6 +877,14 @@ def upsert_recovery(day: str, data: dict) -> None:
     conn.close()
 
 
+def get_latest_recovery() -> dict | None:
+    """The most recent day Garmin sent any sleep or recovery numbers, or None."""
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM recovery_daily ORDER BY date DESC LIMIT 1").fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
 def get_recovery_range(start: str, end: str) -> list:
     conn = get_conn()
     rows = conn.execute(

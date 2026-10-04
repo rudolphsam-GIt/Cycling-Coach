@@ -358,6 +358,13 @@ def recovery(pmc: pd.DataFrame) -> None:
         return
     df = pd.DataFrame(rows)
     df["date"] = pd.to_datetime(df["date"])
+    from auth.garmin import recovery_status
+    status = recovery_status()
+    if status["stale"] and status["last_date"]:
+        last = pd.Timestamp(status["last_date"])
+        st.warning(f"Garmin hasn't sent sleep or recovery since {last:%b} {last.day}, so the newest days are "
+                   "missing. Open the Garmin Connect app on your phone to sync your watch.",
+                   icon=":material/watch:")
 
     section_header("HRV and resting heart rate", "With form (TSB) behind them, to read recovery against load",
                    explain="hrv")

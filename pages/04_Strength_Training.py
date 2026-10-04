@@ -132,7 +132,8 @@ if planned:
     for ps in planned:
         ps_exercises = json.loads(ps["exercises_json"]) if ps.get("exercises_json") else []
         ps_name = (ps.get("notes") or "").split(" | ")[0]
-        with st.expander(f"{ps['date']} · {ps_name}"):
+        _d = date.fromisoformat(ps["date"])
+        with st.expander(f"{_d:%a %b} {_d.day} · {ps_name}"):
             with st.form(f"planned_form_{ps['id']}"):
                 ps_duration = st.number_input("Duration (minutes)", 5, 180,
                                               int(ps.get("duration_minutes") or 45))

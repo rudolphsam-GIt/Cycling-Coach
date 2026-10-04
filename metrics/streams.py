@@ -316,3 +316,57 @@ def numbers_from_streams(streams: dict, ftp: float = 0.0) -> dict:
         "avg_cad": sum(cad) / len(cad) if cad else None,
         "decoupling": decoupling(power, hr) if power and hr else None,
     }
+
+
+# ── Distance along the ride ───────────────────────────────────────────────────
+
+NICE_STEPS = (0.1, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100, 200, 500)
+
+
+def cumulative_distance(streams: dict) -> list[float] | None:
+    """Meters covered at each second. From the distance channel when there is one (gaps carry
+    the last value, and the line never goes backwards), otherwise by adding up speed."""
+    dist = streams.get("dist")
+    if dist and any(v is not None for v in dist):
+        out, last = [], 0.0
+        for v in dist:
+            last = max(last, v) if v is not None else last
+            out.append(last)
+        return out
+    speed = streams.get("speed")
+    if speed and any(v for v in speed):
+        out, total = [], 0.0
+        for v in speed:
+            total += v or 0.0
+            out.append(total)
+        return out
+    return None
+
+
+def nice_step(raw: float) -> float:
+    """The smallest round step (1, 2, 5, 10 and so on) that is at least `raw`."""
+    for step in NICE_STEPS:
+        if step >= raw:
+            return step
+    return NICE_STEPS[-1]
+
+
+def distance_ticks(cumulative_m: list[float], start: int, end: int, meters_per_unit: float,
+                   count: int = 8) -> list[tuple[float, int]]:
+    """Round distances (in miles or km) inside the window from `start` to `end` seconds,
+    each with the second it was reached, for labelling the timeline by distance."""
+    if not cumulative_m or end - start < 2:
+        return []
+    window = cumulative_m[start:end]
+    lo, hi = window[0] / meters_per_unit, window[-1] / meters_per_unit
+    if hi - lo <= 0:
+        return []
+    step = nice_step((hi - lo) / count)
+    arr = np.asarray(window, dtype=float)
+    ticks, v = [], math.ceil(lo / step - 1e-9) * step
+    while v <= hi + 1e-9:
+        i = int(np.searchsorted(arr, v * meters_per_unit, side="left"))
+        if i < len(arr):
+            ticks.append((round(v, 6), start + i))
+        v += step
+    return ticks

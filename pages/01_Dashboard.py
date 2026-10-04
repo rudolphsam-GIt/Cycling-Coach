@@ -81,8 +81,10 @@ with col_plan:
         )
 
 with col_recovery:
-    _rec = get_recovery_range((date.today() - timedelta(days=1)).isoformat(), today_str)
+    import auth.garmin as _garmin
+    _rec = get_recovery_range((date.today() - timedelta(days=21)).isoformat(), today_str)
     _r = _rec[-1] if _rec else None
+    _status = _garmin.recovery_status()
     if _r:
         _stats = []
         if _r.get("sleep_hours"):
@@ -96,10 +98,26 @@ with col_recovery:
         _stats_html = "".join(
             f"<div><div class='today-stat-value'>{v}</div><div class='today-stat-label'>{l}</div></div>"
             for v, l in _stats)
-        _status = f" · HRV {_r['hrv_status'].lower()}" if _r.get("hrv_status") else ""
+        _hrv = f" · HRV {_r['hrv_status'].lower()}" if _r.get("hrv_status") else ""
+        _when = ""
+        if _status["stale"]:
+            _d = date.fromisoformat(_r["date"])
+            _when = f" · {_d:%b} {_d.day}"
+        _stale_note = (
+            f"<div class='today-card-body'>Garmin hasn't sent sleep or recovery since "
+            f"{_d:%b} {_d.day}. Open the Garmin Connect app on your phone to sync your watch.</div>"
+            if _status["stale"] else "")
         st.markdown(
-            f"<div class='today-card'><div class='today-card-label'>Recovery · Garmin{_status}</div>"
-            f"<div class='today-stats'>{_stats_html}</div></div>",
+            f"<div class='today-card'><div class='today-card-label'>Recovery · Garmin{_hrv}{_when}</div>"
+            f"<div class='today-stats'>{_stats_html}</div>{_stale_note}</div>",
+            unsafe_allow_html=True,
+        )
+    elif _garmin.is_connected():
+        st.markdown(
+            "<div class='today-card'><div class='today-card-label'>Recovery</div>"
+            "<div class='today-card-title'>Waiting for Garmin</div>"
+            "<div class='today-card-body'>Garmin is connected but hasn't sent any sleep or recovery "
+            "numbers yet. Open the Garmin Connect app on your phone to sync your watch.</div></div>",
             unsafe_allow_html=True,
         )
     else:

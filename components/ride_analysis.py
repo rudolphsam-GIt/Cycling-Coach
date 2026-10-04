@@ -195,6 +195,7 @@ def _timeline(act: dict, streams: dict, ftp: float, lthr: float, window_range: t
     if not rows:
         st.caption("This ride has no power, heart rate, speed or elevation data to chart.")
         return
+    cum = sm.cumulative_distance(streams)
     fig = make_subplots(rows=len(rows), cols=1, shared_xaxes=True, vertical_spacing=0.04,
                         row_heights=[2 if k == "power" else 1 for k, _, _ in rows])
     for i, (key, label, color) in enumerate(rows, start=1):
@@ -209,7 +210,7 @@ def _timeline(act: dict, streams: dict, ftp: float, lthr: float, window_range: t
         minutes = [x / 60 for x in xs]
         if i == 1:
             first_x, first_y = minutes, ys
-        hover = [sm.elapsed_label(x) for x in xs]
+        hover = [hover_label(x, cum, unit) for x in xs]
         kwargs = dict(fill="tozeroy", fillcolor=charts_rgba(color, 0.12)) if key == "alt" else {}
         fig.add_trace(go.Scatter(x=minutes, y=ys, mode="lines", name=label, line=dict(color=color, width=1.6),
                                  customdata=hover, connectgaps=False, selected=dict(marker=dict(opacity=0)),
@@ -231,18 +232,42 @@ def _timeline(act: dict, streams: dict, ftp: float, lthr: float, window_range: t
     # reports the box that was dragged even though the lines themselves have no points.
     fig.add_trace(go.Scatter(x=first_x, y=first_y, mode="markers", marker=dict(size=14, opacity=0),
                              showlegend=False, hoverinfo="skip"), row=1, col=1)
-    charts.apply_theme(fig, height=170 + 140 * len(rows), legend="none")
+    charts.apply_theme(fig, height=200 + 140 * len(rows), legend="none")
     # apply_theme styles the first axes only, so give every row the same quiet grid
     fig.update_xaxes(gridcolor=theme.GRID, linecolor=theme.BORDER, zeroline=False,
                      tickfont=dict(size=12, color=theme.TEXT2))
     fig.update_yaxes(gridcolor=theme.GRID, linecolor=theme.BORDER, zeroline=False, automargin=True,
                      tickfont=dict(size=12, color=theme.TEXT2), title_font=dict(size=12, color=theme.TEXT2))
     fig.update_layout(hovermode="x unified")
-    fig.update_xaxes(title_text="Minutes", row=len(rows), col=1)
+    cumulative = sm.cumulative_distance(streams)
+    ticks = sm.distance_ticks(cumulative, window_range[0], window_range[1],
+                              1609.344 if unit == "mi" else 1000.0) if cumulative else []
+    if ticks:
+        # Distance along the top and the bottom, with the clock time under the bottom labels,
+        # so it is clear where on the road each part of the ride happened.
+        values = [i / 60 for _, i in ticks]
+        bottom = [f"{v:g} {unit}<br>{sm.elapsed_label(i)}" for v, i in ticks]
+        top = [f"{v:g} {unit}" for v, _ in ticks]
+        fig.update_xaxes(tickvals=values, ticktext=bottom, row=len(rows), col=1)
+        fig.update_xaxes(tickvals=values, ticktext=top, side="top", showticklabels=True, row=1, col=1)
+        fig.update_xaxes(title_text=f"Distance ({unit}) and elapsed time", title_standoff=14,
+                         row=len(rows), col=1)
+    else:
+        fig.update_xaxes(title_text="Minutes", title_standoff=14, row=len(rows), col=1)
+    fig.update_xaxes(automargin=True)
+    fig.update_layout(margin=dict(t=44, b=70))
     charts.show(fig, key=timeline_key(act["id"]), zoom="select", reset_button=False)
     deeper = " Drag again inside it to zoom in further." if window_range != (0, length_of(streams)) else ""
     st.caption("Drag across a part of the ride to zoom in on it. The numbers, zones, efforts and power curve "
                f"all switch to that part.{deeper} The dashed lines are your FTP and threshold heart rate.")
+
+
+def hover_label(second: int, cum: list[float] | None, unit: str) -> str:
+    """The time into the ride, and how far along it was, for the hover text."""
+    label = sm.elapsed_label(second)
+    if cum and 0 <= second < len(cum):
+        label += f" · {cum[second] / (1609.344 if unit == 'mi' else 1000.0):.1f} {unit}"
+    return label
 
 
 def length_of(streams: dict) -> int:

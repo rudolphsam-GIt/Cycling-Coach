@@ -324,7 +324,23 @@ def sync(days_back: int = 30) -> tuple[int, str]:
         return 0, friendly_error(e)
 
     set_setting("garmin_last_sync", datetime.utcnow().isoformat())
-    return rides, f"Synced {rides} rides and {recovery_days} days of sleep and recovery from Garmin."
+    msg = f"Synced {rides} rides and {recovery_days} days of sleep and recovery from Garmin."
+    if recovery_status()["stale"]:
+        msg += " Garmin has no recent sleep or recovery data. Sync your watch in the Garmin Connect app."
+    return rides, msg
+
+
+def recovery_status(today: date | None = None) -> dict:
+    """Whether Garmin has been sending sleep and recovery numbers. Rides come from a bike
+    computer or watch and sleep from a watch worn overnight, so one can be current while the
+    other has stopped. Returns {last_date, days_old, stale}."""
+    from db.queries import get_latest_recovery
+    today = today or date.today()
+    row = get_latest_recovery()
+    if not row:
+        return {"last_date": None, "days_old": None, "stale": True}
+    days_old = (today - date.fromisoformat(row["date"])).days
+    return {"last_date": row["date"], "days_old": days_old, "stale": days_old > 1}
 
 
 def needs_auto_sync() -> bool:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import streamlit as st
-from datetime import date
+from datetime import date, datetime
 
 from db.schema import run_migrations
 from db.queries import (get_setting, set_setting, log_ftp_history,
@@ -27,7 +27,7 @@ tab_profile, tab_connections, tab_data = st.tabs([":material/person: Profile", "
 with tab_profile:
     st.subheader("Athlete Profile")
 
-    ftp_help.render("settings_ftp")
+    ftp_help.render("settings_ftp", snoozable=False, show_lower=True)
 
     goal_text = st.text_area(
         "Your goals", value=get_setting("goal_text", "") or "; ".join(
@@ -113,6 +113,11 @@ with tab_connections:
             if last_sync and last_sync != "Never":
                 last_sync = last_sync[:16].replace("T", " ")
             st.success(f"Connected · Last sync: {last_sync}")
+            if garmin_auth.is_connected() and last_sync not in ("Never", "") and \
+                    (datetime.utcnow() - datetime.fromisoformat(
+                        get_setting("strava_last_sync", "") or "2000-01-01T00:00:00")).days > 14:
+                st.caption("Garmin is connected too and has been bringing in your rides, so Strava "
+                           "only needs a sync if you ride something that goes to Strava alone.")
             if st.button("Sync Strava (60 days)", icon=":material/sync:", width="stretch"):
                 with st.spinner("Syncing from Strava..."):
                     count, msg = strava_auth.sync_activities(STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET)
@@ -165,6 +170,15 @@ with tab_connections:
             st.success(f"Connected · Last sync: {last_garmin}")
             st.caption("Rides, sleep, HRV, resting heart rate and readiness sync on their own "
                        "when you open the app.")
+            _rs = garmin_auth.recovery_status()
+            if _rs["last_date"] is None:
+                st.warning("Garmin hasn't sent any sleep or recovery numbers yet. Open the Garmin Connect "
+                           "app on your phone to sync your watch.", icon=":material/watch:")
+            elif _rs["stale"]:
+                _d = date.fromisoformat(_rs["last_date"])
+                st.warning(f"Rides are up to date, but Garmin hasn't sent sleep or recovery since "
+                           f"{_d:%b} {_d.day}. Your watch needs to sync with the Garmin Connect app "
+                           "on your phone.", icon=":material/watch:")
             if st.button("Sync Garmin now (30 days)", icon=":material/sync:", width="stretch"):
                 with st.spinner("Syncing from Garmin…"):
                     _, msg = garmin_auth.sync(days_back=30)
