@@ -10,6 +10,8 @@ import anthropic
 from config import ANTHROPIC_API_KEY
 
 MODEL = "claude-opus-5-5"
+# Cheaper model for short, routine jobs (ride reviews, turning a workout into Garmin steps).
+LIGHT_MODEL = "claude-sonnet-5-5"
 
 # Opus 5.5 always thinks before answering, and that thinking counts toward
 # max_tokens, so leave room for it on top of the visible reply.
@@ -27,9 +29,10 @@ def _client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 
-def _request(system: list[dict], messages: list[dict], effort: str, max_tokens: int) -> dict:
+def _request(system: list[dict], messages: list[dict], effort: str, max_tokens: int,
+             model: str = MODEL) -> dict:
     return dict(
-        model=MODEL,
+        model=model,
         max_tokens=max_tokens,
         system=system,
         messages=messages,
@@ -56,10 +59,10 @@ def _error_message(e: anthropic.APIError) -> str:
     return f"Something went wrong talking to Claude: {e}"
 
 
-def ask(system: list[dict], messages: list[dict], effort: str = "medium") -> str:
+def ask(system: list[dict], messages: list[dict], effort: str = "medium", model: str = MODEL) -> str:
     """Send a request and return the reply text, or a readable error message."""
     try:
-        response = _client().beta.messages.create(**_request(system, messages, effort, MAX_TOKENS))
+        response = _client().beta.messages.create(**_request(system, messages, effort, MAX_TOKENS, model))
     except anthropic.APIError as e:
         return _error_message(e)
 
@@ -81,6 +84,7 @@ def stream_chat(
     tools: list[dict],
     run_tool: Callable[[str, dict], str],
     effort: str = "medium",
+    model: str = MODEL,
 ) -> Iterator[tuple[str, str]]:
     """
     Stream a reply, running tools as Claude asks for them.
@@ -98,7 +102,7 @@ def stream_chat(
     while rounds < MAX_TOOL_ROUNDS:
         try:
             with client.beta.messages.stream(
-                **_request(system, messages, effort, STREAM_MAX_TOKENS), tools=tools
+                **_request(system, messages, effort, STREAM_MAX_TOKENS, model), tools=tools
             ) as stream:
                 for event in stream:
                     if event.type == "text":
@@ -154,12 +158,13 @@ class ClaudeError(Exception):
     """A readable error from a Claude call that couldn't produce a result."""
 
 
-def structured(system: str, prompt: str, schema: dict, effort: str = "low") -> dict:
+def structured(system: str, prompt: str, schema: dict, effort: str = "low",
+               model: str = LIGHT_MODEL) -> dict:
     """Ask for JSON that matches `schema` and return it parsed. Raises ClaudeError."""
     import json
 
     request = _request([{"type": "text", "text": system}],
-                       [{"role": "user", "content": prompt}], effort, MAX_TOKENS)
+                       [{"role": "user", "content": prompt}], effort, MAX_TOKENS, model)
     request["output_config"] = {**request["output_config"],
                                 "format": {"type": "json_schema", "schema": schema}}
     try:

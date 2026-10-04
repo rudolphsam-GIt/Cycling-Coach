@@ -32,7 +32,7 @@ def local_time(utc_iso: str) -> str:
 
 
 def stream_reply(system: list[dict], messages: list[dict], effort: str,
-                 proposals: list[dict]) -> tuple[str, str | None]:
+                 proposals: list[dict], model: str = claude_client.MODEL) -> tuple[str, str | None]:
     """
     Stream the coach's reply into the current container, running tools as needed.
     Workouts the coach proposes are appended to `proposals`.
@@ -46,7 +46,7 @@ def stream_reply(system: list[dict], messages: list[dict], effort: str,
     events = claude_client.stream_chat(
         system, messages, coach_tools.TOOLS,
         lambda name, args: coach_tools.run_tool(name, args, proposals),
-        effort=effort,
+        effort=effort, model=model,
     )
     for kind, value in events:
         if kind == "text":
@@ -278,6 +278,7 @@ def report_block(kind: str, ref_key: str, title: str, prompt: str, *,
                 coach_context.system_blocks(coach_reports.REPORT_RULES),
                 [{"role": "user", "content": prompt}],
                 coach_reports.EFFORT.get(kind, "medium"), proposals,
+                coach_reports.MODEL.get(kind, claude_client.MODEL),
             )
             if not error and reply.strip():
                 save_report(kind, ref_key, title, reply)

@@ -63,7 +63,7 @@ The coach talks to Anthropic's API directly using your own key. It does not use 
 3. Open the API Keys section and create a new key.
 4. Copy the key right away, because the console will not show it again. Paste it into `.env` as described above.
 
-You pay for what you use, based on how much text goes back and forth. Short questions cost little. Long conversations, screenshots, and building a multi week plan cost more, because the coach reads a lot of your training data each time. Check the pricing page in the console for current rates, and consider setting a monthly spend limit there so you never get a surprise. Anything you do not use the coach for (the calendar, charts, strength logging, .fit export) costs nothing.
+You pay for what you use, based on how much text goes back and forth. Short questions cost little. Long conversations, screenshots, and building a multi week plan cost more, because the coach reads a lot of your training data each time. Check the pricing page in the console for current rates, and consider setting a monthly spend limit there so you never get a surprise. To keep costs down, short routine jobs (the ride review and turning a workout into Garmin steps) run on a cheaper model, and the weekly check in uses medium effort. Planning, plan edits and chat use the strongest model. Anything you do not use the coach for (the calendar, charts, strength logging, .fit export) costs nothing.
 
 ## Connecting Garmin
 
@@ -274,7 +274,7 @@ Add `--empty` to the first command to get a database with settings but no rides 
 
 ## Under the hood
 
-Python, Streamlit, SQLite, Plotly, and the Anthropic Claude API (model `claude-opus-5-5`). The app is built for one person per copy, so each athlete runs their own copy with their own `.env` and database.
+Python, Streamlit, SQLite, Plotly, and the Anthropic Claude API (`claude-opus-5-5` for chat, plans and race briefs, and the cheaper `claude-sonnet-5-5` at low effort for ride reviews and Garmin workout steps, set in `claude_client.py`). The app is built for one person per copy, so each athlete runs their own copy with their own `.env` and database.
 
 ```
 app.py                    Entry point, setup and welcome gates, navigation

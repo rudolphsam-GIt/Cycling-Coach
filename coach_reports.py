@@ -10,13 +10,17 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import claude_client
+
 REPORT_RULES = """You are writing a saved report the athlete will read on its own page, not a chat
 reply. Start with a one line headline in bold that sums up the verdict. Use short sections with
 ### headings. Look up whatever data you need with your tools before writing, and only quote
 numbers you found. Don't call remember while writing a report; notes are only for things the
 athlete tells you in conversation."""
 
-EFFORT = {"ride_review": "medium", "weekly": "high", "race_plan": "high"}
+EFFORT = {"ride_review": "low", "weekly": "medium", "race_plan": "high"}
+# Ride reviews are short and routine, so they run on the cheaper model. Planning stays on Opus.
+MODEL = {"ride_review": claude_client.LIGHT_MODEL}
 
 
 def _fmt_minutes(seconds) -> str:

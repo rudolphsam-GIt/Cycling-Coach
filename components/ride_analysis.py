@@ -387,7 +387,8 @@ def _coach(act: dict) -> None:
         proposals: list[dict] = []
         reply, error = coach_ui.stream_reply(
             coach_context.system_blocks(coach_reports.REPORT_RULES),
-            [{"role": "user", "content": prompt}], coach_reports.EFFORT.get("ride_review", "medium"), proposals)
+            [{"role": "user", "content": prompt}], coach_reports.EFFORT.get("ride_review", "medium"), proposals,
+            coach_reports.MODEL.get("ride_review"))
         if not error and reply.strip():
             save_report("ride_review", key, title, reply)
             if proposals:
