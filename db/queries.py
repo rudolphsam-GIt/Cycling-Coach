@@ -493,8 +493,9 @@ def update_workout(wid: int, data: dict):
            description=:description, tss_planned=:tss_planned,
            completed=:completed, notes=:notes,
            purpose=COALESCE(:purpose, purpose), feel=COALESCE(:feel, feel),
-           -- Garmin steps are rebuilt from the new description on the next send
+           -- Saved steps are rebuilt when what they were built from changes
            structured_json=CASE WHEN description IS :description AND name IS :name
+                                     AND tss_planned IS :tss_planned AND workout_type IS :workout_type
                                 THEN structured_json ELSE NULL END
            WHERE id=:id""",
         {**data, "purpose": data.get("purpose"), "feel": data.get("feel"), "id": wid},
@@ -657,6 +658,49 @@ def set_workout_garmin(wid: int, garmin_workout_id: str, garmin_schedule_id: str
            structured_json=?, garmin_sent_at=? WHERE id=?""",
         (garmin_workout_id, garmin_schedule_id, steps_json, sent_at, wid),
     )
+    conn.commit()
+    conn.close()
+
+
+def save_workout_steps(wid: int, steps_json: str) -> None:
+    """Keep the structured steps built for a workout, so exports don't build them again.
+    The Garmin ids are left alone, so a workout that was never sent still reads not sent."""
+    conn = get_conn()
+    conn.execute("UPDATE workouts SET structured_json=? WHERE id=?", (steps_json, wid))
+    conn.commit()
+    conn.close()
+
+
+# ── What has been sent to intervals.icu and TrainingPeaks ─────────────────────
+
+def get_synced(service: str) -> dict[int, dict]:
+    """{workout id: row} for everything this app has put on `service`."""
+    conn = get_conn()
+    rows = conn.execute("SELECT * FROM external_sync WHERE service=?", (service,)).fetchall()
+    conn.close()
+    return {r["workout_id"]: dict(r) for r in rows}
+
+
+def save_synced(service: str, rows: list[dict]) -> None:
+    """Record workouts as sent. Each row has workout_id, remote_id, date and fingerprint."""
+    now = datetime.utcnow().isoformat()
+    conn = get_conn()
+    conn.executemany(
+        """INSERT INTO external_sync (service, workout_id, remote_id, date, fingerprint, pushed_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(service, workout_id) DO UPDATE SET remote_id=excluded.remote_id,
+           date=excluded.date, fingerprint=excluded.fingerprint, pushed_at=excluded.pushed_at""",
+        [(service, r["workout_id"], r.get("remote_id"), r["date"], r.get("fingerprint"), now) for r in rows])
+    conn.commit()
+    conn.close()
+
+
+def drop_synced(service: str, workout_ids: list[int]) -> None:
+    if not workout_ids:
+        return
+    conn = get_conn()
+    conn.executemany("DELETE FROM external_sync WHERE service=? AND workout_id=?",
+                     [(service, w) for w in workout_ids])
     conn.commit()
     conn.close()
 

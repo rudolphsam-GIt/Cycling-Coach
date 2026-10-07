@@ -9,6 +9,8 @@ from db.queries import (get_setting, set_setting, log_ftp_history,
 from config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, GARMIN_EMAIL, GARMIN_PASSWORD
 import auth.strava as strava_auth
 import auth.garmin as garmin_auth
+import auth.intervals as intervals_auth
+import auth.trainingpeaks as tp_auth
 from components import ftp_help
 from components.units import distance_switch, unit_switch, weight_input
 from metrics.explain import (DEFAULT_GENDER, GENDER_LABELS, GENDER_PROFILE_TABLE,
@@ -266,6 +268,92 @@ with tab_connections:
                 (st.success if total else st.error)(" · ".join(msgs))
                 if total:
                     st.rerun()
+
+    # ── Plan export: intervals.icu and TrainingPeaks ─────────────────────────────
+    st.divider()
+    col_iv, col_tp = st.columns(2)
+
+    with col_iv:
+        st.subheader("Intervals.icu")
+        st.caption("A free training calendar. The app puts your planned rides on it with their dates, and "
+                   "intervals.icu passes them to Zwift on every computer you ride on, and to Garmin.")
+        if msg := st.session_state.pop("intervals_msg", None):
+            (st.success if msg[0] == "ok" else st.error)(msg[1])
+        if intervals_auth.is_connected():
+            st.success("Connected. Send rides from Plan, Manage, Export your plan.")
+            if st.button("Test connection", key="iv_test", width="stretch"):
+                try:
+                    st.session_state["intervals_msg"] = ("ok", f"Working. Signed in as {intervals_auth.check()}.")
+                except intervals_auth.IntervalsError as e:
+                    st.session_state["intervals_msg"] = ("err", str(e))
+                st.rerun()
+            if st.button("Disconnect intervals.icu", key="iv_off", width="stretch"):
+                set_setting(intervals_auth.KEY_SETTING, "")
+                st.rerun()
+        else:
+            st.markdown("1. Make a free account at intervals.icu.\n"
+                        "2. In intervals.icu open Settings, scroll to Developer Settings and copy your API key.\n"
+                        "3. Paste it here.\n"
+                        "4. In intervals.icu Settings, connect Zwift (and Garmin if you like). Rides you send "
+                        "then show in Zwift under Custom Workouts, intervals.icu, on their days.")
+            with st.form("iv_form"):
+                key = st.text_input("API key", type="password")
+                if st.form_submit_button("Connect intervals.icu", type="primary", width="stretch"):
+                    try:
+                        who = intervals_auth.check(key.strip())
+                    except intervals_auth.IntervalsError as e:
+                        st.session_state["intervals_msg"] = ("err", str(e))
+                    else:
+                        set_setting(intervals_auth.KEY_SETTING, key.strip())
+                        st.session_state["intervals_msg"] = ("ok", f"Connected as {who}.")
+                    st.rerun()
+
+    with col_tp:
+        st.subheader("TrainingPeaks calendar")
+        st.caption("Optional and unofficial. TrainingPeaks has no public way for apps like this one to add "
+                   "workouts, so this uses the same connection the TrainingPeaks website uses. It can stop "
+                   "working whenever TrainingPeaks changes its site and may go against their terms. The "
+                   "TrainingPeaks download on the export panel always works without it.")
+        if msg := st.session_state.pop("tp_msg", None):
+            (st.success if msg[0] == "ok" else st.error)(msg[1])
+        if tp_auth.is_enabled():
+            st.success("On. Send rides from Plan, Manage, Export your plan.")
+            if st.button("Test connection", key="tp_test", width="stretch"):
+                try:
+                    info = tp_auth.check()
+                    note = "" if info["premium"] is not False else " This account isn't Premium, so only today " \
+                                                                  "and tomorrow can hold planned workouts."
+                    st.session_state["tp_msg"] = ("ok", f"Working. Signed in as {info['name']}.{note}")
+                except tp_auth.TPError as e:
+                    st.session_state["tp_msg"] = ("err", str(e))
+                st.rerun()
+            if st.button("Turn off", key="tp_off", width="stretch"):
+                set_setting(tp_auth.ENABLED_SETTING, "0")
+                set_setting(tp_auth.COOKIE_SETTING, "")
+                st.rerun()
+        else:
+            with st.expander("Turn it on"):
+                st.markdown("1. Sign in at app.trainingpeaks.com in Chrome or Safari.\n"
+                            "2. Open the developer tools (in Chrome, View, Developer, Developer Tools), then the "
+                            "Application tab (Storage in Safari), then Cookies, tpapi.trainingpeaks.com.\n"
+                            "3. Copy the value of the cookie named Production_tpAuth and paste it here.\n"
+                            "4. It lasts a few weeks. When it runs out the app asks for a fresh one.")
+                with st.form("tp_form"):
+                    cookie = st.text_input("Production_tpAuth cookie", type="password")
+                    ok = st.checkbox("I understand this is unofficial and may stop working")
+                    if st.form_submit_button("Turn on", type="primary", width="stretch"):
+                        if not ok:
+                            st.session_state["tp_msg"] = ("err", "Tick the box first.")
+                        else:
+                            try:
+                                info = tp_auth.check(cookie.strip())
+                            except tp_auth.TPError as e:
+                                st.session_state["tp_msg"] = ("err", str(e))
+                            else:
+                                set_setting(tp_auth.COOKIE_SETTING, cookie.strip())
+                                set_setting(tp_auth.ENABLED_SETTING, "1")
+                                st.session_state["tp_msg"] = ("ok", f"On. Signed in as {info['name']}.")
+                        st.rerun()
 
 # ── Tab 3: Data Tools ─────────────────────────────────────────────────────────
 with tab_data:

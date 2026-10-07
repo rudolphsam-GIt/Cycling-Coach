@@ -234,11 +234,24 @@ For anything longer than a block, use the buttons at the top of the Coach tab: *
 
 After that, the program stays on the Coach tab with its PDF, and the coach knows which week and phase you are in. You can ask it to move or change individual sessions like any other part of your plan. Starting a new program archives the old one, and the workouts already on your calendar stay.
 
-## Sending workouts to Garmin and TrainingPeaks
+## Getting your plan into TrainingPeaks, Zwift and Garmin
 
-**Garmin.** Garmin must be connected in Settings first. Use the Send to Garmin button on a workout, or send a whole week from the Manage tab. The coach turns the written workout into steps with power targets based on your FTP and shows you a preview. When you confirm, the workout is uploaded to Garmin Connect and scheduled on its date, so it syncs to your Garmin watch or bike computer. If you edit or delete the workout later, the Garmin copy is updated or removed to match. A workout that you changed after sending shows as needing a resend.
+Open Plan, then Manage. **Export your plan** at the top sends a whole range of rides at once: this week, the next 4 or 12 weeks, your current program, or dates you pick. The Export button on your program card opens it on the program's dates.
 
-**.fit files for TrainingPeaks.** TrainingPeaks cannot be linked from this app, but you can move workouts across by hand. Use the Download .fit button on a single workout, or download a whole week from the Manage tab. One workout gives you one `.fit` file. Several workouts give you one zip file with a `.fit` file for each. Then upload the files to TrainingPeaks yourself using its workout import. The same `.fit` files work with other tools that accept structured workouts.
+The first time, press **Prepare steps**. The coach turns each written workout into steps (warm up, intervals with power targets from your FTP, cool down), a few at a time, and keeps them. After that, every route below is instant and free until you edit a workout. A workout that can't be converted is listed with the reason, never silently left out.
+
+| Route | What you get | Setup |
+|---|---|---|
+| **Download for TrainingPeaks** | Zwift workout files (`.zwo`) with the date at the start of each title. In TrainingPeaks open the Workout Library, make a folder, choose Import from its menu and select them all. They list in date order, then you drag each onto its day. | None. This is the official TrainingPeaks route and always works. |
+| **Send to TrainingPeaks calendar** | Each ride on its date in TrainingPeaks, with its structure. Run it again after changes and moved or edited rides are updated, removed ones deleted. Zwift shows TrainingPeaks workouts on their day when the two are linked. | Optional and **unofficial**. TrainingPeaks has no public API for athletes, so this uses the connection their website uses (like the open source tp2intervals tool). It can stop working whenever TrainingPeaks changes its site and may go against their terms. Turn it on in Settings by pasting your `Production_tpAuth` cookie. Future dates need TrainingPeaks Premium. |
+| **Sync to intervals.icu** | Each ride on its date in intervals.icu (free), which passes them to Zwift on every computer you ride on, under Custom Workouts, intervals.icu, and to Garmin. Run it again after changes. | Paste your intervals.icu API key in Settings (intervals.icu Settings, Developer Settings), then connect Zwift in intervals.icu. This is an official API. |
+| **Download all files** | `.zwo` for Zwift and TrainingPeaks, `.fit` for Garmin, Wahoo and other bike computers, `plan.csv` listing every ride, and how to import each. | None. |
+
+Removing a ride in the app also removes it from intervals.icu and the TrainingPeaks calendar if it was sent there.
+
+**Garmin directly.** With Garmin connected in Settings, use Send to Garmin on a workout or send a whole week from the Manage tab. You see a preview of the steps first. When you confirm, the workout is uploaded to Garmin Connect and scheduled on its date, so it syncs to your watch or bike computer. If you edit or delete the workout later, the Garmin copy is updated or removed to match. A workout changed after sending shows as needing a resend.
+
+**One workout as a file.** The Download .fit button on a workout, or Download week as .fit in Manage, still gives you `.fit` files for a bike computer. TrainingPeaks imports `.zwo`, not `.fit`, so use the export panel for TrainingPeaks.
 
 ## Data and privacy
 
@@ -247,11 +260,12 @@ Where things are kept.
 1. Your rides, plans, settings, chat history and coach memory are in `data/cycling.db` inside the project folder. This file is listed in `.gitignore`, so it is never committed to git.
 2. Your API keys are in `.env`, which is also in `.gitignore`.
 3. Your Garmin sign in tokens are in `.cycling_coach_garmin` in your home folder, outside the project.
+4. An intervals.icu API key or TrainingPeaks cookie, if you add one, is kept in `data/cycling.db` and only ever sent to that service.
 
 What leaves your computer.
 
 1. When you use the coach, a summary of your training (FTP, weight, fitness numbers, recent rides, races, goals), your chat messages, your coach memory notes and any screenshots you attach are sent to the Anthropic API. The same goes for ride reviews, weekly check ins, race plans and sending workouts to Garmin, which also use the coach.
-2. Sync talks to Garmin or Strava. Race features fetch public pages from the OBRA website.
+2. Sync talks to Garmin or Strava. Race features fetch public pages from the OBRA website. If you use them, the export panel sends the rides you choose (date, name, steps, purpose and feel) to intervals.icu or TrainingPeaks.
 3. Nothing else is uploaded. If you never press a coach button and never send a chat message, no training data goes to Anthropic.
 
 To back up your data, stop the app and copy `data/cycling.db` somewhere safe. To restore, put the copy back in the same place.
@@ -293,6 +307,10 @@ pages/                    Today, Plan, Dashboard, Data, Strength, Races, Competi
 planning.py               Training block generator used by Quick Generate
 programs.py               Multi month programs: checks, weeks and dates, saving and adding to the calendar
 program_pdf.py            The program as a PDF
+exporters.py              Zwift workout files and the export zips
+sync.py                   Removing rides from intervals.icu and TrainingPeaks when removed here
+auth/intervals.py         Intervals.icu sync (official API)
+auth/trainingpeaks.py     TrainingPeaks calendar sync (unofficial, optional)
 plan_changes.py           Moves, edits and removals of planned workouts, shared by the coach and the buttons
 garmin_workouts.py        Turns workouts into Garmin steps and .fit files
 claude_client.py          Claude calls, streaming, tool loop, error handling
@@ -316,6 +334,7 @@ components/plan_impact_ui.py  The Plan impact panel and undo bar
 components/explain.py     Help icons and tooltips that explain a number in plain words
 components/ftp_help.py    FTP estimate note, suggestion from best 20 minutes, guided test
 components/ride_analysis.py  The ride analysis window
+components/plan_export.py  Export your plan to TrainingPeaks, Zwift and Garmin
 components/program_ui.py  The program draft card, PDF button and starter buttons on the Coach tab
 components/checklist.py   Getting started checklist on Today
 components/data_filters.py  Date range, search and filters shared by Dashboard and Data

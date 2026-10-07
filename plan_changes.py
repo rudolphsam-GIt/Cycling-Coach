@@ -208,6 +208,7 @@ def apply_changes(changes: list[dict], today: date | None = None) -> dict:
     """Apply confirmed changes. Each is checked again first. Returns counts and the
     changes that were skipped with the reason, so one bad item never blocks the rest."""
     from garmin_workouts import remove_from_garmin
+    from sync import remove_everywhere
 
     today = today or date.today()
     done = {"moved": 0, "updated": 0, "removed": 0, "skipped": [], "first": None}
@@ -226,6 +227,7 @@ def apply_changes(changes: list[dict], today: date | None = None) -> dict:
             if c["action"] == "remove":
                 remove_from_garmin(row)
                 q.delete_workout(c["id"])
+                remove_everywhere([c["id"]])
                 done["removed"] += 1
                 continue
             f = c["fields"]

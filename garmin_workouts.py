@@ -70,7 +70,11 @@ Rules:
   at 45 to 60%.
 - Steady rides with no intervals become a single interval step at the described intensity,
   or 56 to 75% (zone 2) for easy or endurance rides.
-- Match the total duration to the description as closely as you can."""
+- Match the total duration to the description as closely as you can.
+- When the description gives no durations (for example "Steady ride · Base · week 6"), size the
+  ride from the planned TSS: hours = TSS / (100 x IF squared), using an intensity factor of about
+  0.65 for recovery, 0.70 for endurance and long rides, 0.82 for tempo, 0.90 for threshold and
+  0.85 for VO2 or sprint sessions once warm up, recoveries and cool down are counted."""
 
 
 class WorkoutError(Exception):
@@ -130,6 +134,51 @@ def build_steps(workout: dict) -> list:
     except claude_client.ClaudeError as e:
         raise WorkoutError(str(e)) from e
     return check_steps(data.get("steps"))
+
+
+def saved_steps(workout: dict) -> list | None:
+    """The steps already built for this workout, or None."""
+    if not workout.get("structured_json"):
+        return None
+    try:
+        return check_steps(json.loads(workout["structured_json"]))
+    except (WorkoutError, TypeError, ValueError):
+        return None
+
+
+def ensure_steps(workouts: list[dict], progress=None, max_workers: int = 4) -> dict:
+    """{workout id: steps, or an error message} for each workout. Saved steps are reused. The
+    rest are built with Claude, several at once, and saved so they are never built twice.
+    `progress(done, total)` is called as each one finishes."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from db.queries import save_workout_steps
+
+    out, todo = {}, []
+    for w in workouts:
+        steps = saved_steps(w)
+        if steps is None:
+            todo.append(w)
+        else:
+            out[w["id"]] = steps
+    if todo:
+        _ftp()                               # a missing FTP is one clear message, not one per workout
+    done = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(build_steps, w): w for w in todo}
+        for f in as_completed(futures):
+            w = futures[f]
+            try:
+                steps = f.result()
+                save_workout_steps(w["id"], json.dumps(steps))
+                out[w["id"]] = steps
+            except WorkoutError as e:
+                out[w["id"]] = str(e)
+            except Exception as e:           # one bad workout never stops the rest
+                out[w["id"]] = f"Couldn't build the steps: {e}"
+            done += 1
+            if progress:
+                progress(done, len(todo))
+    return out
 
 
 def _watts(pct: float | None, ftp: float) -> float | None:

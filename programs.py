@@ -408,6 +408,7 @@ def apply(program_id: int, *, replace_existing: bool = False, today: date | None
     sessions already inside the program's dates are removed first. It all happens in one
     transaction, so a failure part way changes nothing. Returns counts."""
     from garmin_workouts import remove_from_garmin
+    from sync import remove_everywhere
 
     today = today or date.today()
     row = q.get_program_by_id(program_id)
@@ -434,6 +435,7 @@ def apply(program_id: int, *, replace_existing: bool = False, today: date | None
         raise ProgramError("that program is not a draft any more")
     for old in done["removed_workouts"]:
         remove_from_garmin(old)          # after the commit, and best effort, since it goes over the network
+    remove_everywhere([old["id"] for old in done["removed_workouts"]])
     first = min([w["date"] for w in items["rides"]] + [s["date"] for s in items["strength"]]
                 or [program["start_date"]])
     return {"rides": len(items["rides"]), "strength": len(items["strength"]),

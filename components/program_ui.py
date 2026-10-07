@@ -298,6 +298,13 @@ def draft_card(*, on_plan_page: bool = True) -> None:
         st.caption("Want something different? Tell your coach in the chat and the draft updates.")
 
 
+def _open_export() -> None:
+    """Callback: open Plan, Manage with the export panel on this program's dates."""
+    from components import plan_export
+    plan_export.choose_program_range()
+    st.session_state["plan_jump"] = "manage"
+
+
 def active_card() -> None:
     """The program that is on the calendar. Details stay hidden until asked for."""
     prog = programs.load("active")
@@ -306,7 +313,7 @@ def active_card() -> None:
     here = programs.where_are_we(prog)
     m = get_current_metrics()
     with st.container(border=True):
-        head, pdf, archive = st.columns([5, 2, 2], vertical_alignment="center")
+        head, pdf, export, archive = st.columns([5, 2, 2, 2], vertical_alignment="center")
         title = f"**Your program** · {prog['title']}"
         head.markdown(title)
         if here:
@@ -316,6 +323,9 @@ def active_card() -> None:
             head.caption(programs.friendly_range(prog))
         with pdf:
             _pdf_button(prog, f"prog_active_pdf_{prog['id']}", m)
+        export.button("Export", key=f"prog_export_{prog['id']}", width="stretch", icon=":material/ios_share:",
+                      on_click=_open_export,
+                      help="Send the whole program to TrainingPeaks, Zwift and Garmin, or download the files.")
         if archive.button("Archive", key=f"prog_archive_{prog['id']}", width="stretch",
                           icon=":material/inventory_2:",
                           help="Stops showing it here. Workouts already on your calendar stay."):

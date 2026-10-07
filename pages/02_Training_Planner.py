@@ -2,14 +2,13 @@ from __future__ import annotations
 import base64
 import io
 import json
-import re
 import zipfile
 import streamlit as st
 from datetime import date, timedelta
 from PIL import Image
 from components import page_header
 from components import calendar as plan_cal
-from components import ftp_help, plan_impact_ui, ride_analysis
+from components import ftp_help, plan_export, plan_impact_ui, ride_analysis
 
 from db.schema import run_migrations
 from db.queries import (get_workouts, add_workout, update_workout, delete_workout,
@@ -17,7 +16,9 @@ from db.queries import (get_workouts, add_workout, update_workout, delete_workou
                          get_workout, get_strength_session, delete_strength_session, garmin_status, save_message, get_conversation_history,
                          get_memories, forget_memory, save_phase_notes, get_phase_notes)
 import auth.garmin as garmin_auth
+import exporters
 import garmin_workouts
+import sync
 import planning
 from metrics.training_load import get_current_metrics
 from metrics import plan_impact
@@ -56,14 +57,11 @@ if _jump := st.session_state.pop("plan_jump", None):
     st.session_state["plan_tab"] = TAB_BY_JUMP.get(_jump, _jump)
 
 
-def _slug(name: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "workout"
-
-
 def remove_workout(w: dict) -> None:
     """Delete a planned workout, and the copy we sent to Garmin if there is one."""
     garmin_workouts.remove_from_garmin(w)
     delete_workout(w["id"])
+    sync.remove_everywhere([w["id"]])
 
 
 def queue_garmin_send(ws: list) -> None:
@@ -96,31 +94,24 @@ def fit_button(w: dict, container, key: str) -> None:
         queue_fit_download([w])
 
 
-def _saved_steps(w: dict):
-    try:
-        return garmin_workouts.check_steps(json.loads(w["structured_json"]))
-    except Exception:
-        return None
-
-
 def _steps_for(w: dict, cache: dict):
     """
-    Get or build this workout's structured steps, caching failures as error
-    strings too. `cache` is the single shared step_cache (see garmin_send_panel
-    and fit_download_panel) so previewing the same unconfirmed workout in both
-    panels only ever calls Claude once.
+    This workout's structured steps, or an error message. Steps are built once with
+    garmin_workouts.ensure_steps and saved on the workout, so the Garmin send, the .fit
+    download and the plan export all share them. `cache` keeps failures for this visit so a
+    workout that can't be converted isn't retried on every rerun.
     """
     wid = w["id"]
     if wid not in cache:
-        steps = _saved_steps(w) if w.get("structured_json") else None
-        if steps is None:
-            with st.spinner(f"Turning {w['name']} into structured steps…"):
-                try:
-                    steps = garmin_workouts.build_steps(w)
-                except garmin_workouts.WorkoutError as e:
-                    steps = str(e)
-        cache[wid] = steps
-    return cache[wid]
+        with st.spinner(f"Turning {w['name']} into structured steps…"):
+            try:
+                cache[wid] = garmin_workouts.ensure_steps([w])[wid]
+            except garmin_workouts.WorkoutError as e:
+                cache[wid] = str(e)
+    steps = cache[wid]
+    if isinstance(steps, list):
+        cache.pop(wid)           # saved now, so the next visit reads the latest from the workout
+    return steps
 
 
 def garmin_send_panel() -> None:
@@ -201,7 +192,7 @@ def fit_download_panel() -> None:
             try:
                 data = garmin_workouts.to_fit_bytes(w, steps)
                 st.download_button(f"Download {w['name']}.fit", data=data,
-                                   file_name=f"{w['date']}_{_slug(w['name'])}.fit",
+                                   file_name=f"{exporters.file_base(w)}.fit",
                                    mime="application/octet-stream", width="stretch", type="primary")
             except Exception as e:
                 fit_error = str(e)
@@ -211,7 +202,7 @@ def fit_download_panel() -> None:
                 used_names: set[str] = set()
                 with zipfile.ZipFile(buf, "w") as zf:
                     for w, steps in ready:
-                        base = f"{w['date']}_{_slug(w['name'])}"
+                        base = exporters.file_base(w)
                         arcname, n = f"{base}.fit", 2
                         while arcname in used_names:
                             arcname, n = f"{base}_{n}.fit", n + 1
@@ -882,6 +873,7 @@ def render_quick_generate() -> None:
 
 
 def render_manage_tab() -> None:
+    plan_export.render(today)
     render_quick_generate()
 
     view = st.segmented_control("Show", ["This week", "All upcoming"], default="This week",

@@ -128,6 +128,16 @@ CREATE TABLE IF NOT EXISTS activity_streams (
     fetched_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS external_sync (
+    service TEXT NOT NULL,             -- intervals or trainingpeaks
+    workout_id INTEGER NOT NULL,
+    remote_id TEXT,
+    date TEXT NOT NULL,
+    fingerprint TEXT,
+    pushed_at TEXT NOT NULL,
+    PRIMARY KEY (service, workout_id)
+);
+
 CREATE TABLE IF NOT EXISTS programs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
