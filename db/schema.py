@@ -128,6 +128,19 @@ CREATE TABLE IF NOT EXISTS activity_streams (
     fetched_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS programs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL,              -- draft, active, archived or discarded
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    content_json TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    executed_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS plan_phases (
     phase TEXT PRIMARY KEY,
     focus TEXT,
@@ -183,6 +196,9 @@ def run_migrations():
         "ALTER TABLE workouts ADD COLUMN purpose TEXT",
         "ALTER TABLE workouts ADD COLUMN feel TEXT",
         "ALTER TABLE strength_sessions ADD COLUMN purpose TEXT",
+        "ALTER TABLE activities ADD COLUMN tss_locked INTEGER DEFAULT 0",
+        "ALTER TABLE activities ADD COLUMN edited INTEGER DEFAULT 0",
+        "ALTER TABLE activities ADD COLUMN original_json TEXT",
     ]:
         try:
             conn.execute(col_sql)

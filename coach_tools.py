@@ -17,6 +17,7 @@ from db.queries import (get_activities, get_workouts, get_races, get_wellness_ra
                         WORKOUT_TYPES)
 from metrics.training_load import compute_pmc, get_current_metrics
 import planning
+import programs
 
 
 MEMORY_CATEGORIES = ["health", "schedule", "preferences", "goals", "training_response", "other"]
@@ -281,6 +282,106 @@ TOOLS = [
         },
     },
     {
+        "name": "propose_program",
+        "description": "Save a multi month training program (for example an off season) as a draft "
+                       "the athlete reviews, discusses with you and downloads as a PDF. Use it only "
+                       "after you have talked through their goals and limits. Nothing goes on their "
+                       "calendar until they press Add to my calendar, so never say it has. To revise, "
+                       "call it again with the whole program, which replaces the draft. The program is "
+                       "a list of consecutive phases. Each phase gives its weeks, how the weekly "
+                       "training load moves from start to end, and a typical week. The app turns that "
+                       "into dated workouts, so each template day carries a share of the week's load.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "For example 'Off season 2026 to 2027'"},
+                "goal": {"type": "string", "description": "What this program is for, in the athlete's terms, two or three sentences"},
+                "overview": {"type": "string", "description": "How the program is shaped and why, in plain words, a short paragraph"},
+                "start_date": {"type": "string", "description": "YYYY-MM-DD, today or later, ideally a Monday. The first week starts here"},
+                "assumptions": {"type": "array", "items": {"type": "string"},
+                                "description": "What you assumed, such as hours a week, days available, FTP, indoor or outdoor"},
+                "phases": {
+                    "type": "array",
+                    "description": "In order, back to back, 1 to 8 phases. A rest or break phase uses no week_template and 0 load.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string", "description": "Short and unique, for example 'Reset' or 'Base 1'"},
+                            "weeks": {"type": "integer", "description": "1 to 26"},
+                            "focus": {"type": "string", "description": "One short line, what this phase builds"},
+                            "why": {"type": "string", "description": "Two or three plain sentences, why it comes now and how it serves the goal"},
+                            "weekly_hours": {"type": "number", "description": "Typical riding hours in a normal week of this phase"},
+                            "weekly_tss_start": {"type": "number", "description": "Training load (TSS) of the first week, a normal week"},
+                            "weekly_tss_end": {"type": "number", "description": "Training load (TSS) of the last normal week"},
+                            "recovery_every": {"type": "integer", "enum": [0, 3, 4],
+                                               "description": "Every Nth week is a lighter week at 60 percent load. 0 for none"},
+                            "key_workouts": {"type": "array", "items": {"type": "string"},
+                                             "description": "Up to 6 headline sessions with what to focus on"},
+                            "success_markers": {"type": "array", "items": {"type": "string"},
+                                                "description": "Up to 5 signs the phase is working"},
+                            "week_template": {
+                                "type": "array",
+                                "description": "The typical week, one ride per day at most. Empty for a break phase.",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "day": {"type": "string", "enum": programs.DAYS},
+                                        "workout_type": {"type": "string", "enum": WORKOUT_TYPES},
+                                        "name": {"type": "string"},
+                                        "description": {"type": "string", "description": "Structure with durations and power targets"},
+                                        "share": {"type": "number", "description": "Relative size of this day within the week, for example 1.0 for a normal day, 1.8 for the long ride, 0.4 for recovery"},
+                                        "purpose": {"type": "string", "description": "One or two plain sentences, what it trains for this athlete"},
+                                        "feel": {"type": "string", "description": "Effort out of 10 and a talk test"},
+                                    },
+                                    "required": ["day", "workout_type", "name", "description", "share", "purpose", "feel"],
+                                },
+                            },
+                            "strength": {
+                                "type": "object",
+                                "description": "Optional gym work for this phase",
+                                "properties": {
+                                    "days": {"type": "array", "items": {"type": "string", "enum": programs.DAYS}},
+                                    "name": {"type": "string"},
+                                    "duration_minutes": {"type": "integer"},
+                                    "purpose": {"type": "string"},
+                                    "exercises": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {"name": {"type": "string"}, "sets": {"type": "integer"},
+                                                           "reps": {"type": "string"}, "intensity": {"type": "string"}},
+                                            "required": ["name", "sets", "reps", "intensity"],
+                                        },
+                                    },
+                                },
+                                "required": ["days", "name", "duration_minutes", "purpose", "exercises"],
+                            },
+                        },
+                        "required": ["name", "weeks", "focus", "why", "weekly_hours", "weekly_tss_start",
+                                     "weekly_tss_end", "recovery_every"],
+                    },
+                },
+                "checkpoints": {
+                    "type": "array",
+                    "description": "Moments to check progress, such as an FTP test or a weight check",
+                    "items": {
+                        "type": "object",
+                        "properties": {"week": {"type": "integer", "description": "1 based week of the program"},
+                                       "what": {"type": "string"}, "why": {"type": "string"}},
+                        "required": ["week", "what", "why"],
+                    },
+                },
+                "notes": {"type": "array", "items": {"type": "string"},
+                          "description": "Up to 6 practical notes, such as how to swap days or what to do when sick"},
+                "tss_overrides": {"type": "object", "additionalProperties": {"type": "number"},
+                                  "description": "Weeks the athlete set by hand, as week number to weekly TSS, "
+                                                 "for example {\"4\": 300}. Copy the ones in the current draft "
+                                                 "unchanged unless the athlete asks you to change them."},
+            },
+            "required": ["title", "goal", "overview", "start_date", "phases"],
+        },
+    },
+    {
         "name": "generate_training_block",
         "description": "Generate a draft periodized block of rides from today (or a given start "
                        "date) to a race date, ramping weekly training load toward a target CTL "
@@ -317,6 +418,7 @@ STATUS_LABELS = {
     "propose_workouts": "Drafting workouts",
     "propose_strength_sessions": "Drafting strength sessions",
     "generate_training_block": "Sketching a training block",
+    "propose_program": "Drafting your program",
 }
 
 
@@ -431,12 +533,31 @@ def run_tool(name: str, args: dict, proposals: list[dict]) -> str:
         result = _propose_strength(args, proposals)
     elif name == "generate_training_block":
         result = _generate_block(args)
+    elif name == "propose_program":
+        return _propose_program(args)
     else:
         raise ToolInputError(f"unknown tool {name}")
 
     if not result and name not in ("propose_workouts", "propose_strength_sessions", "propose_plan_changes"):
         return "No data found for that period."
     return json.dumps(result, default=str)
+
+
+def _propose_program(args: dict) -> str:
+    """Save the coach's program as the draft. Errors go back to the coach to fix."""
+    program = programs.save_draft(args)
+    plan = programs.week_plan(program)
+    items = programs.expand(program)
+    tss = [w["tss"] for w in plan if not w["recovery"] and w["tss"]]
+    return json.dumps({
+        "saved": True, "version": program["version"],
+        "weeks": program["total_weeks"], "ends": program["end_date"],
+        "rides_on_calendar_if_added": len(items["rides"]),
+        "strength_sessions_if_added": len(items["strength"]),
+        "normal_week_tss_range": [min(tss), max(tss)] if tss else None,
+        "next": "The draft is shown to the athlete with a PDF download and an Add to my calendar "
+                "button. It is NOT on their calendar. Walk them through the shape of it in plain "
+                "words and ask what they would change."})
 
 
 def _optional_str(w: dict, key: str, where: str) -> str | None:

@@ -99,17 +99,33 @@ class ApplyMoveTests(unittest.TestCase):
         self.assertEqual([w["garmin_workout_id"] for w in self.removed], ["g1"])
         self.assertTrue(st.session_state[cal.LAST_MOVE_KEY]["garmin"])
 
-    def test_refuses_past_targets_past_sources_and_done_workouts(self):
+    def test_refuses_past_targets_for_upcoming_and_done_workouts(self):
         future = self._workout("2026-10-12")
-        past = self._workout("2026-10-05")
         done = self._workout("2026-10-12")
         q.update_workout(done, {**q.get_workout(done), "completed": 1})
         self.assertIn("passed", cal.apply_move("ride", future, "2026-10-06", self.TODAY))
-        self.assertIn("stay where", cal.apply_move("ride", past, "2026-10-14", self.TODAY))
         self.assertIn("stay where", cal.apply_move("ride", done, "2026-10-14", self.TODAY))
         self.assertEqual(q.get_workout(future)["date"], "2026-10-12")
         self.assertEqual(self.removed, [])
         self.assertNotIn(cal.LAST_MOVE_KEY, st.session_state)
+
+    def test_a_skipped_workout_can_go_to_a_later_day_or_an_earlier_one(self):
+        skipped = self._workout("2026-10-05")
+        self.assertIsNone(cal.apply_move("ride", skipped, "2026-10-14", self.TODAY))
+        self.assertEqual(q.get_workout(skipped)["date"], "2026-10-14")
+        self.assertEqual(st.session_state[cal.LAST_MOVE_KEY]["from"], "2026-10-05")
+        again = self._workout("2026-10-05")
+        self.assertIsNone(cal.apply_move("ride", again, "2026-10-03", self.TODAY))     # the day it was really ridden
+        self.assertEqual(q.get_workout(again)["date"], "2026-10-03")
+
+    def test_a_skipped_strength_session_can_be_moved_but_a_logged_one_cannot(self):
+        skipped = q.add_strength_session({"date": "2026-10-05", "plan_week": 1, "exercises_json": "[]",
+                                          "duration_minutes": 45, "notes": "Legs | Planned by AI Coach"})
+        logged = q.add_strength_session({"date": "2026-10-05", "plan_week": 1, "exercises_json": "[]",
+                                         "duration_minutes": 45, "notes": "Upper", "completed": 1})
+        self.assertIsNone(cal.apply_move("strength", skipped, "2026-10-14", self.TODAY))
+        self.assertEqual(q.get_strength_session(skipped)["date"], "2026-10-14")
+        self.assertIn("stay where", cal.apply_move("strength", logged, "2026-10-14", self.TODAY))
 
     def test_refuses_bad_input(self):
         wid = self._workout("2026-10-12")

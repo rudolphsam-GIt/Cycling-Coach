@@ -65,14 +65,23 @@ class ValidationTests(Base):
         self.propose([{"target": "ride", "id": wid, "action": "remove", "reason": "x"}])
         self.assertIsNotNone(q.get_workout(wid))
 
-    def test_done_and_past_items_cannot_change(self):
+    def test_done_items_cannot_change(self):
         done = self.ride(D(3))
         q.update_workout(done, {**q.get_workout(done), "completed": 1})
-        past = self.ride(D(-2))
         s_done = self.strength(D(3), completed=1)
-        for target, wid in (("ride", done), ("ride", past), ("strength", s_done)):
+        for target, wid in (("ride", done), ("strength", s_done)):
             with self.assertRaises(coach_tools.ToolInputError, msg=(target, wid)):
                 self.propose([{"target": target, "id": wid, "action": "remove", "reason": "x"}])
+
+    def test_a_skipped_workout_can_be_moved_and_edited_by_the_coach_like_on_the_calendar(self):
+        skipped = self.ride(D(-2))
+        out = self.propose([{"target": "ride", "id": skipped, "action": "move", "new_date": D(2), "reason": "Do it later"}])
+        self.assertEqual(out[0]["new_date"], D(2))
+        done = pc.apply_changes(out)
+        self.assertEqual((done["moved"], q.get_workout(skipped)["date"]), (1, D(2)))
+        other = self.ride(D(-3))
+        out = self.propose([{"target": "ride", "id": other, "action": "update", "tss_planned": 40, "reason": "Easier"}])
+        self.assertEqual(out[0]["fields"], {"tss_planned": 40.0})
 
     def test_bad_input_is_rejected_with_a_helpful_message(self):
         wid = self.ride(D(3))

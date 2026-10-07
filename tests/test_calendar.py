@@ -250,7 +250,7 @@ class PayloadTests(unittest.TestCase):
         self.assertEqual(payload["weekdays"][0], "Mon")
         json.dumps(payload)   # must be JSON safe
 
-    def test_only_upcoming_unfinished_planned_items_can_be_dragged(self):
+    def test_unfinished_planned_items_can_be_dragged_even_when_skipped(self):
         days = build(
             workouts=[W("2026-10-05", name="Past", id=1), W("2026-10-20", name="Soon", id=2),
                       W("2026-10-21", name="Done early", id=3, completed=1)],
@@ -261,7 +261,7 @@ class PayloadTests(unittest.TestCase):
             activities=[A("2026-10-16", id=9)], today=self.TODAY)
         p = cal.build_payload(days, None, self.TODAY)
         locked = lambda iso: {(c["kind"], c["id"]): c["locked"] for c in self.day(p, iso)["chips"]}
-        self.assertEqual(locked("2026-10-05"), {("ride", 1): True})
+        self.assertEqual(locked("2026-10-05"), {("ride", 1): False})      # skipped, so it can be moved
         self.assertEqual(locked("2026-10-20"), {("ride", 2): False})
         self.assertEqual(locked("2026-10-21"), {("ride", 3): True})
         self.assertEqual(locked("2026-10-22"), {("strength", 7): False})

@@ -6,8 +6,10 @@ the athlete as a card with before and after, and only applied when the athlete
 confirms. The same rules are checked again at apply time, because the plan may have
 changed since the proposal was made.
 
-Only workouts and strength sessions that are today or later and not done can be
-changed. Rides that are done and days that have passed stay as they are.
+Anything not done can be changed. That includes a workout whose day passed without it being
+done (a skipped workout), which can be moved to any day. An upcoming one can't be moved into
+the past, and done ones stay as they are. move_error holds that rule for the coach and the
+calendar alike.
 """
 from __future__ import annotations
 
@@ -56,9 +58,18 @@ def _label(target: str, row: dict) -> str:
     return notes if notes and not notes.startswith("Planned by AI Coach") else "Strength session"
 
 
+def move_error(row: dict, to_iso: str, today: date, what: str = "workout") -> str | None:
+    """Why `row` can't move to `to_iso`, or None when it can. Shared by the calendar and the coach."""
+    if row.get("completed"):
+        return f"Done {what}s stay where they are."
+    if to_iso < today.isoformat() <= row["date"]:
+        return f"{what.capitalize()}s can't be moved to a day that has passed."
+    return None
+
+
 def check_target(target: str, item_id, today: date | None = None) -> dict:
     """The stored row for something that can still be changed. Raises ChangeError when it
-    doesn't exist, is done, or is on a day that has passed."""
+    doesn't exist or is done. A skipped workout from a day that has passed can still change."""
     today = today or date.today()
     row = _row(target, item_id)
     if not row:
@@ -66,8 +77,6 @@ def check_target(target: str, item_id, today: date | None = None) -> dict:
                           f"{'get_planned_workouts' if target == 'ride' else 'get_planned_strength'}")
     if row.get("completed"):
         raise ChangeError(f"'{_label(target, row)}' is already done, so it stays as it is")
-    if row["date"] < today.isoformat():
-        raise ChangeError(f"'{_label(target, row)}' is on {row['date']}, which has passed, so it stays as it is")
     return row
 
 
@@ -88,8 +97,8 @@ def validate_change(raw: dict, today: date | None = None, workout_types: list | 
     new_date = None
     if raw.get("new_date") is not None:
         d = _iso(raw["new_date"], "new_date")
-        if d < today:
-            raise ChangeError("new_date can't be a day that has passed")
+        if (why := move_error(row, d.isoformat(), today)):
+            raise ChangeError(f"new_date is not allowed. {why}")
         new_date = d.isoformat() if d.isoformat() != row["date"] else None
 
     fields: dict = {}
@@ -207,8 +216,8 @@ def apply_changes(changes: list[dict], today: date | None = None) -> dict:
         try:
             row = check_target(c["target"], c["id"], today)
             new_date = c.get("new_date")
-            if new_date and new_date < today.isoformat():
-                raise ChangeError("the new day has passed")
+            if new_date and (why := move_error(row, new_date, today)):
+                raise ChangeError(why.rstrip("."))
         except ChangeError as e:
             done["skipped"].append({"name": c.get("name"), "why": str(e)})
             continue

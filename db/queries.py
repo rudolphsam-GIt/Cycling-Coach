@@ -108,7 +108,14 @@ def _find_cross_source_duplicate(conn, data: dict):
         (data["date"], data["source"]),
     ).fetchall()
     for row in rows:
-        if _same_ride(data, dict(row)):
+        candidate = dict(row)
+        # A ride the rider corrected by hand is matched on its time and distance as first synced.
+        if candidate.get("original_json"):
+            try:
+                candidate.update(json.loads(candidate["original_json"]))
+            except (TypeError, ValueError):
+                pass
+        if _same_ride(data, candidate):
             return row
     return None
 
@@ -128,13 +135,13 @@ def upsert_activity(data: dict):
             # Incoming is richer — update the existing row in place, keep its external_id
             conn.execute(
                 """UPDATE activities SET
-                   avg_power_watts  = COALESCE(?, avg_power_watts),
-                   normalized_power = COALESCE(?, normalized_power),
-                   tss              = COALESCE(?, tss),
-                   if_value         = COALESCE(?, if_value),
-                   avg_hr           = COALESCE(?, avg_hr),
-                   max_hr           = COALESCE(?, max_hr),
-                   zone_time_json   = COALESCE(?, zone_time_json)
+                   avg_power_watts  = CASE WHEN edited = 1 THEN avg_power_watts ELSE COALESCE(?, avg_power_watts) END,
+                   normalized_power = CASE WHEN edited = 1 THEN normalized_power ELSE COALESCE(?, normalized_power) END,
+                   tss              = CASE WHEN tss_locked = 1 OR edited = 1 THEN tss ELSE COALESCE(?, tss) END,
+                   if_value         = CASE WHEN edited = 1 THEN if_value ELSE COALESCE(?, if_value) END,
+                   avg_hr           = CASE WHEN edited = 1 THEN avg_hr ELSE COALESCE(?, avg_hr) END,
+                   max_hr           = CASE WHEN edited = 1 THEN max_hr ELSE COALESCE(?, max_hr) END,
+                   zone_time_json   = CASE WHEN edited = 1 THEN zone_time_json ELSE COALESCE(?, zone_time_json) END
                    WHERE id = ?""",
                 (
                     data.get("avg_power_watts"), data.get("normalized_power"),
@@ -157,12 +164,19 @@ def upsert_activity(data: dict):
                    :elapsed_seconds,:distance_meters,:elevation_gain_meters,:avg_power_watts,:avg_hr,
                    :max_hr,:normalized_power,:tss,:if_value,:raw_json,:zone_time_json)
            ON CONFLICT(external_id) DO UPDATE SET
-               tss=excluded.tss, if_value=excluded.if_value,
-               normalized_power=excluded.normalized_power,
-               avg_power_watts=excluded.avg_power_watts,
-               elapsed_seconds=excluded.elapsed_seconds,
-               avg_hr=excluded.avg_hr, max_hr=excluded.max_hr,
-               zone_time_json=COALESCE(excluded.zone_time_json, zone_time_json)""",
+               tss=CASE WHEN activities.tss_locked = 1 OR activities.edited = 1
+                        THEN activities.tss ELSE excluded.tss END,
+               if_value=CASE WHEN activities.edited = 1 THEN activities.if_value ELSE excluded.if_value END,
+               normalized_power=CASE WHEN activities.edited = 1 THEN activities.normalized_power
+                                     ELSE excluded.normalized_power END,
+               avg_power_watts=CASE WHEN activities.edited = 1 THEN activities.avg_power_watts
+                                    ELSE excluded.avg_power_watts END,
+               elapsed_seconds=CASE WHEN activities.edited = 1 THEN activities.elapsed_seconds
+                                    ELSE excluded.elapsed_seconds END,
+               avg_hr=CASE WHEN activities.edited = 1 THEN activities.avg_hr ELSE excluded.avg_hr END,
+               max_hr=CASE WHEN activities.edited = 1 THEN activities.max_hr ELSE excluded.max_hr END,
+               zone_time_json=CASE WHEN activities.edited = 1 THEN activities.zone_time_json
+                                   ELSE COALESCE(excluded.zone_time_json, activities.zone_time_json) END""",
         data,
     )
     conn.commit()
@@ -250,6 +264,56 @@ def get_streams(activity_id: int) -> dict | None:
         return json.loads(row["data"])
     except (TypeError, ValueError):
         return None
+
+
+def set_activity_tss(activity_id: int, tss: float) -> None:
+    """Set a ride's TSS by hand. The value is locked, so a later sync or a recalculation
+    leaves it alone until clear_activity_tss is called."""
+    conn = get_conn()
+    conn.execute("UPDATE activities SET tss=?, tss_locked=1 WHERE id=?", (round(float(tss), 1), activity_id))
+    conn.commit()
+    conn.close()
+
+
+ACTIVITY_EDIT_FIELDS = ("name", "duration_seconds", "distance_meters", "elevation_gain_meters",
+                        "avg_power_watts", "normalized_power", "avg_hr", "max_hr")
+# Fields a sync would overwrite. Editing one of these marks the ride edited so the next sync keeps
+# the rider's numbers. The name, distance and climbing are never overwritten by a sync.
+SYNCED_FIELDS = ("duration_seconds", "avg_power_watts", "normalized_power", "avg_hr", "max_hr")
+# What duplicate matching compares, kept as synced before the first edit.
+MATCH_FIELDS = ("duration_seconds", "elapsed_seconds", "distance_meters")
+
+
+def update_activity_details(activity_id: int, values: dict) -> None:
+    """Correct a ride by hand. Only the fields in ACTIVITY_EDIT_FIELDS are written. A new duration
+    also replaces the elapsed time, which the TSS maths prefers. The synced time and distance are
+    kept in original_json the first time, so the same ride from another source still matches."""
+    row = get_activity(activity_id)
+    if not row:
+        return
+    fields = {k: values[k] for k in ACTIVITY_EDIT_FIELDS if k in values}
+    if not fields:
+        return
+    if "duration_seconds" in fields:
+        fields["elapsed_seconds"] = fields["duration_seconds"]
+    sets = ", ".join(f"{k}=?" for k in fields)
+    if any(k in fields for k in SYNCED_FIELDS):
+        sets += ", edited=1"
+    original = json.dumps({k: row.get(k) for k in MATCH_FIELDS})
+    conn = get_conn()
+    conn.execute(f"UPDATE activities SET {sets}, original_json=COALESCE(original_json, ?) WHERE id=?",
+                 (*fields.values(), original, activity_id))
+    conn.commit()
+    conn.close()
+
+
+def clear_activity_tss(activity_id: int) -> None:
+    """Go back to the calculated TSS for one ride."""
+    conn = get_conn()
+    conn.execute("UPDATE activities SET tss_locked=0 WHERE id=?", (activity_id,))
+    conn.commit()
+    conn.close()
+    recalculate_all_tss(only_id=activity_id)
 
 
 def get_activity(activity_id: int) -> dict | None:
@@ -392,18 +456,21 @@ WORKOUT_TYPES = ["Endurance", "Tempo", "Threshold", "VO2 Max", "Sprint/Anaerobic
                  "Recovery", "Long Ride", "Race", "Other"]
 
 
-def add_workout(data: dict) -> int:
-    conn = get_conn()
-    cur = conn.execute(
+def _insert_workout(conn, data: dict) -> int:
+    return conn.execute(
         """INSERT INTO workouts (date, name, workout_type, description,
            structured_json, tss_planned, notes, phase, week_number, purpose, feel)
            VALUES (:date,:name,:workout_type,:description,:structured_json,:tss_planned,:notes,
                    :phase,:week_number,:purpose,:feel)""",
         {**data, "phase": data.get("phase"), "week_number": data.get("week_number"),
          "purpose": data.get("purpose"), "feel": data.get("feel")},
-    )
+    ).lastrowid
+
+
+def add_workout(data: dict) -> int:
+    conn = get_conn()
+    wid = _insert_workout(conn, data)
     conn.commit()
-    wid = cur.lastrowid
     conn.close()
     return wid
 
@@ -458,18 +525,21 @@ def move_workout(wid: int, new_date: str) -> dict | None:
 
 # ── Why a block is built the way it is ────────────────────────────────────────
 
+def _upsert_phase_notes(conn, phases: list) -> None:
+    rows = [(p["name"], p.get("focus"), p.get("why"), datetime.utcnow().isoformat())
+            for p in phases or [] if p.get("name")]
+    if rows:
+        conn.executemany(
+            """INSERT INTO plan_phases (phase, focus, why, updated_at) VALUES (?, ?, ?, ?)
+               ON CONFLICT(phase) DO UPDATE SET focus=excluded.focus, why=excluded.why,
+               updated_at=excluded.updated_at""", rows)
+
+
 def save_phase_notes(phases: list) -> None:
     """Store the focus and reason for each named phase of a plan. A later plan
     that reuses a phase name replaces its note."""
-    rows = [(p["name"], p.get("focus"), p.get("why"), datetime.utcnow().isoformat())
-            for p in phases or [] if p.get("name")]
-    if not rows:
-        return
     conn = get_conn()
-    conn.executemany(
-        """INSERT INTO plan_phases (phase, focus, why, updated_at) VALUES (?, ?, ?, ?)
-           ON CONFLICT(phase) DO UPDATE SET focus=excluded.focus, why=excluded.why,
-           updated_at=excluded.updated_at""", rows)
+    _upsert_phase_notes(conn, phases)
     conn.commit()
     conn.close()
 
@@ -480,6 +550,96 @@ def get_phase_notes() -> dict:
     rows = conn.execute("SELECT phase, focus, why FROM plan_phases").fetchall()
     conn.close()
     return {r["phase"]: {"focus": r["focus"], "why": r["why"]} for r in rows}
+
+
+# ── Multi month programs ──────────────────────────────────────────────────────
+
+def save_program_draft(title: str, start: str, end: str, content_json: str, version: int,
+                       previous_id: int | None) -> int:
+    """Save a draft program. A new draft replaces the previous one in place, so there is
+    only ever one draft, and its version counts the revisions."""
+    now = datetime.utcnow().isoformat()
+    conn = get_conn()
+    if previous_id:
+        conn.execute("""UPDATE programs SET title=?, start_date=?, end_date=?, content_json=?,
+                        version=?, updated_at=? WHERE id=?""",
+                     (title, start, end, content_json, version, now, previous_id))
+        pid = previous_id
+    else:
+        pid = conn.execute(
+            """INSERT INTO programs (title, status, start_date, end_date, content_json, version,
+               created_at, updated_at) VALUES (?, 'draft', ?, ?, ?, ?, ?, ?)""",
+            (title, start, end, content_json, version, now, now)).lastrowid
+    conn.commit()
+    conn.close()
+    return pid
+
+
+def get_program(status: str) -> dict | None:
+    """The newest program with this status, or None."""
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM programs WHERE status=? ORDER BY id DESC LIMIT 1",
+                       (status,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_program_by_id(pid: int) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM programs WHERE id=?", (pid,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def set_program_status(pid: int, status: str) -> None:
+    conn = get_conn()
+    conn.execute("UPDATE programs SET status=?, updated_at=? WHERE id=?",
+                 (status, datetime.utcnow().isoformat(), pid))
+    conn.commit()
+    conn.close()
+
+
+def apply_program_rows(pid: int, *, remove_workout_ids: list, remove_strength_ids: list,
+                       workouts: list, strength: list, phases: list) -> dict | None:
+    """Put a draft program on the calendar in one transaction: make it the active program
+    (archiving any earlier one), remove the planned items it replaces, and add its workouts,
+    strength sessions and phase notes. Either all of it happens or none of it does. Returns the
+    removed workout rows (so their Garmin copies can be deleted) and how many strength sessions
+    went, or None when the program is not a draft any more, such as after a second click."""
+    now = datetime.utcnow().isoformat()
+    conn = get_conn()
+    try:
+        if conn.execute("UPDATE programs SET status='active', executed_at=?, updated_at=? "
+                        "WHERE id=? AND status='draft'", (now, now, pid)).rowcount != 1:
+            conn.rollback()
+            return None
+        conn.execute("UPDATE programs SET status='archived', updated_at=? WHERE status='active' AND id != ?",
+                     (now, pid))
+        removed = []
+        if remove_workout_ids:
+            marks = ",".join("?" * len(remove_workout_ids))
+            removed = [dict(r) for r in conn.execute(
+                f"SELECT * FROM workouts WHERE id IN ({marks}) AND COALESCE(completed, 0) = 0",
+                remove_workout_ids)]
+            conn.executemany("DELETE FROM workouts WHERE id=?", [(r["id"],) for r in removed])
+        strength_removed = 0
+        if remove_strength_ids:
+            marks = ",".join("?" * len(remove_strength_ids))
+            strength_removed = conn.execute(
+                f"DELETE FROM strength_sessions WHERE id IN ({marks}) AND COALESCE(completed, 0) = 0",
+                remove_strength_ids).rowcount
+        for w in workouts:
+            _insert_workout(conn, w)
+        for s_ in strength:
+            _insert_strength(conn, s_)
+        _upsert_phase_notes(conn, phases)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return {"removed_workouts": removed, "strength_removed": strength_removed}
 
 
 def get_workout(wid: int) -> dict | None:
@@ -608,8 +768,9 @@ def get_weekly_tss_summary(weeks: int = 5) -> list[dict]:
     return results
 
 
-def recalculate_all_tss():
-    """Recompute TSS and zone estimates for every stored activity."""
+def recalculate_all_tss(only_id: int | None = None):
+    """Recompute TSS and zone estimates for every stored activity, or just one. Rides whose
+    TSS was set by hand are left alone."""
     from auth.strava import _compute_tss, _compute_hr_tss, _estimate_tss
     from metrics.zones import estimate_zone_seconds
 
@@ -619,7 +780,9 @@ def recalculate_all_tss():
     conn = get_conn()
     rows = conn.execute(
         """SELECT id, duration_seconds, elapsed_seconds, normalized_power,
-                  avg_power_watts, avg_hr, max_hr FROM activities"""
+                  avg_power_watts, avg_hr, max_hr FROM activities
+           WHERE COALESCE(tss_locked, 0) = 0 AND (? IS NULL OR id = ?)""",
+        (only_id, only_id),
     ).fetchall()
     updated = 0
     for row in rows:
@@ -659,19 +822,31 @@ def recalculate_all_tss():
 
 # ── Strength Sessions ─────────────────────────────────────────────────────────
 
-def add_strength_session(data: dict) -> int:
-    conn = get_conn()
-    cur = conn.execute(
+def _insert_strength(conn, data: dict) -> int:
+    return conn.execute(
         """INSERT INTO strength_sessions (date, plan_week, exercises_json,
            duration_minutes, notes, phase, completed, purpose) VALUES (:date,:plan_week,
            :exercises_json,:duration_minutes,:notes,:phase,:completed,:purpose)""",
         {**data, "phase": data.get("phase"), "completed": data.get("completed", 0),
          "purpose": data.get("purpose")},
-    )
+    ).lastrowid
+
+
+def add_strength_session(data: dict) -> int:
+    conn = get_conn()
+    sid = _insert_strength(conn, data)
     conn.commit()
-    sid = cur.lastrowid
     conn.close()
     return sid
+
+
+def get_strength_between(start: str, end: str) -> list:
+    """Strength sessions, planned or logged, from start to end inclusive, oldest first."""
+    conn = get_conn()
+    rows = conn.execute("SELECT * FROM strength_sessions WHERE date BETWEEN ? AND ? ORDER BY date",
+                        (start, end)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def get_strength_sessions(days_back: int = 60) -> list:

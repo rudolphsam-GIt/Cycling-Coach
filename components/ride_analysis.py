@@ -18,12 +18,15 @@ from plotly.subplots import make_subplots
 
 from auth import ride_data
 from components import charts, ride_detail, theme
-from components.units import distance_unit
-from db.queries import get_activity, get_peaks_between, get_report, get_setting, get_workouts, save_report
+from components.units import climb_input, distance_input, distance_unit
+from db.queries import (clear_activity_tss, get_activity, get_peaks_between, get_report, get_setting,
+                        get_workouts, recalculate_all_tss, save_report, set_activity_tss,
+                        update_activity_details)
 from metrics import analysis as an
 from metrics import streams as sm
 from metrics.explain import TIPS
-from metrics.units import climb_from_m, climb_unit, fmt_climb, fmt_distance, speed_from_kph, speed_unit
+from metrics.units import (climb_from_m, climb_unit, dist_from_km, fmt_climb, fmt_distance, speed_from_kph,
+                           speed_unit)
 from metrics.zones import HR_ZONE_NAMES, POWER_ZONE_NAMES, ZONE_COLORS, get_hr_zones, get_power_zones
 
 SMOOTHING = {"Raw": 1, "10 s": 10, "30 s": 30, "60 s": 60}
@@ -101,6 +104,101 @@ def _tiles(n: dict) -> None:
     for row in rows:
         for col, (label, value, tip) in zip(st.columns(4), row):
             col.metric(label, value, help=tip)
+
+
+def _same(a, b, digits: int = 0) -> bool:
+    """Two optional numbers that agree once rounded."""
+    return (round(a, digits) if a else None) == (round(b, digits) if b else None)
+
+
+def _save_ride_edits(act: dict, new: dict, tss: float) -> bool:
+    """Write the changes from the Edit ride form. Returns False when nothing changed.
+    A TSS you typed is locked in. When only the inputs to the TSS maths changed (time, power,
+    heart rate) and the TSS was not typed over, it is worked out again from the new values."""
+    unit = distance_unit()
+    changed = {k: new[k] for k in ("duration_seconds", "avg_power_watts", "normalized_power", "avg_hr", "max_hr")
+               if not _same(new[k], act.get(k))}
+    if new["name"] != act.get("name"):
+        changed["name"] = new["name"]
+    if not _same(dist_from_km(new["distance_meters"] / 1000, unit),
+                 dist_from_km((act.get("distance_meters") or 0) / 1000, unit), 1):
+        changed["distance_meters"] = new["distance_meters"]
+    if not _same(climb_from_m(new["elevation_gain_meters"], unit),
+                 climb_from_m(act.get("elevation_gain_meters") or 0, unit)):
+        changed["elevation_gain_meters"] = new["elevation_gain_meters"]
+    tss_changed = round(tss) != round(_n(act.get("tss")) or 0)
+    if not changed and not tss_changed:
+        return False
+    if changed:
+        update_activity_details(act["id"], changed)
+    if tss_changed:
+        set_activity_tss(act["id"], tss)
+    elif any(k in changed for k in ("duration_seconds", "avg_power_watts", "normalized_power", "avg_hr")) \
+            and not act.get("tss_locked"):
+        recalculate_all_tss(only_id=act["id"])
+    return True
+
+
+def _whole_input(where, label: str, value, cap: int, key: str, **kwargs) -> int:
+    """A whole number input that starts at the stored value. The maximum stretches to fit a
+    stored value above the usual cap, so an unusual ride never stops the window opening."""
+    start = int(round(_n(value) or 0))
+    return where.number_input(label, 0, max(cap, start), start, key=key, **kwargs)
+
+
+def _edit_ride(act: dict) -> None:
+    """Let the rider correct a ride that is off, such as a power meter dropout, an indoor ride logged
+    without power, or a wrong name. Edits are kept when the ride syncs again."""
+    import zlib
+
+    unit = distance_unit()
+    edited = bool(act.get("edited") or act.get("tss_locked"))
+    stored = (act.get("name"), act.get("duration_seconds"), act.get("distance_meters"),
+              act.get("elevation_gain_meters"), act.get("avg_power_watts"), act.get("normalized_power"),
+              act.get("avg_hr"), act.get("max_hr"), act.get("tss"))
+    key = f"ra_edit_{act['id']}_{zlib.crc32(repr(stored).encode())}"
+    text, button = st.columns([4, 1], vertical_alignment="center")
+    text.caption("You corrected this ride by hand. Your numbers are kept when it syncs again."
+                 if edited else "Something wrong with this ride? You can correct it.")
+    with button.popover("Edit ride", icon=":material/edit:", width="stretch"):
+        st.caption("Fix whatever is off. Your fitness, fatigue and form numbers use these values, and they are "
+                   "kept when the ride syncs again. Leave a power or heart rate at 0 if the ride has none.")
+        name = st.text_input("Name", value=act.get("name") or "", key=f"{key}_name")
+        secs = int(_n(act.get("duration_seconds")) or 0)
+        h, m = st.columns(2)
+        hours = h.number_input("Hours", 0, max(48, secs // 3600), secs // 3600, key=f"{key}_h")
+        mins = m.number_input("Minutes", 0, 59, (secs % 3600) // 60, key=f"{key}_m")
+        d, c = st.columns(2)
+        with d:
+            km = (_n(act.get("distance_meters")) or 0) / 1000
+            meters = distance_input("Distance", km, key=f"{key}_d", unit=unit, min_km=0,
+                                    max_km=max(1500, km + 1), step_km=1.0, step_mi=1.0) * 1000
+        with c:
+            up = _n(act.get("elevation_gain_meters")) or 0
+            climb = climb_input("Climbing", up, key=f"{key}_c", unit=unit, min_m=0, max_m=max(15000, up + 100))
+        p1, p2 = st.columns(2)
+        avg_w = _whole_input(p1, "Average power (W)", act.get("avg_power_watts"), 2000, f"{key}_aw")
+        np_w = _whole_input(p2, "Normalized power (W)", act.get("normalized_power"), 2000, f"{key}_np")
+        q1, q2 = st.columns(2)
+        avg_hr = _whole_input(q1, "Average heart rate", act.get("avg_hr"), 250, f"{key}_ah")
+        max_hr = _whole_input(q2, "Max heart rate", act.get("max_hr"), 250, f"{key}_mh")
+        tss = _whole_input(st, "TSS", act.get("tss"), 1500, f"{key}_tss", step=5,
+                              help="Training stress for the whole ride. One hour at your FTP is 100. If you only "
+                                   "change the time, power or heart rate, it is worked out again for you.")
+        new = {"name": name.strip() or act.get("name"), "duration_seconds": hours * 3600 + mins * 60,
+               "distance_meters": meters, "elevation_gain_meters": climb,
+               "avg_power_watts": avg_w or None, "normalized_power": np_w or None,
+               "avg_hr": avg_hr or None, "max_hr": max_hr or None}
+        if st.button("Save changes", key=f"{key}_save", type="primary", icon=":material/save:", width="stretch"):
+            if new["duration_seconds"] <= 0:
+                st.warning("Give the ride a time first.")
+            elif _save_ride_edits(act, new, tss):
+                st.rerun(scope="fragment")
+            else:
+                st.info("Nothing changed.")
+        if act.get("tss_locked") and st.button("Use the calculated TSS", key=f"{key}_clear", width="stretch"):
+            clear_activity_tss(act["id"])
+            st.rerun(scope="fragment")
 
 
 def _planned_tab(planned: list[dict], n: dict) -> None:
@@ -440,6 +538,7 @@ def render(act: dict) -> None:
         n = sm.numbers_from_streams(view, ftp)
         _selection_banner(act["id"], sel, whole, n)
     _tiles(n)
+    _edit_ride(act)
     if n.get("decoupling") is not None:
         d = n["decoupling"]
         verdict = ("stayed steady" if d < 3 else "drifted a little" if d < 6 else

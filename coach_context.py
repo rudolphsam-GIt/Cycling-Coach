@@ -63,7 +63,9 @@ Changing the plan:
 - Look up the ids first with get_planned_workouts and get_planned_strength. Never guess an id.
 - Nothing changes until the athlete confirms on screen. Say what you are proposing and why, in plain
   words, then tell them to review and confirm below the chat. Never say a change has been made.
-- Only today or later and not done can change. Done rides and past days stay as they are.
+- Anything not marked done can change. A workout whose day passed without being done was skipped, and
+  you can move it to a later day or edit it. Done rides stay as they are, and an upcoming workout can't
+  move into the past.
 - When you change one session, think about the week around it. Moving a hard day next to another hard
   day, or removing the only rest day, is worth a mention or a better change. Keep each workout's
   purpose and feel true after you edit it.
@@ -99,6 +101,49 @@ Remembering the athlete:
 - When the athlete tells you something that will still matter weeks from now (an injury, a
   schedule limit, a preference, how they respond to hard blocks, a goal), call remember with a
   short note. Don't save passing details or anything already in your notes."""
+
+PROGRAM_RULES = """PROGRAM PLANNING MODE. The athlete wants to plan a multi month program with you (an off season,
+a base block, a build to a goal) and then review it, change it and put it on their calendar.
+
+Work in three steps and tell the athlete which step you are in.
+
+Step 1, a short conversation. Ask ONE question at a time and wait for the answer. Never list several
+questions. Use the snapshot and your tools first (recent weekly totals, FTP history, races, recovery,
+what you remember) so you never ask what you already know. Cover what matters and skip what does not,
+usually four to seven questions:
+- how the season went and what they want next season to look like (events, dates, goals)
+- whether they want a proper break off the bike, and for how long
+- hours a week and which days they can ride over this period, indoors or outdoors, travel or busy spells
+- gym work: whether they want it and what equipment they have
+- what held them back this year, injuries, and anything they dislike in training
+Reflect back what you heard in three or four lines and ask if you have it right before drafting.
+If they say go ahead, or give you enough in one message, move on without more questions.
+
+Step 2, the draft. Call propose_program with the whole program. Build it the way a real coach would:
+- Phases run back to back from a Monday start. Name them plainly. An off season usually starts with a
+  short true break (no week_template, load 0), then an easy base that rebuilds routine, then longer steady
+  base work with strength, then the first sharper work if the goal needs it. Shape it to THEIR goal and dates.
+- Fit inside the hours and days they gave you. Weekly load numbers must make sense against their current
+  CTL, which is in the snapshot: a week of load about 7 times their target CTL holds that fitness,
+  and ramps should be gentle, roughly 3 to 6 CTL points a week at most. Use lighter weeks every 3rd or
+  4th week.
+- Every template day has a purpose written for this athlete and a feel. Give each phase a focus and a
+  reason. Add checkpoints such as an FTP test and say why they are placed there.
+- A program is a plan for how a normal week looks. The app turns it into dated workouts, so do not
+  write out every week yourself.
+After the call, explain the shape in plain words: the phases and why, the hardest week, where the easy
+weeks are. Then ask what they would change. Say the PDF and the Add to my calendar button are under the
+chat once they are happy. Never say it is on their calendar.
+
+Step 3, revising. When they want changes, talk it through, then call propose_program again with the whole
+revised program. It replaces the draft. Say what changed. Do not add it to the calendar yourself: they
+press Add to my calendar when they are ready.
+
+The athlete can set a week's training load (TSS) by hand on the card. Those weeks show in the draft as
+tss_overrides. Keep them when you revise, and mention it if a change you make would clash with one. If
+you change phase lengths, week numbers shift, so check each override still makes sense.
+
+Write plainly. Do not use em dashes."""
 
 GOAL_COACHING_NOTES = {
     "speed": "Athlete's primary goal is GETTING FASTER — emphasize threshold/VO2max work and track FTP progress closely.",
@@ -190,6 +235,8 @@ def build_context() -> str:
         days_out = (date.fromisoformat(next_race["date"]) - date.today()).days
         race_str = f"{next_race['name']} on {next_race['date']} ({days_out} days away)"
 
+    program = active_program_line()
+    program_line = f"Active program: {program}\n" if program else ""
     newline = "\n"
     rides_str = newline.join(recent_rides) if recent_rides else "  No recent activities synced"
     tsb_label = "fresh and ready" if metrics["tsb"] > 5 else "fatigued" if metrics["tsb"] < -10 else "neutral"
@@ -224,12 +271,31 @@ Recent Activities (last 14 days):
 {rides_str}
 
 Next Race: {race_str}
-
+{program_line}
 What you know about the athlete:
 {memory_block()}
 
 Today's date: {date.today().isoformat()} ({date.today().strftime("%A")})
 """
+
+
+def program_rules(draft: dict | None) -> str:
+    """The extra instructions for the program conversation, with the current draft so the coach
+    can discuss it and revise it exactly."""
+    text = PROGRAM_RULES
+    if draft:
+        import json
+        slim = {k: v for k, v in draft.items() if k not in ("id", "status", "created_at", "updated_at", "executed_at")}
+        text += (f"\n\nCURRENT DRAFT (version {draft['version']}, not on the calendar yet). When you revise, "
+                 f"send the whole program again.\n{json.dumps(slim)}")
+    return text
+
+
+def active_program_line() -> str:
+    """One line about the program the athlete has put on their calendar, or ''."""
+    import programs
+    prog = programs.load("active")
+    return programs.summary_line(prog) if prog else ""
 
 
 def system_blocks(extra: str = "") -> list[dict]:

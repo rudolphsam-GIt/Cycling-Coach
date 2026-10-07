@@ -306,8 +306,8 @@ def _rgba(hex_color: str, alpha: float) -> str:
 
 
 def _chips(day: DayData, today: date) -> list[dict]:
-    """The items drawn inside one cell. Only unfinished planned rides and planned
-    strength on today or later can be dragged. `kind` is what the page acts on."""
+    """The items drawn inside one cell. Unfinished planned rides and planned strength can be
+    dragged, including skipped ones from days that have passed. `kind` is what the page acts on."""
     upcoming = date.fromisoformat(day.date) >= today
     status_color = theme.STATUS_COLORS.get(day.status, theme.ACCENT)
     chips = []
@@ -317,13 +317,13 @@ def _chips(day: DayData, today: date) -> list[dict]:
         chips.append({
             "kind": "ride", "id": w.get("id"), "label": _short(w.get("name") or "Workout", 22),
             "tss": round(tss) if tss else None, "done": done,
-            "locked": done or not upcoming,
+            "locked": done,
             "color": theme.GOOD if done else (theme.STATUS_COLORS["planned"] if upcoming else status_color),
         })
     for s in day.strength:
         chips.append({
             "kind": "strength", "id": s.get("id"), "label": _short(s["name"], 22), "tss": None,
-            "done": not s["planned"], "locked": (not s["planned"]) or not upcoming,
+            "done": not s["planned"], "locked": not s["planned"],
             "color": theme.STRENGTH,
         })
     for r in day.rides:
@@ -467,7 +467,9 @@ OPEN_KEY = "cal_open"
 
 
 def apply_move(kind: str, item_id, to_iso, today: date | None = None) -> str | None:
-    """Move an upcoming, unfinished planned ride or strength session to another day.
+    """Move an unfinished planned ride or strength session to another day. An upcoming one can go
+    to today or later. One whose day has passed without it being done (a skipped workout) can go
+    to any day, so it can be ridden later or filed on the day it really happened. A done one stays.
 
     Returns an error message when the move isn't allowed, None otherwise (also
     None when the item is already on that day). A ride that was sent to Garmin
@@ -475,6 +477,7 @@ def apply_move(kind: str, item_id, to_iso, today: date | None = None) -> str | N
     The move is remembered in st.session_state["last_move"] for the Undo bar."""
     import streamlit as st
     from db import queries as q
+    from plan_changes import move_error
 
     today = today or date.today()
     to = _valid_iso(to_iso)
@@ -484,15 +487,12 @@ def apply_move(kind: str, item_id, to_iso, today: date | None = None) -> str | N
         return "That item can't be moved."
     if not to:
         return "That isn't a valid date."
-    if to < today.isoformat():
-        return "Workouts can't be moved to a day that has passed."
-
     if kind == "ride":
         row = q.get_workout(item_id)
         if not row:
             return "That workout no longer exists."
-        if row.get("completed") or row["date"] < today.isoformat():
-            return "Done and past workouts stay where they are."
+        if (why := move_error(row, to, today)):
+            return why
         old = q.move_workout(item_id, to)
         if old is None:
             return None
@@ -503,8 +503,8 @@ def apply_move(kind: str, item_id, to_iso, today: date | None = None) -> str | N
         row = q.get_strength_session(item_id)
         if not row:
             return "That session no longer exists."
-        if row.get("completed") or row["date"] < today.isoformat():
-            return "Done and past sessions stay where they are."
+        if (why := move_error(row, to, today, "session")):
+            return why
         old = q.move_strength_session(item_id, to)
         if old is None:
             return None

@@ -44,7 +44,8 @@ if coach_available:
     try:
         import coach_context
         import coach_reports
-        from components import coach_ui
+        from components import coach_ui, program_ui
+        import programs
     except ImportError:
         coach_available = False
         coach_import_error = True
@@ -295,7 +296,7 @@ def workout_form(default_date: date) -> None:
         w_date = st.date_input("Date", value=default_date)
         w_name = st.text_input("Workout name", placeholder="e.g. Threshold intervals")
         w_type = st.selectbox("Type", WORKOUT_TYPES)
-        w_tss = st.number_input("Planned TSS", min_value=0, max_value=400, value=60, step=5)
+        w_tss = st.number_input("Planned TSS", min_value=0, max_value=500, value=60, step=5)
         w_desc = st.text_area("Description or notes", placeholder="3x10 min @ 95% FTP, 5 min rest")
         w_purpose = st.text_input("What is it for? (optional)",
                                   placeholder="Leave blank to use a standard explanation for the type")
@@ -416,14 +417,15 @@ def workout_dialog(kind: str, item_id, state: dict) -> None:
     if not w:
         st.info("That workout no longer exists.")
         return
-    editable = not w.get("completed") and w["date"] >= today.isoformat()
+    skipped = not w.get("completed") and w["date"] < today.isoformat()
+    editable = not w.get("completed")
     st.markdown(f"**{fmt_day(w['date'])}**")
     st.caption(workout_summary(w))
 
     if not editable:
         st.write(w.get("description") or "No description.")
         why_block(w)
-        st.caption("Done and past workouts can't be edited or moved. You can mark one done or undo that.")
+        st.caption("A workout marked done stays as it is. Undo done if you need to change it.")
         with st.container(horizontal=True):
             if w.get("completed"):
                 st.button("Undo done", key="dlg_undo", icon=":material/undo:",
@@ -441,9 +443,12 @@ def workout_dialog(kind: str, item_id, state: dict) -> None:
     wtype = c1.selectbox("Type", WORKOUT_TYPES, key="dlg_type",
                          index=WORKOUT_TYPES.index(w["workout_type"])
                          if w.get("workout_type") in WORKOUT_TYPES else 0)
-    new_date = c2.date_input("Date", value=date.fromisoformat(w["date"]), min_value=today,
-                             key="dlg_date")
-    tss = c1.number_input("Planned TSS", min_value=0, max_value=400, step=5, key="dlg_tss",
+    new_date = c2.date_input("Date", value=date.fromisoformat(w["date"]),
+                             min_value=None if skipped else today, key="dlg_date")
+    if skipped:
+        st.info("This workout was not ridden on its day. Move it to another day to do it later, or to the "
+                "day you really did it, then mark it done. You can also edit it first.", icon=":material/event_busy:")
+    tss = c1.number_input("Planned TSS", min_value=0, max_value=500, step=5, key="dlg_tss",
                           value=int(w["tss_planned"]) if w.get("tss_planned") is not None else 60)
     desc = st.text_area("Description or notes", value=w.get("description") or "", key="dlg_desc",
                         placeholder="3x10 min @ 95% FTP, 5 min rest")
@@ -518,12 +523,16 @@ def strength_dialog(item_id) -> None:
     if row.get("purpose"):
         st.markdown(f"**Why.** {row['purpose']}")
     st.caption("Strength isn't counted in training load. Log the session itself on the Strength page.")
-    if not info["planned"] or row["date"] < today.isoformat():
-        st.caption("Done and past sessions can't be moved.")
+    if not info["planned"]:
+        st.caption("A session you have logged stays where it is.")
         strength_remove_controls(row, "dlg_s")
         return
-    new_date = st.date_input("Date", value=date.fromisoformat(row["date"]), min_value=today,
-                             key="dlg_s_date")
+    skipped = row["date"] < today.isoformat()
+    if skipped:
+        st.info("This session was not done on its day. Move it to another day to do it later.",
+                icon=":material/event_busy:")
+    new_date = st.date_input("Date", value=date.fromisoformat(row["date"]),
+                             min_value=None if skipped else today, key="dlg_s_date")
     with st.container(horizontal=True):
         if st.button("Move session", key="dlg_s_save", type="primary", icon=":material/event:",
                      disabled=new_date.isoformat() == row["date"]):
@@ -619,7 +628,7 @@ def clear_chat() -> None:
     conn.execute("DELETE FROM ai_conversations")
     conn.commit()
     conn.close()
-    for k in ("chat_error", "chat_resend", "pending_message"):
+    for k in ("chat_error", "chat_resend", "pending_message", "program_mode"):
         st.session_state.pop(k, None)
 
 
@@ -694,6 +703,9 @@ def render_coach_tab(next_race) -> None:
     render_memories()
     render_checkin()
 
+    # The program card sits above the chat but is filled in after the reply streams, so a draft the
+    # coach has just saved shows straight away.
+    program_slot = st.container()
     chat_box = st.container(height=520, border=True, autoscroll=True)
     st.markdown("**Message your coach**")
     st.caption("Enter sends. The paperclip attaches a screenshot of a workout or chart.")
@@ -745,8 +757,10 @@ def render_coach_tab(next_race) -> None:
             if messages:
                 proposals: list[dict] = []
                 with st.chat_message("assistant"):
+                    extra = (coach_context.program_rules(programs.load("draft"))
+                             if program_ui.in_program_mode() else "")
                     reply, error = coach_ui.stream_reply(
-                        coach_context.system_blocks(), messages, "medium", proposals)
+                        coach_context.system_blocks(extra), messages, "medium", proposals)
                 if error or not reply.strip():
                     st.session_state["chat_error"] = error or "The coach sent back an empty reply."
                     if not error:
@@ -765,6 +779,12 @@ def render_coach_tab(next_race) -> None:
                       on_click=queue_resend)
 
         coach_ui.proposal_card("proposed_workouts", on_plan_page=True)
+
+    with program_slot:
+        program_ui.draft_card(on_plan_page=True)
+        if not programs.load("draft"):
+            program_ui.active_card()
+            program_ui.start_card()
 
 
 # ── Manage tab ─────────────────────────────────────────────────────────────────

@@ -9,3 +9,4 @@ requests>=2.31.0
 fitparse>=1.2.0
 fit-tool>=0.9.14
 pillow>=10.0.0
+reportlab>=4.0
