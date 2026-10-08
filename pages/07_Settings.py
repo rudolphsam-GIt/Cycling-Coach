@@ -1,22 +1,24 @@
 from __future__ import annotations
 
 import streamlit as st
-from datetime import date
+from datetime import date, datetime
 
-from db.schema import run_migrations
 from db.queries import (get_setting, set_setting, log_ftp_history,
                         recalculate_all_tss, deduplicate_activities)
 from config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, GARMIN_EMAIL, GARMIN_PASSWORD
 import auth.strava as strava_auth
 import auth.garmin as garmin_auth
-from components.styles import inject_styles
+import auth.intervals as intervals_auth
+import auth.trainingpeaks as tp_auth
+from components import ftp_help
+from components.units import distance_switch, unit_switch, weight_input
+from metrics.explain import (DEFAULT_GENDER, GENDER_LABELS, GENDER_PROFILE_TABLE,
+                             age_from_birth_year)
 from components.cards import page_header
-from components.onboarding import GOALS, parse_goal_keys, goal_keys_to_labels
+from components.explain import setting_help
+from components.onboarding import GOAL_EXAMPLES, goal_keys_to_labels, infer_goal_keys, parse_goal_keys
 
-run_migrations()
 
-st.set_page_config(page_title="Settings · Cycling Coach", layout="wide")
-inject_styles()
 page_header("Settings", "Your profile, connected accounts and data tools")
 
 tab_profile, tab_connections, tab_data = st.tabs([":material/person: Profile", ":material/link: Connections", ":material/build: Data tools"])
@@ -25,47 +27,83 @@ tab_profile, tab_connections, tab_data = st.tabs([":material/person: Profile", "
 with tab_profile:
     st.subheader("Athlete Profile")
 
-    _current_goal_keys = parse_goal_keys(get_setting("primary_goal", ""))
-    _current_labels = goal_keys_to_labels(_current_goal_keys)
-    goal_labels = st.multiselect(
-        "Goals", list(GOALS.keys()),
-        default=_current_labels,
-        help="Used to tailor AI Coach recommendations — pick one or more",
+    ftp_help.render("settings_ftp", snoozable=False, show_lower=True)
+
+    goal_text = st.text_area(
+        "Your goals", value=get_setting("goal_text", "") or "; ".join(
+            goal_keys_to_labels(parse_goal_keys(get_setting("primary_goal", "")))),
+        height=90, placeholder="In your own words. " + "; ".join(GOAL_EXAMPLES[:3]),
+        help="Anything you want from riding. Your coach plans around what you write.",
     )
+    g_col, a_col = st.columns(2)
+    saved_gender = get_setting("gender", "") or DEFAULT_GENDER
+    gender_label = g_col.selectbox(
+        "Gender", list(GENDER_LABELS), index=list(GENDER_LABELS.values()).index(saved_gender),
+        help="Used only to pick typical power ranges, which differ between women and men. Non-binary and "
+                 "Prefer not to say use an average of the two. You can change it any time in Settings.")
+    saved_age = age_from_birth_year(get_setting("birth_year", ""))
+    age = a_col.number_input("Age", min_value=12, max_value=95, value=saved_age, step=1,
+                             placeholder="Optional",
+                             help="Power and heart rate change with age. Used for the starting estimates "
+                                  "of FTP and threshold heart rate. Only your birth year is stored.")
+    t1, t2 = st.columns(2)
+    weekly_hours = t1.slider("Hours a week to train", 1, 20,
+                             int(float(get_setting("weekly_hours_target", 6) or 6)))
+    days_per_week = t2.slider("Days a week to train", 1, 7,
+                              int(float(get_setting("days_per_week", 4) or 4)))
 
     col1, col2 = st.columns(2)
     with col1:
         ftp = st.number_input(
             "FTP (watts)", min_value=0, max_value=600,
             value=int(get_setting("ftp_watts", 200) or 200), step=5,
-            help="Functional Threshold Power — used for TSS, IF, and zone calculations",
+            help=setting_help("ftp"),
         )
-        weight = st.number_input(
-            "Weight (kg)", min_value=30.0, max_value=200.0,
-            value=float(get_setting("weight_kg", 70) or 70), step=0.5,
-        )
+        unit = unit_switch("settings_unit")
+        distance_switch("settings_distance", label="Distance units (miles also means feet and mph)")
+        weight = weight_input("Weight", float(get_setting("weight_kg", 70) or 70), key="settings_weight",
+                              unit=unit, min_kg=30.0, max_kg=200.0, help=setting_help("weight"))
     with col2:
         lthr = st.number_input(
             "LTHR (bpm)", min_value=0, max_value=220,
             value=int(get_setting("lthr", 155) or 155), step=1,
-            help="Lactate Threshold Heart Rate — used for HR-based TSS and zone estimates",
+            help=setting_help("lthr"),
         )
         init_ctl = st.number_input(
             "Starting CTL", min_value=0.0, max_value=200.0,
             value=float(get_setting("ctl_start", 0) or 0), step=1.0,
-            help="Set this if you have prior training history. Leave at 0 to build from scratch.",
+            help=setting_help("ctl_start"),
         )
 
-    if st.button("Save Profile", type="primary"):
+    if st.button("Save profile", type="primary", icon=":material/save:"):
         old_ftp = int(get_setting("ftp_watts", 0) or 0)
+        old_lthr = int(get_setting("lthr", 0) or 0)
         set_setting("ftp_watts", ftp)
         set_setting("weight_kg", weight)
+        set_setting("weight_unit", unit)
         set_setting("lthr", lthr)
         set_setting("ctl_start", init_ctl)
-        set_setting("primary_goal", ",".join(GOALS[g] for g in goal_labels))
+        if age:
+            set_setting("birth_year", date.today().year - int(age))
+        set_setting("gender", GENDER_LABELS[gender_label])
+        if GENDER_LABELS[gender_label] in GENDER_PROFILE_TABLE:
+            set_setting("power_profile_table", GENDER_PROFILE_TABLE[GENDER_LABELS[gender_label]])
+        set_setting("goal_text", goal_text.strip())
+        set_setting("primary_goal", ",".join(infer_goal_keys(goal_text)))
+        set_setting("weekly_hours_target", weekly_hours)
+        set_setting("days_per_week", days_per_week)
         if ftp != old_ftp and ftp > 0:
             log_ftp_history(ftp)
-        st.success("Profile saved!")
+            set_setting("ftp_estimated", "0")   # the rider set it themselves
+        if lthr != old_lthr:
+            set_setting("lthr_estimated", "0")
+        if (ftp != old_ftp and ftp > 0) or (lthr != old_lthr and lthr > 0):
+            # TSS and zones depend on FTP and LTHR, so bring every ride up to date now.
+            with st.spinner("Updating TSS and zones for your rides…"):
+                n = recalculate_all_tss()
+            st.success(f"Profile saved. TSS and zones updated for {n} rides.")
+        else:
+            st.success("Profile saved.")
 
 # ── Tab 2: Connections ────────────────────────────────────────────────────────
 with tab_connections:
@@ -81,7 +119,12 @@ with tab_connections:
             if last_sync and last_sync != "Never":
                 last_sync = last_sync[:16].replace("T", " ")
             st.success(f"Connected · Last sync: {last_sync}")
-            if st.button("Sync Strava (60 days)", width="stretch"):
+            if garmin_auth.is_connected() and last_sync not in ("Never", "") and \
+                    (datetime.utcnow() - datetime.fromisoformat(
+                        get_setting("strava_last_sync", "") or "2000-01-01T00:00:00")).days > 14:
+                st.caption("Garmin is connected too and has been bringing in your rides, so Strava "
+                           "only needs a sync if you ride something that goes to Strava alone.")
+            if st.button("Sync Strava (60 days)", icon=":material/sync:", width="stretch"):
                 with st.spinner("Syncing from Strava..."):
                     count, msg = strava_auth.sync_activities(STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET)
                 st.success(msg) if "synced" in msg.lower() else st.error(msg)
@@ -110,7 +153,8 @@ with tab_connections:
                             strava_auth.sync_activities(STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET)
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Connection failed: {e}")
+                            st.error("Couldn't connect to Strava. Copy the whole address from your browser after you approve, "
+                                     f"then paste it again. Details: {e}")
                 else:
                     st.error("Couldn't find the auth code in that URL. Make sure you copied the full address bar.")
 
@@ -133,9 +177,34 @@ with tab_connections:
             st.success(f"Connected · Last sync: {last_garmin}")
             st.caption("Rides, sleep, HRV, resting heart rate and readiness sync on their own "
                        "when you open the app.")
-            if st.button("Sync Garmin now (30 days)", width="stretch"):
+            _rs = garmin_auth.recovery_status()
+            if _rs["last_date"] is None:
+                st.warning("Garmin hasn't sent any sleep or recovery numbers yet. Open the Garmin Connect "
+                           "app on your phone to sync your watch.", icon=":material/watch:")
+            elif _rs["stale"]:
+                _d = date.fromisoformat(_rs["last_date"])
+                st.warning(f"Rides are up to date, but Garmin hasn't sent sleep or recovery since "
+                           f"{_d:%b} {_d.day}. Your watch needs to sync with the Garmin Connect app "
+                           "on your phone.", icon=":material/watch:")
+            if st.button("Sync Garmin now (30 days)", icon=":material/sync:", width="stretch"):
                 with st.spinner("Syncing from Garmin…"):
                     _, msg = garmin_auth.sync(days_back=30)
+                st.session_state["garmin_sync_msg"] = msg
+                st.rerun()
+            if st.button("Load peak power and heart rate history (1 year)", icon=":material/bolt:",
+                         width="stretch",
+                         help="Reads your best power and heart rate for 5 s up to 2 h from Garmin for rides "
+                              "already in the app, for the Progress page. Adds no rides. Heart rate needs each "
+                              "ride's file, so the first run takes a minute or two."):
+                bar = st.progress(0.0, text="Reading rides from Garmin…")
+                try:
+                    updated, seen = garmin_auth.backfill_peaks(
+                        days_back=365,
+                        progress=lambda done, total: bar.progress(done / max(total, 1),
+                                                                  text=f"Ride {done} of {total}"))
+                    msg = f"Synced peak power and heart rate for {updated} of {seen} Garmin rides."
+                except Exception as e:
+                    msg = garmin_auth.friendly_error(e)
                 st.session_state["garmin_sync_msg"] = msg
                 st.rerun()
             if st.button("Disconnect Garmin", width="stretch"):
@@ -205,6 +274,92 @@ with tab_connections:
                 if total:
                     st.rerun()
 
+    # ── Plan export: intervals.icu and TrainingPeaks ─────────────────────────────
+    st.divider()
+    col_iv, col_tp = st.columns(2)
+
+    with col_iv:
+        st.subheader("Intervals.icu")
+        st.caption("A free training calendar. The app puts your planned rides on it with their dates, and "
+                   "intervals.icu passes them to Zwift on every computer you ride on, and to Garmin.")
+        if msg := st.session_state.pop("intervals_msg", None):
+            (st.success if msg[0] == "ok" else st.error)(msg[1])
+        if intervals_auth.is_connected():
+            st.success("Connected. Send rides from Plan, Manage, Export your plan.")
+            if st.button("Test connection", key="iv_test", width="stretch"):
+                try:
+                    st.session_state["intervals_msg"] = ("ok", f"Working. Signed in as {intervals_auth.check()}.")
+                except intervals_auth.IntervalsError as e:
+                    st.session_state["intervals_msg"] = ("err", str(e))
+                st.rerun()
+            if st.button("Disconnect intervals.icu", key="iv_off", width="stretch"):
+                set_setting(intervals_auth.KEY_SETTING, "")
+                st.rerun()
+        else:
+            st.markdown("1. Make a free account at intervals.icu.\n"
+                        "2. In intervals.icu open Settings, scroll to Developer Settings and copy your API key.\n"
+                        "3. Paste it here.\n"
+                        "4. In intervals.icu Settings, connect Zwift (and Garmin if you like). Rides you send "
+                        "then show in Zwift under Custom Workouts, intervals.icu, on their days.")
+            with st.form("iv_form"):
+                key = st.text_input("API key", type="password")
+                if st.form_submit_button("Connect intervals.icu", type="primary", width="stretch"):
+                    try:
+                        who = intervals_auth.check(key.strip())
+                    except intervals_auth.IntervalsError as e:
+                        st.session_state["intervals_msg"] = ("err", str(e))
+                    else:
+                        set_setting(intervals_auth.KEY_SETTING, key.strip())
+                        st.session_state["intervals_msg"] = ("ok", f"Connected as {who}.")
+                    st.rerun()
+
+    with col_tp:
+        st.subheader("TrainingPeaks calendar")
+        st.caption("Optional and unofficial. TrainingPeaks has no public way for apps like this one to add "
+                   "workouts, so this uses the same connection the TrainingPeaks website uses. It can stop "
+                   "working whenever TrainingPeaks changes its site and may go against their terms. The "
+                   "TrainingPeaks download on the export panel always works without it.")
+        if msg := st.session_state.pop("tp_msg", None):
+            (st.success if msg[0] == "ok" else st.error)(msg[1])
+        if tp_auth.is_enabled():
+            st.success("On. Send rides from Plan, Manage, Export your plan.")
+            if st.button("Test connection", key="tp_test", width="stretch"):
+                try:
+                    info = tp_auth.check()
+                    note = "" if info["premium"] is not False else " This account isn't Premium, so only today " \
+                                                                  "and tomorrow can hold planned workouts."
+                    st.session_state["tp_msg"] = ("ok", f"Working. Signed in as {info['name']}.{note}")
+                except tp_auth.TPError as e:
+                    st.session_state["tp_msg"] = ("err", str(e))
+                st.rerun()
+            if st.button("Turn off", key="tp_off", width="stretch"):
+                set_setting(tp_auth.ENABLED_SETTING, "0")
+                set_setting(tp_auth.COOKIE_SETTING, "")
+                st.rerun()
+        else:
+            with st.expander("Turn it on"):
+                st.markdown("1. Sign in at app.trainingpeaks.com in Chrome or Safari.\n"
+                            "2. Open the developer tools (in Chrome, View, Developer, Developer Tools), then the "
+                            "Application tab (Storage in Safari), then Cookies, tpapi.trainingpeaks.com.\n"
+                            "3. Copy the value of the cookie named Production_tpAuth and paste it here.\n"
+                            "4. It lasts a few weeks. When it runs out the app asks for a fresh one.")
+                with st.form("tp_form"):
+                    cookie = st.text_input("Production_tpAuth cookie", type="password")
+                    ok = st.checkbox("I understand this is unofficial and may stop working")
+                    if st.form_submit_button("Turn on", type="primary", width="stretch"):
+                        if not ok:
+                            st.session_state["tp_msg"] = ("err", "Tick the box first.")
+                        else:
+                            try:
+                                info = tp_auth.check(cookie.strip())
+                            except tp_auth.TPError as e:
+                                st.session_state["tp_msg"] = ("err", str(e))
+                            else:
+                                set_setting(tp_auth.COOKIE_SETTING, cookie.strip())
+                                set_setting(tp_auth.ENABLED_SETTING, "1")
+                                st.session_state["tp_msg"] = ("ok", f"On. Signed in as {info['name']}.")
+                        st.rerun()
+
 # ── Tab 3: Data Tools ─────────────────────────────────────────────────────────
 with tab_data:
     st.subheader("Data Tools")
@@ -212,14 +367,17 @@ with tab_data:
     col_a, col_b = st.columns(2)
     with col_a:
         st.markdown("**Recalculate TSS**")
-        st.caption("Recomputes TSS and zone estimates for every ride using your current FTP and LTHR.")
+        st.caption("Recomputes TSS and zone estimates for every ride using your current FTP and LTHR. "
+                   "This runs on its own when you change FTP or LTHR.")
         if st.button("Recalculate TSS", width="stretch"):
-            n = recalculate_all_tss()
+            with st.spinner("Recalculating TSS for every ride…"):
+                n = recalculate_all_tss()
             st.success(f"Recalculated TSS for {n} activities.")
 
     with col_b:
-        st.markdown("**Remove Duplicate Rides**")
-        st.caption("Removes rides logged on both Strava and Garmin — keeps the one with more data.")
-        if st.button("Remove Duplicates", width="stretch"):
-            n = deduplicate_activities()
+        st.markdown("**Remove duplicate rides**")
+        st.caption("Removes rides logged on both Strava and Garmin and keeps the one with more data.")
+        if st.button("Remove duplicates", width="stretch"):
+            with st.spinner("Looking for duplicate rides…"):
+                n = deduplicate_activities()
             st.success(f"Removed {n} duplicate ride{'s' if n != 1 else ''}." if n else "No duplicates found.")

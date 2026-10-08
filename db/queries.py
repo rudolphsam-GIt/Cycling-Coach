@@ -22,11 +22,30 @@ def is_ride(activity: dict) -> bool:
 
 # ── Athlete Settings ──────────────────────────────────────────────────────────
 
-def get_setting(key: str, default=None):
+# Pages read a dozen or more settings per rerun. Keep them all in memory,
+# keyed by database file, and reload after a write or a short expiry so a
+# background sync in another process is still picked up.
+_SETTINGS_TTL = 30.0
+_settings_cache: dict = {}
+
+
+def get_all_settings() -> dict:
+    from db import schema
+    import time
+    hit = _settings_cache.get(schema.DB_PATH)
+    if hit and time.monotonic() - hit[0] < _SETTINGS_TTL:
+        return hit[1]
     conn = get_conn()
-    row = conn.execute("SELECT value FROM athlete_settings WHERE key=?", (key,)).fetchone()
+    rows = conn.execute("SELECT key, value FROM athlete_settings").fetchall()
     conn.close()
-    return row["value"] if row else default
+    values = {r["key"]: r["value"] for r in rows}
+    _settings_cache[schema.DB_PATH] = (time.monotonic(), values)
+    return values
+
+
+def get_setting(key: str, default=None):
+    value = get_all_settings().get(key)
+    return default if value is None else value
 
 
 def set_setting(key: str, value):
@@ -37,13 +56,7 @@ def set_setting(key: str, value):
     )
     conn.commit()
     conn.close()
-
-
-def get_all_settings() -> dict:
-    conn = get_conn()
-    rows = conn.execute("SELECT key, value FROM athlete_settings").fetchall()
-    conn.close()
-    return {r["key"]: r["value"] for r in rows}
+    _settings_cache.clear()
 
 
 # ── Activities ────────────────────────────────────────────────────────────────
@@ -108,7 +121,14 @@ def _find_cross_source_duplicate(conn, data: dict):
         (data["date"], data["source"]),
     ).fetchall()
     for row in rows:
-        if _same_ride(data, dict(row)):
+        candidate = dict(row)
+        # A ride the rider corrected by hand is matched on its time and distance as first synced.
+        if candidate.get("original_json"):
+            try:
+                candidate.update(json.loads(candidate["original_json"]))
+            except (TypeError, ValueError):
+                pass
+        if _same_ride(data, candidate):
             return row
     return None
 
@@ -128,13 +148,13 @@ def upsert_activity(data: dict):
             # Incoming is richer — update the existing row in place, keep its external_id
             conn.execute(
                 """UPDATE activities SET
-                   avg_power_watts  = COALESCE(?, avg_power_watts),
-                   normalized_power = COALESCE(?, normalized_power),
-                   tss              = COALESCE(?, tss),
-                   if_value         = COALESCE(?, if_value),
-                   avg_hr           = COALESCE(?, avg_hr),
-                   max_hr           = COALESCE(?, max_hr),
-                   zone_time_json   = COALESCE(?, zone_time_json)
+                   avg_power_watts  = CASE WHEN edited = 1 THEN avg_power_watts ELSE COALESCE(?, avg_power_watts) END,
+                   normalized_power = CASE WHEN edited = 1 THEN normalized_power ELSE COALESCE(?, normalized_power) END,
+                   tss              = CASE WHEN tss_locked = 1 OR edited = 1 THEN tss ELSE COALESCE(?, tss) END,
+                   if_value         = CASE WHEN edited = 1 THEN if_value ELSE COALESCE(?, if_value) END,
+                   avg_hr           = CASE WHEN edited = 1 THEN avg_hr ELSE COALESCE(?, avg_hr) END,
+                   max_hr           = CASE WHEN edited = 1 THEN max_hr ELSE COALESCE(?, max_hr) END,
+                   zone_time_json   = CASE WHEN edited = 1 THEN zone_time_json ELSE COALESCE(?, zone_time_json) END
                    WHERE id = ?""",
                 (
                     data.get("avg_power_watts"), data.get("normalized_power"),
@@ -146,7 +166,7 @@ def upsert_activity(data: dict):
             conn.commit()
         # Either way, don't insert a second row
         conn.close()
-        return
+        return dup["id"]
 
     conn.execute(
         """INSERT INTO activities
@@ -157,16 +177,205 @@ def upsert_activity(data: dict):
                    :elapsed_seconds,:distance_meters,:elevation_gain_meters,:avg_power_watts,:avg_hr,
                    :max_hr,:normalized_power,:tss,:if_value,:raw_json,:zone_time_json)
            ON CONFLICT(external_id) DO UPDATE SET
-               tss=excluded.tss, if_value=excluded.if_value,
-               normalized_power=excluded.normalized_power,
-               avg_power_watts=excluded.avg_power_watts,
-               elapsed_seconds=excluded.elapsed_seconds,
-               avg_hr=excluded.avg_hr, max_hr=excluded.max_hr,
-               zone_time_json=COALESCE(excluded.zone_time_json, zone_time_json)""",
+               tss=CASE WHEN activities.tss_locked = 1 OR activities.edited = 1
+                        THEN activities.tss ELSE excluded.tss END,
+               if_value=CASE WHEN activities.edited = 1 THEN activities.if_value ELSE excluded.if_value END,
+               normalized_power=CASE WHEN activities.edited = 1 THEN activities.normalized_power
+                                     ELSE excluded.normalized_power END,
+               avg_power_watts=CASE WHEN activities.edited = 1 THEN activities.avg_power_watts
+                                    ELSE excluded.avg_power_watts END,
+               elapsed_seconds=CASE WHEN activities.edited = 1 THEN activities.elapsed_seconds
+                                    ELSE excluded.elapsed_seconds END,
+               avg_hr=CASE WHEN activities.edited = 1 THEN activities.avg_hr ELSE excluded.avg_hr END,
+               max_hr=CASE WHEN activities.edited = 1 THEN activities.max_hr ELSE excluded.max_hr END,
+               zone_time_json=CASE WHEN activities.edited = 1 THEN activities.zone_time_json
+                                   ELSE COALESCE(excluded.zone_time_json, activities.zone_time_json) END""",
         data,
     )
     conn.commit()
+    row = conn.execute("SELECT id FROM activities WHERE external_id = ?",
+                       (data.get("external_id"),)).fetchone()
     conn.close()
+    return row["id"] if row else None
+
+
+def match_activity_id(data: dict) -> int | None:
+    """The id of the stored ride this record describes (same external id, or the
+    same ride from another source), without writing anything."""
+    conn = get_conn()
+    row = conn.execute("SELECT id FROM activities WHERE external_id = ?",
+                       (data.get("external_id"),)).fetchone()
+    if not row:
+        row = _find_cross_source_duplicate(conn, data)
+    conn.close()
+    return row["id"] if row else None
+
+
+# ── Peak power (best average power per duration, per ride) ────────────────────
+
+def save_peaks(activity_id: int, peaks: dict) -> None:
+    """Store best average power by duration in seconds. Keeps the higher value if
+    a ride already has one for that duration (another source may differ slightly)."""
+    if not activity_id or not peaks:
+        return
+    conn = get_conn()
+    conn.executemany(
+        """INSERT INTO activity_peaks (activity_id, duration_s, watts) VALUES (?, ?, ?)
+           ON CONFLICT(activity_id, duration_s) DO UPDATE SET watts = MAX(watts, excluded.watts)""",
+        [(activity_id, int(d), float(w)) for d, w in peaks.items()],
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_peaks_between(start: str, end: str) -> list:
+    """Rows of {activity_id, date, name, duration_s, watts} for rides in the range."""
+    conn = get_conn()
+    rows = conn.execute(
+        """SELECT p.activity_id, a.date, a.name, p.duration_s, p.watts
+           FROM activity_peaks p JOIN activities a ON a.id = p.activity_id
+           WHERE a.date BETWEEN ? AND ? ORDER BY a.date""",
+        (start, end),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_activities_between(start: str, end: str) -> list:
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM activities WHERE date BETWEEN ? AND ? ORDER BY date DESC", (start, end)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def save_streams(activity_id: int, streams: dict, source: str = "") -> None:
+    """Keep a ride's second by second data so it only has to be fetched once."""
+    if not activity_id or not streams:
+        return
+    data = json.dumps(streams, separators=(",", ":"))
+    if len(data) > 8_000_000:       # a very long ride, not worth keeping
+        return
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO activity_streams (activity_id, data, source, fetched_at) VALUES (?, ?, ?, ?)
+           ON CONFLICT(activity_id) DO UPDATE SET data=excluded.data, source=excluded.source,
+           fetched_at=excluded.fetched_at""",
+        (activity_id, data, source, datetime.utcnow().isoformat()))
+    conn.commit()
+    conn.close()
+
+
+def get_streams(activity_id: int) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT data FROM activity_streams WHERE activity_id = ?", (activity_id,)).fetchone()
+    conn.close()
+    if not row:
+        return None
+    try:
+        return json.loads(row["data"])
+    except (TypeError, ValueError):
+        return None
+
+
+def set_activity_tss(activity_id: int, tss: float) -> None:
+    """Set a ride's TSS by hand. The value is locked, so a later sync or a recalculation
+    leaves it alone until clear_activity_tss is called."""
+    conn = get_conn()
+    conn.execute("UPDATE activities SET tss=?, tss_locked=1 WHERE id=?", (round(float(tss), 1), activity_id))
+    conn.commit()
+    conn.close()
+
+
+ACTIVITY_EDIT_FIELDS = ("name", "duration_seconds", "distance_meters", "elevation_gain_meters",
+                        "avg_power_watts", "normalized_power", "avg_hr", "max_hr")
+# Fields a sync would overwrite. Editing one of these marks the ride edited so the next sync keeps
+# the rider's numbers. The name, distance and climbing are never overwritten by a sync.
+SYNCED_FIELDS = ("duration_seconds", "avg_power_watts", "normalized_power", "avg_hr", "max_hr")
+# What duplicate matching compares, kept as synced before the first edit.
+MATCH_FIELDS = ("duration_seconds", "elapsed_seconds", "distance_meters")
+
+
+def update_activity_details(activity_id: int, values: dict) -> None:
+    """Correct a ride by hand. Only the fields in ACTIVITY_EDIT_FIELDS are written. A new duration
+    also replaces the elapsed time, which the TSS maths prefers. The synced time and distance are
+    kept in original_json the first time, so the same ride from another source still matches."""
+    row = get_activity(activity_id)
+    if not row:
+        return
+    fields = {k: values[k] for k in ACTIVITY_EDIT_FIELDS if k in values}
+    if not fields:
+        return
+    if "duration_seconds" in fields:
+        fields["elapsed_seconds"] = fields["duration_seconds"]
+    sets = ", ".join(f"{k}=?" for k in fields)
+    if any(k in fields for k in SYNCED_FIELDS):
+        sets += ", edited=1"
+    original = json.dumps({k: row.get(k) for k in MATCH_FIELDS})
+    conn = get_conn()
+    conn.execute(f"UPDATE activities SET {sets}, original_json=COALESCE(original_json, ?) WHERE id=?",
+                 (*fields.values(), original, activity_id))
+    conn.commit()
+    conn.close()
+
+
+def clear_activity_tss(activity_id: int) -> None:
+    """Go back to the calculated TSS for one ride."""
+    conn = get_conn()
+    conn.execute("UPDATE activities SET tss_locked=0 WHERE id=?", (activity_id,))
+    conn.commit()
+    conn.close()
+    recalculate_all_tss(only_id=activity_id)
+
+
+def get_activity(activity_id: int) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM activities WHERE id = ?", (activity_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def save_hr_peaks(activity_id: int, peaks: dict) -> None:
+    """Store best average heart rate by duration in seconds, keeping the higher value."""
+    if not activity_id or not peaks:
+        return
+    conn = get_conn()
+    conn.executemany(
+        """INSERT INTO activity_hr_peaks (activity_id, duration_s, bpm) VALUES (?, ?, ?)
+           ON CONFLICT(activity_id, duration_s) DO UPDATE SET bpm = MAX(bpm, excluded.bpm)""",
+        [(activity_id, int(d), float(b)) for d, b in peaks.items()],
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_hr_peaks_between(start: str, end: str) -> list:
+    """Rows of {activity_id, date, name, duration_s, bpm} for rides in the range."""
+    conn = get_conn()
+    rows = conn.execute(
+        """SELECT p.activity_id, a.date, a.name, p.duration_s, p.bpm
+           FROM activity_hr_peaks p JOIN activities a ON a.id = p.activity_id
+           WHERE a.date BETWEEN ? AND ? ORDER BY a.date""",
+        (start, end),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def has_hr_peaks(activity_id: int) -> bool:
+    conn = get_conn()
+    row = conn.execute("SELECT 1 FROM activity_hr_peaks WHERE activity_id = ? LIMIT 1",
+                       (activity_id,)).fetchone()
+    conn.close()
+    return row is not None
+
+
+def first_activity_date() -> str | None:
+    conn = get_conn()
+    row = conn.execute("SELECT MIN(date) AS d FROM activities").fetchone()
+    conn.close()
+    return row["d"] if row else None
 
 
 def deduplicate_activities() -> int:
@@ -180,6 +389,7 @@ def deduplicate_activities() -> int:
     rows = [dict(r) for r in rows]
 
     to_delete = set()
+    kept_for = {}   # dropped id -> kept id, so peak power moves to the row that stays
     for i, a in enumerate(rows):
         if a["id"] in to_delete:
             continue
@@ -192,10 +402,33 @@ def deduplicate_activities() -> int:
                 # Duplicate found — delete the lower-scoring one
                 keep, drop = (a, b) if _activity_score(a) >= _activity_score(b) else (b, a)
                 to_delete.add(drop["id"])
+                kept_for[drop["id"]] = keep["id"]
                 if drop is a:
                     break
 
     if to_delete:
+        for drop_id, keep_id in kept_for.items():
+            conn.execute(
+                """INSERT INTO activity_peaks (activity_id, duration_s, watts)
+                   SELECT ?, duration_s, watts FROM activity_peaks WHERE activity_id = ?
+                   ON CONFLICT(activity_id, duration_s) DO UPDATE SET watts = MAX(watts, excluded.watts)""",
+                (keep_id, drop_id))
+        for drop_id, keep_id in kept_for.items():
+            conn.execute(
+                """INSERT INTO activity_hr_peaks (activity_id, duration_s, bpm)
+                   SELECT ?, duration_s, bpm FROM activity_hr_peaks WHERE activity_id = ?
+                   ON CONFLICT(activity_id, duration_s) DO UPDATE SET bpm = MAX(bpm, excluded.bpm)""",
+                (keep_id, drop_id))
+        for drop_id, keep_id in kept_for.items():
+            conn.execute(
+                """INSERT OR IGNORE INTO activity_streams (activity_id, data, source, fetched_at)
+                   SELECT ?, data, source, fetched_at FROM activity_streams WHERE activity_id = ?""",
+                (keep_id, drop_id))
+        for table in ("activity_peaks", "activity_hr_peaks", "activity_streams"):
+            conn.execute(
+                f"DELETE FROM {table} WHERE activity_id IN ({','.join('?' * len(to_delete))})",
+                list(to_delete),
+            )
         conn.execute(
             f"DELETE FROM activities WHERE id IN ({','.join('?' * len(to_delete))})",
             list(to_delete),
@@ -213,6 +446,19 @@ def get_activities(days_back: int = 90) -> list:
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def checklist_counts(today: str) -> dict:
+    """Counts for the getting started checklist, in one round trip."""
+    conn = get_conn()
+    row = conn.execute(
+        """SELECT (SELECT COUNT(*) FROM activities) AS rides,
+                  (SELECT COUNT(*) FROM workouts) AS workouts,
+                  (SELECT COUNT(*) FROM activities
+                    WHERE date BETWEEN (SELECT MIN(date) FROM workouts) AND ?) AS rides_since_plan""",
+        (today,)).fetchone()
+    conn.close()
+    return dict(row)
 
 
 def get_daily_tss(start: str, end: str) -> dict:
@@ -236,16 +482,21 @@ WORKOUT_TYPES = ["Endurance", "Tempo", "Threshold", "VO2 Max", "Sprint/Anaerobic
                  "Recovery", "Long Ride", "Race", "Other"]
 
 
+def _insert_workout(conn, data: dict) -> int:
+    return conn.execute(
+        """INSERT INTO workouts (date, name, workout_type, description,
+           structured_json, tss_planned, notes, phase, week_number, purpose, feel)
+           VALUES (:date,:name,:workout_type,:description,:structured_json,:tss_planned,:notes,
+                   :phase,:week_number,:purpose,:feel)""",
+        {**data, "phase": data.get("phase"), "week_number": data.get("week_number"),
+         "purpose": data.get("purpose"), "feel": data.get("feel")},
+    ).lastrowid
+
+
 def add_workout(data: dict) -> int:
     conn = get_conn()
-    cur = conn.execute(
-        """INSERT INTO workouts (date, name, workout_type, description,
-           structured_json, tss_planned, notes)
-           VALUES (:date,:name,:workout_type,:description,:structured_json,:tss_planned,:notes)""",
-        data,
-    )
+    wid = _insert_workout(conn, data)
     conn.commit()
-    wid = cur.lastrowid
     conn.close()
     return wid
 
@@ -261,15 +512,230 @@ def get_workouts(start: str, end: str) -> list:
 
 
 def update_workout(wid: int, data: dict):
+    """Save edits. The date is not changed here, use move_workout for that."""
     conn = get_conn()
     conn.execute(
         """UPDATE workouts SET name=:name, workout_type=:workout_type,
            description=:description, tss_planned=:tss_planned,
-           completed=:completed, notes=:notes WHERE id=:id""",
-        {**data, "id": wid},
+           completed=:completed, notes=:notes,
+           purpose=COALESCE(:purpose, purpose), feel=COALESCE(:feel, feel),
+           -- Saved steps are rebuilt when what they were built from changes
+           structured_json=CASE WHEN description IS :description AND name IS :name
+                                     AND tss_planned IS :tss_planned AND workout_type IS :workout_type
+                                THEN structured_json ELSE NULL END
+           WHERE id=:id""",
+        {**data, "purpose": data.get("purpose"), "feel": data.get("feel"), "id": wid},
     )
     conn.commit()
     conn.close()
+
+
+def move_workout(wid: int, new_date: str) -> dict | None:
+    """Move a planned workout to another day. The Garmin ids are cleared, since the
+    copy on Garmin is scheduled for the old day. Returns the row as it was before
+    the move (so the caller can remove the Garmin copy or undo), or None if the
+    workout doesn't exist or is already on that day."""
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM workouts WHERE id=?", (wid,)).fetchone()
+    if not row or row["date"] == new_date:
+        conn.close()
+        return None
+    conn.execute(
+        """UPDATE workouts SET date=?, garmin_workout_id=NULL, garmin_schedule_id=NULL,
+           garmin_sent_at=NULL WHERE id=?""",
+        (new_date, wid),
+    )
+    conn.commit()
+    conn.close()
+    return dict(row)
+
+
+# ── Why a block is built the way it is ────────────────────────────────────────
+
+def _upsert_phase_notes(conn, phases: list) -> None:
+    rows = [(p["name"], p.get("focus"), p.get("why"), datetime.utcnow().isoformat())
+            for p in phases or [] if p.get("name")]
+    if rows:
+        conn.executemany(
+            """INSERT INTO plan_phases (phase, focus, why, updated_at) VALUES (?, ?, ?, ?)
+               ON CONFLICT(phase) DO UPDATE SET focus=excluded.focus, why=excluded.why,
+               updated_at=excluded.updated_at""", rows)
+
+
+def save_phase_notes(phases: list) -> None:
+    """Store the focus and reason for each named phase of a plan. A later plan
+    that reuses a phase name replaces its note."""
+    conn = get_conn()
+    _upsert_phase_notes(conn, phases)
+    conn.commit()
+    conn.close()
+
+
+def get_phase_notes() -> dict:
+    """{phase name: {focus, why}} for every stored phase."""
+    conn = get_conn()
+    rows = conn.execute("SELECT phase, focus, why FROM plan_phases").fetchall()
+    conn.close()
+    return {r["phase"]: {"focus": r["focus"], "why": r["why"]} for r in rows}
+
+
+# ── Multi month programs ──────────────────────────────────────────────────────
+
+def save_program_draft(title: str, start: str, end: str, content_json: str, version: int,
+                       previous_id: int | None) -> int:
+    """Save a draft program. A new draft replaces the previous one in place, so there is
+    only ever one draft, and its version counts the revisions."""
+    now = datetime.utcnow().isoformat()
+    conn = get_conn()
+    if previous_id:
+        conn.execute("""UPDATE programs SET title=?, start_date=?, end_date=?, content_json=?,
+                        version=?, updated_at=? WHERE id=?""",
+                     (title, start, end, content_json, version, now, previous_id))
+        pid = previous_id
+    else:
+        pid = conn.execute(
+            """INSERT INTO programs (title, status, start_date, end_date, content_json, version,
+               created_at, updated_at) VALUES (?, 'draft', ?, ?, ?, ?, ?, ?)""",
+            (title, start, end, content_json, version, now, now)).lastrowid
+    conn.commit()
+    conn.close()
+    return pid
+
+
+def get_program(status: str) -> dict | None:
+    """The newest program with this status, or None."""
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM programs WHERE status=? ORDER BY id DESC LIMIT 1",
+                       (status,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_program_by_id(pid: int) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM programs WHERE id=?", (pid,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def set_program_status(pid: int, status: str) -> None:
+    conn = get_conn()
+    conn.execute("UPDATE programs SET status=?, updated_at=? WHERE id=?",
+                 (status, datetime.utcnow().isoformat(), pid))
+    conn.commit()
+    conn.close()
+
+
+def apply_program_rows(pid: int, *, remove_workout_ids: list, remove_strength_ids: list,
+                       workouts: list, strength: list, phases: list) -> dict | None:
+    """Put a draft program on the calendar in one transaction: make it the active program
+    (archiving any earlier one), remove the planned items it replaces, and add its workouts,
+    strength sessions and phase notes. Either all of it happens or none of it does. Returns the
+    removed workout rows (so their Garmin copies can be deleted) and how many strength sessions
+    went, or None when the program is not a draft any more, such as after a second click."""
+    now = datetime.utcnow().isoformat()
+    conn = get_conn()
+    try:
+        if conn.execute("UPDATE programs SET status='active', executed_at=?, updated_at=? "
+                        "WHERE id=? AND status='draft'", (now, now, pid)).rowcount != 1:
+            conn.rollback()
+            return None
+        conn.execute("UPDATE programs SET status='archived', updated_at=? WHERE status='active' AND id != ?",
+                     (now, pid))
+        removed = []
+        if remove_workout_ids:
+            marks = ",".join("?" * len(remove_workout_ids))
+            removed = [dict(r) for r in conn.execute(
+                f"SELECT * FROM workouts WHERE id IN ({marks}) AND COALESCE(completed, 0) = 0",
+                remove_workout_ids)]
+            conn.executemany("DELETE FROM workouts WHERE id=?", [(r["id"],) for r in removed])
+        strength_removed = 0
+        if remove_strength_ids:
+            marks = ",".join("?" * len(remove_strength_ids))
+            strength_removed = conn.execute(
+                f"DELETE FROM strength_sessions WHERE id IN ({marks}) AND COALESCE(completed, 0) = 0",
+                remove_strength_ids).rowcount
+        for w in workouts:
+            _insert_workout(conn, w)
+        for s_ in strength:
+            _insert_strength(conn, s_)
+        _upsert_phase_notes(conn, phases)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return {"removed_workouts": removed, "strength_removed": strength_removed}
+
+
+def get_workout(wid: int) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM workouts WHERE id=?", (wid,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def set_workout_garmin(wid: int, garmin_workout_id: str, garmin_schedule_id: str | None,
+                       steps_json: str, sent_at: str) -> None:
+    conn = get_conn()
+    conn.execute(
+        """UPDATE workouts SET garmin_workout_id=?, garmin_schedule_id=?,
+           structured_json=?, garmin_sent_at=? WHERE id=?""",
+        (garmin_workout_id, garmin_schedule_id, steps_json, sent_at, wid),
+    )
+    conn.commit()
+    conn.close()
+
+
+def save_workout_steps(wid: int, steps_json: str) -> None:
+    """Keep the structured steps built for a workout, so exports don't build them again.
+    The Garmin ids are left alone, so a workout that was never sent still reads not sent."""
+    conn = get_conn()
+    conn.execute("UPDATE workouts SET structured_json=? WHERE id=?", (steps_json, wid))
+    conn.commit()
+    conn.close()
+
+
+# ── What has been sent to intervals.icu and TrainingPeaks ─────────────────────
+
+def get_synced(service: str) -> dict[int, dict]:
+    """{workout id: row} for everything this app has put on `service`."""
+    conn = get_conn()
+    rows = conn.execute("SELECT * FROM external_sync WHERE service=?", (service,)).fetchall()
+    conn.close()
+    return {r["workout_id"]: dict(r) for r in rows}
+
+
+def save_synced(service: str, rows: list[dict]) -> None:
+    """Record workouts as sent. Each row has workout_id, remote_id, date and fingerprint."""
+    now = datetime.utcnow().isoformat()
+    conn = get_conn()
+    conn.executemany(
+        """INSERT INTO external_sync (service, workout_id, remote_id, date, fingerprint, pushed_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(service, workout_id) DO UPDATE SET remote_id=excluded.remote_id,
+           date=excluded.date, fingerprint=excluded.fingerprint, pushed_at=excluded.pushed_at""",
+        [(service, r["workout_id"], r.get("remote_id"), r["date"], r.get("fingerprint"), now) for r in rows])
+    conn.commit()
+    conn.close()
+
+
+def drop_synced(service: str, workout_ids: list[int]) -> None:
+    if not workout_ids:
+        return
+    conn = get_conn()
+    conn.executemany("DELETE FROM external_sync WHERE service=? AND workout_id=?",
+                     [(service, w) for w in workout_ids])
+    conn.commit()
+    conn.close()
+
+
+def garmin_status(workout: dict) -> str:
+    """'not_sent', 'sent', or 'changed' (edited since it was sent)."""
+    if not workout.get("garmin_workout_id"):
+        return "not_sent"
+    return "sent" if workout.get("structured_json") else "changed"
 
 
 def delete_workout(wid: int):
@@ -372,8 +838,9 @@ def get_weekly_tss_summary(weeks: int = 5) -> list[dict]:
     return results
 
 
-def recalculate_all_tss():
-    """Recompute TSS and zone estimates for every stored activity."""
+def recalculate_all_tss(only_id: int | None = None):
+    """Recompute TSS and zone estimates for every stored activity, or just one. Rides whose
+    TSS was set by hand are left alone."""
     from auth.strava import _compute_tss, _compute_hr_tss, _estimate_tss
     from metrics.zones import estimate_zone_seconds
 
@@ -383,7 +850,9 @@ def recalculate_all_tss():
     conn = get_conn()
     rows = conn.execute(
         """SELECT id, duration_seconds, elapsed_seconds, normalized_power,
-                  avg_power_watts, avg_hr, max_hr FROM activities"""
+                  avg_power_watts, avg_hr, max_hr FROM activities
+           WHERE COALESCE(tss_locked, 0) = 0 AND (? IS NULL OR id = ?)""",
+        (only_id, only_id),
     ).fetchall()
     updated = 0
     for row in rows:
@@ -423,18 +892,31 @@ def recalculate_all_tss():
 
 # ── Strength Sessions ─────────────────────────────────────────────────────────
 
+def _insert_strength(conn, data: dict) -> int:
+    return conn.execute(
+        """INSERT INTO strength_sessions (date, plan_week, exercises_json,
+           duration_minutes, notes, phase, completed, purpose) VALUES (:date,:plan_week,
+           :exercises_json,:duration_minutes,:notes,:phase,:completed,:purpose)""",
+        {**data, "phase": data.get("phase"), "completed": data.get("completed", 0),
+         "purpose": data.get("purpose")},
+    ).lastrowid
+
+
 def add_strength_session(data: dict) -> int:
     conn = get_conn()
-    cur = conn.execute(
-        """INSERT INTO strength_sessions (date, plan_week, exercises_json,
-           duration_minutes, notes) VALUES (:date,:plan_week,:exercises_json,
-           :duration_minutes,:notes)""",
-        data,
-    )
+    sid = _insert_strength(conn, data)
     conn.commit()
-    sid = cur.lastrowid
     conn.close()
     return sid
+
+
+def get_strength_between(start: str, end: str) -> list:
+    """Strength sessions, planned or logged, from start to end inclusive, oldest first."""
+    conn = get_conn()
+    rows = conn.execute("SELECT * FROM strength_sessions WHERE date BETWEEN ? AND ? ORDER BY date",
+                        (start, end)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def get_strength_sessions(days_back: int = 60) -> list:
@@ -448,11 +930,73 @@ def get_strength_sessions(days_back: int = 60) -> list:
     return [dict(r) for r in rows]
 
 
-def mark_strength_complete(sid: int, duration_minutes: int, notes: str = ""):
+def get_strength_session(sid: int) -> dict | None:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM strength_sessions WHERE id=?", (sid,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def delete_strength_session(sid: int) -> dict | None:
+    """Remove a strength session, planned or logged. Returns the row that was removed,
+    or None if it doesn't exist."""
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM strength_sessions WHERE id=?", (sid,)).fetchone()
+    if not row:
+        conn.close()
+        return None
+    conn.execute("DELETE FROM strength_sessions WHERE id=?", (sid,))
+    conn.commit()
+    conn.close()
+    return dict(row)
+
+
+def update_strength_session(sid: int, *, name: str | None = None, exercises: list | None = None,
+                            duration_minutes: int | None = None, purpose: str | None = None) -> dict | None:
+    """Change what is in a strength session. Only the fields given are changed. The name
+    lives at the front of the notes ("Lower body | Planned by AI Coach"), so it is rewritten
+    there. Returns the row as it was before, or None if it doesn't exist."""
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM strength_sessions WHERE id=?", (sid,)).fetchone()
+    if not row:
+        conn.close()
+        return None
+    row = dict(row)
+    notes = row.get("notes") or ""
+    if name is not None:
+        rest = notes.split(" | ", 1)[1] if " | " in notes else "Planned by AI Coach"
+        notes = f"{name} | {rest}"
+    conn.execute(
+        """UPDATE strength_sessions SET notes=?, exercises_json=COALESCE(?, exercises_json),
+           duration_minutes=COALESCE(?, duration_minutes), purpose=COALESCE(?, purpose) WHERE id=?""",
+        (notes, json.dumps(exercises) if exercises is not None else None, duration_minutes, purpose, sid))
+    conn.commit()
+    conn.close()
+    return row
+
+
+def move_strength_session(sid: int, new_date: str) -> dict | None:
+    """Move a strength session to another day. Returns the row as it was before,
+    or None if it doesn't exist or is already on that day."""
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM strength_sessions WHERE id=?", (sid,)).fetchone()
+    if not row or row["date"] == new_date:
+        conn.close()
+        return None
+    conn.execute("UPDATE strength_sessions SET date=? WHERE id=?", (new_date, sid))
+    conn.commit()
+    conn.close()
+    return dict(row)
+
+
+def mark_strength_complete(sid: int, duration_minutes: int, notes: str = "",
+                           exercises_json: str | None = None):
+    """Mark a session done. Pass exercises_json to store what was actually lifted."""
     conn = get_conn()
     conn.execute(
-        "UPDATE strength_sessions SET completed=1, duration_minutes=?, notes=? WHERE id=?",
-        (duration_minutes, notes, sid),
+        """UPDATE strength_sessions SET completed=1, duration_minutes=?, notes=?,
+           exercises_json=COALESCE(?, exercises_json) WHERE id=?""",
+        (duration_minutes, notes, exercises_json, sid),
     )
     conn.commit()
     conn.close()
@@ -557,6 +1101,22 @@ def get_conversation_history(limit: int = 20) -> list:
     return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
 
 
+
+def get_conversation_window(keep: int = 18, step: int = 10) -> list:
+    """The chat history to send to Claude. The oldest message kept only moves
+    forward `step` messages at a time, so for several turns in a row the
+    conversation prefix is identical and Claude's prompt cache keeps hitting.
+    Sends between `keep` and `keep + step - 1` messages once the chat is long."""
+    conn = get_conn()
+    total = conn.execute("SELECT COUNT(*) FROM ai_conversations").fetchone()[0]
+    start = 0 if total < keep + step else ((total - keep) // step) * step
+    rows = conn.execute(
+        "SELECT role, content FROM ai_conversations ORDER BY id LIMIT -1 OFFSET ?",
+        (start,),
+    ).fetchall()
+    conn.close()
+    return [{"role": r["role"], "content": r["content"]} for r in rows]
+
 # ── Recovery (Garmin sleep, HRV, resting HR, readiness) ───────────────────────
 
 RECOVERY_FIELDS = ("sleep_hours", "sleep_score", "hrv_ms", "hrv_status",
@@ -576,6 +1136,14 @@ def upsert_recovery(day: str, data: dict) -> None:
     )
     conn.commit()
     conn.close()
+
+
+def get_latest_recovery() -> dict | None:
+    """The most recent day Garmin sent any sleep or recovery numbers, or None."""
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM recovery_daily ORDER BY date DESC LIMIT 1").fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def get_recovery_range(start: str, end: str) -> list:

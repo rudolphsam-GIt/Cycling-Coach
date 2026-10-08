@@ -4,25 +4,28 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
 from datetime import date, timedelta
-from components import inject_styles, section_header, metric_card, page_header
+from components import page_header, theme, charts
+from components.units import climb_input, distance_input, distance_unit, weight_input, weight_unit
+from metrics.units import fmt_climb, fmt_distance, speed_from_kph, speed_unit
 
-from db.schema import run_migrations
 from db.queries import (get_races, add_race, delete_race, get_setting,
                          add_workout, get_workouts, log_race_result)
 from metrics.training_load import get_current_metrics, project_future
 from research.obra_schedule import get_upcoming_races, DISCIPLINES
 
-run_migrations()
 
-st.set_page_config(page_title="Races · Cycling Coach", layout="wide")
-inject_styles()
+unit = distance_unit()
+
 page_header("Races", "Race day plans, your calendar, taper and pacing")
 
 ftp = float(get_setting("ftp_watts", 200) or 200)
 weight = float(get_setting("weight_kg", 70) or 70)
 
-tab_plan, tab1, tab2, tab3 = st.tabs([":material/auto_awesome: Race Day Plan", ":material/event: Calendar",
-                                     ":material/trending_down: Taper", ":material/speed: Pacing"])
+_RACE_TABS = [":material/auto_awesome: Race Day Plan", ":material/event: Calendar",
+              ":material/trending_down: Taper", ":material/speed: Pacing"]
+# With no race coming up the plan tab has nothing to show, so open on the calendar.
+_has_upcoming = any(r["date"] >= date.today().isoformat() for r in get_races())
+tab_plan, tab1, tab2, tab3 = st.tabs(_RACE_TABS, default=_RACE_TABS[0] if _has_upcoming else _RACE_TABS[1])
 
 # ── Tab 0: AI race day plan ───────────────────────────────────────────────────
 with tab_plan:
@@ -45,24 +48,24 @@ with tab_plan:
 
 # ── Tab 1: Race Calendar ──────────────────────────────────────────────────────
 with tab1:
-    col_list, col_add = st.columns([2, 1])
+    col_list, col_add = st.columns([3, 2])
 
     with col_add:
         st.subheader("Add Race")
 
         # OBRA race picker
-        with st.expander("📋 Pick from OBRA schedule", expanded=True):
+        with st.expander("Pick from OBRA schedule", icon=":material/search:", expanded=True):
             disc_options = list(DISCIPLINES.keys())
             selected_discs = st.multiselect(
                 "Disciplines", disc_options, default=["Road", "Criterium"]
             )
-            col_past, col_fetch, col_refresh = st.columns([2, 2, 1])
-            with col_past:
-                include_past = st.checkbox("Include past races this year", value=False)
+            include_past = st.checkbox("Include past races this year", value=False)
+            col_fetch, col_refresh = st.columns(2)
             with col_fetch:
-                fetch_btn = st.button("Load OBRA Races", width="stretch")
+                fetch_btn = st.button("Load OBRA Races", icon=":material/download:", width="stretch")
             with col_refresh:
-                refresh_btn = st.button("↺", help="Force refresh from OBRA")
+                refresh_btn = st.button("Refresh from OBRA", icon=":material/refresh:",
+                                        help="Force refresh from OBRA", width="stretch")
 
             if fetch_btn or refresh_btn or "obra_races" in st.session_state:
                 if fetch_btn or refresh_btn:
@@ -82,16 +85,16 @@ with tab1:
                     if past_count:
                         count_label += f" + {past_count} past"
                     race_labels = {
-                        f"{'✓ ' if r.get('is_past') else ''}{r['name']}  —  {r['date']}": r
+                        f"{'(past) ' if r.get('is_past') else ''}{r['name']}  /  {r['date']}": r
                         for r in obra_races
                     }
                     chosen_label = st.selectbox(
                         f"{count_label} races found",
-                        ["— select a race —"] + list(race_labels.keys()),
+                        ["Select a race"] + list(race_labels.keys()),
                     )
-                    if chosen_label != "— select a race —":
+                    if chosen_label != "Select a race":
                         obra_r = race_labels[chosen_label]
-                        if st.button("Add this race to my calendar ➕", width="stretch"):
+                        if st.button("Add this race to my calendar", icon=":material/add:", width="stretch"):
                             add_race({
                                 "name": obra_r["name"],
                                 "date": obra_r["date"],
@@ -111,14 +114,14 @@ with tab1:
             st.caption("Or add manually:")
             r_name = st.text_input("Race name", placeholder="e.g. OBRA Road Race #3")
             r_date = st.date_input("Race date", value=date.today() + timedelta(days=30))
-            r_dist = st.number_input("Distance (km)", min_value=1.0, max_value=300.0, value=80.0, step=5.0)
-            r_elev = st.number_input("Elevation gain (m)", min_value=0, max_value=5000, value=800, step=50)
+            r_dist = distance_input("Distance", 80.0, key="race_dist", unit=unit, min_km=1.0, max_km=300.0)
+            r_elev = climb_input("Elevation gain", 800, key="race_elev", unit=unit, min_m=0, max_m=5000)
             r_cat = st.selectbox("Category", ["A", "B", "C", "Open"])
             r_target_h = st.number_input("Target finish time (hours)", 0, 10, 2)
             r_target_m = st.number_input("Target finish time (minutes)", 0, 59, 30)
             r_notes = st.text_area("Notes", placeholder="Hilly circuit race, aggressive start expected")
 
-            if st.form_submit_button("Add Race", width="stretch") and r_name:
+            if st.form_submit_button("Add Race", icon=":material/add:", width="stretch") and r_name:
                 target_s = (r_target_h * 3600 + r_target_m * 60) if (r_target_h or r_target_m) else None
                 add_race({
                     "name": r_name,
@@ -142,25 +145,28 @@ with tab1:
             for r in sorted(upcoming, key=lambda x: x["date"]):
                 days_out = (date.fromisoformat(r["date"]) - date.today()).days
                 cat_badge = f"Cat {r['category']}" if r.get("category") else ""
-                dist_str = f"{r['distance_km']} km" if r.get("distance_km") else ""
-                elev_str = f"{r['elevation_gain_meters']:.0f}m ↑" if r.get("elevation_gain_meters") else ""
+                dist_str = fmt_distance(r["distance_km"] * 1000, unit) if r.get("distance_km") else ""
+                elev_str = f"{fmt_climb(r['elevation_gain_meters'], unit)} gain" if r.get("elevation_gain_meters") else ""
 
                 if days_out <= 7:
-                    st.error(f"🔴 **{r['name']}** — {r['date']} · {days_out} days away! · {cat_badge} {dist_str} {elev_str}")
+                    st.error(f"**{r['name']}**, {r['date']} · {days_out} days away · {cat_badge} {dist_str} {elev_str}",
+                             icon=":material/flag:")
                 elif days_out <= 21:
-                    st.warning(f"🟡 **{r['name']}** — {r['date']} · {days_out} days away · {cat_badge} {dist_str} {elev_str}")
+                    st.warning(f"**{r['name']}**, {r['date']} · {days_out} days away · {cat_badge} {dist_str} {elev_str}",
+                               icon=":material/flag:")
                 else:
-                    st.info(f"🟢 **{r['name']}** — {r['date']} · {days_out} days away · {cat_badge} {dist_str} {elev_str}")
+                    st.info(f"**{r['name']}**, {r['date']} · {days_out} days away · {cat_badge} {dist_str} {elev_str}",
+                            icon=":material/flag:")
 
                 if r.get("notes"):
                     st.caption(r["notes"])
 
-                if st.button("Remove", key=f"del_race_{r['id']}"):
+                if st.button("Remove", key=f"del_race_{r['id']}", icon=":material/delete:"):
                     delete_race(r["id"])
                     st.rerun()
                 st.divider()
         else:
-            st.info("No upcoming races. Add one using the form →")
+            st.info("No upcoming races. Add one using the form on the right.")
 
         if past:
             with st.expander(f"Past races ({len(past)})"):
@@ -178,15 +184,15 @@ with tab1:
                             finish_str = f"  ·  {h}:{m:02d}:{s:02d}" if h else f"  ·  {m}:{s:02d}"
                         avg_pwr = f"  ·  {r['race_avg_power']}W" if r.get("race_avg_power") else ""
                         avg_hr = f"  ·  {r['race_avg_hr']} bpm" if r.get("race_avg_hr") else ""
-                        st.markdown(f"✅ **{r['name']}** — {r['date']}{placing_str}{finish_str}{avg_pwr}{avg_hr}")
+                        st.markdown(f":green[:material/check_circle:] **{r['name']}**, {r['date']}{placing_str}{finish_str}{avg_pwr}{avg_hr}")
                         if r.get("result_notes"):
                             st.caption(r["result_notes"])
                     else:
-                        st.markdown(f"**{r['name']}** — {r['date']}")
+                        st.markdown(f"**{r['name']}**, {r['date']}")
 
                     log_key = f"log_result_{r['id']}"
                     if not result_logged:
-                        if st.button("Log Result", key=f"btn_{log_key}"):
+                        if st.button("Log Result", key=f"btn_{log_key}", icon=":material/edit:"):
                             st.session_state[log_key] = True
 
                     if st.session_state.get(log_key) and not result_logged:
@@ -205,10 +211,10 @@ with tab1:
                                 "How did legs feel?",
                                 options=[1, 2, 3, 4, 5],
                                 value=3,
-                                format_func=lambda v: {1: "💀 Dead", 2: "😓 Heavy", 3: "😐 OK", 4: "😊 Good", 5: "🔥 Great"}[v],
+                                format_func=lambda v: {1: "Dead", 2: "Heavy", 3: "OK", 4: "Good", 5: "Great"}[v],
                             )
                             notes = st.text_area("Notes", placeholder="What went well, what to improve...")
-                            submitted = st.form_submit_button("Save Result", width="stretch")
+                            submitted = st.form_submit_button("Save Result", icon=":material/save:", width="stretch")
                             if submitted:
                                 finish_s = finish_h * 3600 + finish_m * 60
                                 log_race_result(r["id"], {
@@ -232,7 +238,7 @@ with tab2:
     upcoming_races = get_races(upcoming_only=True)
 
     if not upcoming_races:
-        st.info("Add an upcoming race in the Race Calendar tab to use the taper planner.")
+        st.info("Add an upcoming race in the Calendar tab to use the taper planner.")
     else:
         race_options = {f"{r['name']} ({r['date']})": r for r in upcoming_races}
         chosen_name = st.selectbox("Select race to taper for", list(race_options.keys()))
@@ -250,7 +256,7 @@ with tab2:
         if days_out < 3:
             st.warning("Race is in 3 or fewer days — focus on rest and openers only.")
         elif days_out > 60:
-            st.info("More than 60 days out. Use the Training Planner to build fitness first.")
+            st.info("More than 60 days out. Use the Plan page to build fitness first.")
 
         # Build taper TSS schedule
         taper_tss: dict[str, float] = {}
@@ -290,22 +296,26 @@ with tab2:
         # Chart
         fig = make_subplots(specs=[[{"secondary_y": True}]])
         fig.add_trace(go.Scatter(x=projected["date"], y=projected["ctl"],
-                                  name="CTL", line=dict(color="#2196F3")), secondary_y=False)
+                                  name="CTL", line=dict(color=charts.SERIES["ctl"], width=2)),
+                      secondary_y=False)
         fig.add_trace(go.Scatter(x=projected["date"], y=projected["atl"],
-                                  name="ATL", line=dict(color="#F44336")), secondary_y=False)
+                                  name="ATL", line=dict(color=charts.SERIES["atl"], width=2)),
+                      secondary_y=False)
         fig.add_trace(go.Scatter(x=projected["date"], y=projected["tsb"],
-                                  name="TSB (Form)", line=dict(color="#4CAF50"),
-                                  fill="tozeroy", fillcolor="rgba(76,175,80,0.1)"),
+                                  name="TSB (Form)", line=dict(color=charts.SERIES["tsb"], width=2),
+                                  fill="tozeroy", fillcolor="rgba(52,211,153,0.12)"),
                       secondary_y=True)
-        fig.add_vline(x=race_date_ts.value, line_dash="dash", line_color="purple",
-                      annotation_text="Race Day")
-        fig.add_hrect(y0=5, y1=15, fillcolor="green", opacity=0.05,
-                      annotation_text="Target form zone", secondary_y=True)
-        fig.update_layout(height=350, hovermode="x unified",
-                          plot_bgcolor="#1C1F2E", margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, width="stretch")
+        fig.add_vline(x=race_date_ts.to_pydatetime().isoformat(), line_dash="dash",
+                      line_color=theme.RACE, annotation_text="Race Day",
+                      annotation_font_color=theme.RACE)
+        fig.add_hrect(y0=5, y1=15, fillcolor=theme.GOOD, opacity=0.08, line_width=0,
+                      annotation_text="Target form zone", annotation_font_color=theme.TEXT2,
+                      secondary_y=True)
+        charts.apply_theme(fig, height=350, dual_y=True)
+        fig.update_layout(hovermode="x unified")
+        charts.show(fig, key="taper_chart")
 
-        if st.button("Generate Taper Workouts in Planner"):
+        if st.button("Add taper workouts to my plan"):
             count = 0
             for d_str, tss in taper_tss.items():
                 d = date.fromisoformat(d_str)
@@ -326,7 +336,7 @@ with tab2:
                     "structured_json": None, "tss_planned": round(tss), "notes": "",
                 })
                 count += 1
-            st.success(f"Added {count} taper workouts to the planner.")
+            st.success(f"Added {count} taper workouts to your plan.")
 
 # ── Tab 3: Pacing Strategy ────────────────────────────────────────────────────
 with tab3:
@@ -334,15 +344,16 @@ with tab3:
 
     pcol1, pcol2 = st.columns(2)
     with pcol1:
-        p_dist = st.number_input("Race distance (km)", 10.0, 300.0, 80.0, 5.0)
-        p_elev = st.number_input("Total elevation gain (m)", 0, 5000, 800, 50)
+        p_dist = distance_input("Race distance", 80.0, key="pace_dist", unit=unit, min_km=10.0, max_km=300.0)
+        p_elev = climb_input("Total elevation gain", 800, key="pace_elev", unit=unit, min_m=0, max_m=5000)
         p_target_h = st.number_input("Target time (hours)", 0, 10, 2)
         p_target_m = st.number_input("Target time (minutes)", 0, 59, 30)
 
     with pcol2:
         p_ftp = st.number_input("FTP (W)", 50, 600, int(ftp), 5,
                                  help="Defaults to your saved FTP")
-        p_weight = st.number_input("Weight (kg)", 30.0, 150.0, float(weight), 0.5)
+        p_weight = weight_input("Weight", float(weight), key="pace_weight", unit=weight_unit(),
+                                min_kg=30.0, max_kg=150.0)
 
     if st.button("Calculate Pacing Plan", width="stretch"):
         target_s = p_target_h * 3600 + p_target_m * 60
@@ -362,7 +373,7 @@ with tab3:
 
             st.subheader("Pacing Recommendations")
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Target avg speed", f"{speed_kph:.1f} km/h")
+            m1.metric("Target avg speed", f"{speed_from_kph(speed_kph, unit):.1f} {speed_unit(unit)}")
             m2.metric("Est. avg power needed", f"{total_watts:.0f}W")
             m3.metric("Intensity Factor", f"{if_value:.2f}",
                        help="< 0.75 = easy, 0.75-0.85 = moderate, > 0.85 = hard")
@@ -401,14 +412,14 @@ with tab3:
             # Equipment checklist
             st.subheader("Race Day Checklist")
             checklist = [
-                "✅ Helmet (mandatory)", "✅ Cycling shoes + cleats checked",
-                "✅ Jersey + bibs", "✅ Gloves",
+                "Helmet (mandatory)", "Cycling shoes + cleats checked",
+                "Jersey + bibs", "Gloves",
             ]
             if p_dist > 60:
-                checklist += ["✅ 2+ water bottles", "✅ 3+ gels or bars",
-                               "✅ Spare tube + CO2/pump", "✅ Multi-tool"]
+                checklist += ["2+ water bottles", "3+ gels or bars",
+                               "Spare tube + CO2/pump", "Multi-tool"]
             if p_elev > 1500:
-                checklist += ["✅ Arm warmers", "✅ Leg warmers", "✅ Gilet/vest"]
-            checklist += ["✅ Garmin/computer charged", "✅ Pre-race meal planned (3hrs before)"]
+                checklist += ["Arm warmers", "Leg warmers", "Gilet/vest"]
+            checklist += ["Garmin/computer charged", "Pre-race meal planned (3hrs before)"]
             for item in checklist:
-                st.markdown(item)
+                st.markdown(f":green[:material/check_circle:] {item}")

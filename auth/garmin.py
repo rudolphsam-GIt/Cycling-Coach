@@ -14,7 +14,8 @@ import json
 import os
 from datetime import datetime, timedelta, date
 
-from db.queries import get_setting, set_setting, upsert_activity, upsert_recovery
+from db.queries import (get_setting, set_setting, upsert_activity, upsert_recovery,
+                        match_activity_id, save_peaks, save_hr_peaks, has_hr_peaks)
 from metrics.zones import estimate_zone_seconds
 
 TOKEN_DIR = os.path.join(os.path.expanduser("~"), ".cycling_coach_garmin")
@@ -166,6 +167,50 @@ def activity_row(act: dict, ftp: float, lthr: float) -> dict | None:
     }
 
 
+def peak_powers(act: dict) -> dict[int, float]:
+    """Best average power by duration in seconds, from Garmin's maxAvgPower_<secs>
+    fields. Empty for rides without power or that the rider excluded from power
+    curve reports in Garmin Connect."""
+    if act.get("excludeFromPowerCurveReports"):
+        return {}
+    peaks = {}
+    for key, value in act.items():
+        if not key.startswith("maxAvgPower_"):
+            continue
+        try:
+            secs, watts = int(key.rsplit("_", 1)[1]), float(value)
+        except (TypeError, ValueError):
+            continue
+        if secs > 0 and 0 < watts < 3000:
+            peaks[secs] = watts
+    return peaks
+
+
+def find_garmin_activity_id(api, activity: dict) -> str | None:
+    """The Garmin id of the same ride, for a ride stored from another source, found by date
+    and matched on time and distance the same way duplicate rides are."""
+    from db.queries import _same_ride
+    ftp = float(get_setting("ftp_watts", 0) or 0)
+    lthr = float(get_setting("lthr", 0) or 0)
+    day = str(activity.get("date"))[:10]
+    for act in api.get_activities_by_date(day, day):
+        row = activity_row(act, ftp, lthr)
+        if row and _same_ride(row, activity):
+            return str(act.get("activityId"))
+    return None
+
+
+def _hr_peaks(api, activity_id) -> dict:
+    """Best average heart rate by duration, from the ride's original FIT file.
+    Empty when the download or parsing fails (sync carries on regardless)."""
+    from metrics.peaks import fit_from_download, hr_peaks_from_fit
+    try:
+        raw = api.download_activity(str(activity_id), dl_fmt=api.ActivityDownloadFormat.ORIGINAL)
+        return hr_peaks_from_fit(fit_from_download(raw))
+    except Exception:
+        return {}
+
+
 def _sync_rides(api, days_back: int) -> int:
     ftp = float(get_setting("ftp_watts", 0) or 0)
     lthr = float(get_setting("lthr", 0) or 0)
@@ -174,9 +219,43 @@ def _sync_rides(api, days_back: int) -> int:
     for act in api.get_activities_by_date(start, date.today().isoformat()):
         row = activity_row(act, ftp, lthr)
         if row and row["date"]:
-            upsert_activity(row)
+            activity_id = upsert_activity(row)
+            save_peaks(activity_id, peak_powers(act))
+            if activity_id and act.get("averageHR") and not has_hr_peaks(activity_id):
+                save_hr_peaks(activity_id, _hr_peaks(api, act.get("activityId")))
             count += 1
     return count
+
+
+def backfill_peaks(days_back: int = 365, progress=None) -> tuple[int, int]:
+    """Read Garmin ride history and store peak power (from the ride summary) and
+    peak heart rate (from the ride's FIT file, only when not stored yet) for rides
+    already in the app, matched by Garmin id or as the same ride from Strava.
+    Never adds rides. `progress(done, total)` is called as it goes.
+    Returns (rides updated, Garmin rides seen)."""
+    api = _client()
+    ftp = float(get_setting("ftp_watts", 0) or 0)
+    lthr = float(get_setting("lthr", 0) or 0)
+    start = (date.today() - timedelta(days=days_back)).isoformat()
+    acts = [a for a in api.get_activities_by_date(start, date.today().isoformat())
+            if activity_row(a, ftp, lthr)]
+    updated = 0
+    for i, act in enumerate(acts):
+        row = activity_row(act, ftp, lthr)
+        activity_id = match_activity_id(row) if row and row["date"] else None
+        if activity_id:
+            changed = False
+            if (peaks := peak_powers(act)):
+                save_peaks(activity_id, peaks)
+                changed = True
+            if act.get("averageHR") and not has_hr_peaks(activity_id):
+                if (hr := _hr_peaks(api, act.get("activityId"))):
+                    save_hr_peaks(activity_id, hr)
+                    changed = True
+            updated += changed
+        if progress:
+            progress(i + 1, len(acts))
+    return updated, len(acts)
 
 
 # ── Recovery ──────────────────────────────────────────────────────────────────
@@ -245,7 +324,23 @@ def sync(days_back: int = 30) -> tuple[int, str]:
         return 0, friendly_error(e)
 
     set_setting("garmin_last_sync", datetime.utcnow().isoformat())
-    return rides, f"Synced {rides} rides and {recovery_days} days of sleep and recovery from Garmin."
+    msg = f"Synced {rides} rides and {recovery_days} days of sleep and recovery from Garmin."
+    if recovery_status()["stale"]:
+        msg += " Garmin has no recent sleep or recovery data. Sync your watch in the Garmin Connect app."
+    return rides, msg
+
+
+def recovery_status(today: date | None = None) -> dict:
+    """Whether Garmin has been sending sleep and recovery numbers. Rides come from a bike
+    computer or watch and sleep from a watch worn overnight, so one can be current while the
+    other has stopped. Returns {last_date, days_old, stale}."""
+    from db.queries import get_latest_recovery
+    today = today or date.today()
+    row = get_latest_recovery()
+    if not row:
+        return {"last_date": None, "days_old": None, "stale": True}
+    days_old = (today - date.fromisoformat(row["date"])).days
+    return {"last_date": row["date"], "days_old": days_old, "stale": days_old > 1}
 
 
 def needs_auto_sync() -> bool:
@@ -260,10 +355,8 @@ def needs_auto_sync() -> bool:
         return True
 
 
-def auto_sync() -> tuple[int, str] | None:
-    """Sync the last few days if it's been a while. Returns None if skipped."""
-    if not needs_auto_sync():
-        return None
+def sync_recent() -> tuple[int, str]:
+    """Sync from a couple of days before the last sync up to today."""
     last = get_setting("garmin_last_sync", "")
     days = 30
     if last:
@@ -272,3 +365,27 @@ def auto_sync() -> tuple[int, str] | None:
         except ValueError:
             pass
     return sync(days_back=min(days, 90))
+
+
+def auto_sync() -> tuple[int, str] | None:
+    """Sync the last few days if it's been a while. Returns None if skipped."""
+    if not needs_auto_sync():
+        return None
+    return sync_recent()
+
+
+def last_sync_text() -> str:
+    """For example "Synced 2 hours ago", or "" when Garmin has never synced."""
+    last = get_setting("garmin_last_sync", "")
+    try:
+        mins = int((datetime.utcnow() - datetime.fromisoformat(last)).total_seconds() // 60)
+    except (TypeError, ValueError):
+        return ""
+    if mins < 2:
+        return "Synced just now"
+    if mins < 60:
+        return f"Synced {mins} min ago"
+    if mins < 48 * 60:
+        hours = mins // 60
+        return f"Synced {hours} hour{'s' if hours != 1 else ''} ago"
+    return f"Synced {mins // 1440} days ago"

@@ -4,17 +4,17 @@ import plotly.graph_objects as go
 import pandas as pd
 import json
 from datetime import date, timedelta
-from components import inject_styles, section_header, page_header
+from components import section_header, page_header, theme, charts
+from components.units import weight_input, weight_unit
+from metrics.units import from_kg
 
-from db.schema import run_migrations
 from db.queries import (add_strength_session, get_strength_sessions,
-                         mark_strength_complete, get_setting)
+                         mark_strength_complete, get_setting, delete_strength_session)
 
-run_migrations()
 
-st.set_page_config(page_title="Strength · Cycling Coach", layout="wide")
-inject_styles()
 page_header("Strength", "Phase based gym work that supports your riding")
+
+unit = weight_unit()   # set once in Settings
 
 # ── Cycling-specific strength plans ──────────────────────────────────────────
 
@@ -116,6 +116,55 @@ PLANS = {
     },
 }
 
+# ── Sessions your coach planned ──────────────────────────────────────────────
+
+def is_planned(s: dict) -> bool:
+    return not s.get("completed") and "Planned by AI Coach" in (s.get("notes") or "")
+
+
+planned = sorted((s for s in get_strength_sessions(days_back=14) if is_planned(s)),
+                 key=lambda s: s["date"])
+if planned:
+    section_header("Planned by your coach",
+                   "Log the weights you used and the session counts toward your Strength Progress chart.")
+    for ps in planned:
+        ps_exercises = json.loads(ps["exercises_json"]) if ps.get("exercises_json") else []
+        ps_name = (ps.get("notes") or "").split(" | ")[0]
+        _d = date.fromisoformat(ps["date"])
+        with st.expander(f"{_d:%a %b} {_d.day} · {ps_name}"):
+            with st.form(f"planned_form_{ps['id']}"):
+                ps_duration = st.number_input("Duration (minutes)", 5, 180,
+                                              int(ps.get("duration_minutes") or 45))
+                ps_weights = {}
+                for i, ex in enumerate(ps_exercises):
+                    st.markdown(f"**{ex['name']}** · {ex['sets']} × {ex.get('reps', '')} · "
+                                f"{ex.get('intensity', '')}")
+                    if ex.get("notes"):
+                        st.caption(ex["notes"])
+                    if "bodyweight" not in (ex.get("intensity") or "").lower():
+                        ps_weights[i] = weight_input(
+                            "Weight used", 0.0, key=f"pw_{ps['id']}_{i}", unit=unit,
+                            min_kg=0.0, max_kg=300.0, step_lb=5.0, step_kg=2.5)
+                ps_notes = st.text_area("Notes", key=f"pn_{ps['id']}",
+                                        placeholder="How did it go? Any PRs?")
+                if st.form_submit_button("Save Session", icon=":material/save:"):
+                    logged = []
+                    for i, ex in enumerate(ps_exercises):
+                        row = dict(ex)
+                        if ps_weights.get(i, 0) > 0:
+                            row["weight_kg"] = ps_weights[i]
+                        logged.append(row)
+                    mark_strength_complete(ps["id"], ps_duration, f"{ps_name} | {ps_notes}",
+                                           json.dumps(logged))
+                    st.success("Session logged!")
+                    st.rerun()
+            if st.button("Remove this session", key=f"rm_planned_{ps['id']}", icon=":material/delete:",
+                         help="Takes this planned session off your plan and calendar"):
+                delete_strength_session(ps["id"])
+                st.toast("Removed " + ps_name)
+                st.rerun()
+    st.divider()
+
 # ── Phase selector ────────────────────────────────────────────────────────────
 col_plan, col_log = st.columns([2, 1])
 
@@ -155,12 +204,11 @@ with col_log:
             weights = {}
             for ex in exercises:
                 if ex.get("intensity") not in ("Bodyweight",) and "%" not in ex.get("intensity", ""):
-                    w = st.number_input(f"{ex['name']} — weight used (kg)",
-                                        min_value=0.0, max_value=300.0,
-                                        value=0.0, step=2.5, key=f"w_{ex['name']}")
+                    w = weight_input(f"{ex['name']}, weight used", 0.0, key=f"w_{ex['name']}",
+                                     unit=unit, min_kg=0.0, max_kg=300.0, step_lb=5.0, step_kg=2.5)
                     weights[ex["name"]] = w
 
-            if st.form_submit_button("Save Session ✅"):
+            if st.form_submit_button("Save Session", icon=":material/save:"):
                 # Attach logged weights to exercises
                 enriched = []
                 for ex in exercises:
@@ -175,6 +223,7 @@ with col_log:
                     "exercises_json": json.dumps(enriched),
                     "duration_minutes": duration,
                     "notes": f"{session_name} | {notes}",
+                    "completed": 1,
                 })
                 st.session_state.pop("log_session", None)
                 st.session_state.pop("log_exercises", None)
@@ -185,7 +234,7 @@ with col_log:
 
     # ── Session history ───────────────────────────────────────────────────────
     st.subheader("Recent Sessions")
-    sessions = get_strength_sessions(days_back=60)
+    sessions = [s for s in get_strength_sessions(days_back=60) if not is_planned(s)]
     if sessions:
         for s in sessions[:10]:
             exercises = json.loads(s["exercises_json"]) if s.get("exercises_json") else []
@@ -194,12 +243,18 @@ with col_log:
                 ex_names += f" +{len(exercises)-3} more"
             st.markdown(f"**{s['date']}** · {s.get('notes', '')[:50]}")
             st.caption(f"{s.get('duration_minutes', '?')} min · {ex_names}")
+            with st.popover("Remove", icon=":material/delete:", key=f"rm_logged_pop_{s['id']}"):
+                st.caption("This deletes the logged session and the weights you recorded.")
+                if st.button("Yes, delete it", key=f"rm_logged_{s['id']}", type="primary"):
+                    delete_strength_session(s["id"])
+                    st.toast("Removed the session")
+                    st.rerun()
     else:
         st.info("No sessions logged yet.")
 
 # ── Progress tracker ──────────────────────────────────────────────────────────
 st.divider()
-st.subheader("Strength Progress")
+section_header("Strength Progress", "Weight used over time for each lift you have logged")
 
 sessions_all = get_strength_sessions(days_back=180)
 lift_data: dict[str, list] = {}
@@ -223,14 +278,13 @@ if lift_data:
     lift_df = pd.DataFrame(lift_data[selected_lift]).sort_values("date")
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=lift_df["date"], y=lift_df["weight_kg"],
+    fig.add_trace(go.Scatter(x=lift_df["date"], y=[from_kg(w, unit) for w in lift_df["weight_kg"]],
                               mode="lines+markers", name=selected_lift,
-                              line=dict(color="#2196F3", width=2),
-                              marker=dict(size=8)))
-    fig.update_layout(height=280, plot_bgcolor="#1C1F2E",
-                       yaxis_title="Weight (kg)", xaxis_title="Date",
-                       margin=dict(l=10, r=10, t=10, b=10))
-    st.plotly_chart(fig, width="stretch")
+                              line=dict(color=theme.STRENGTH, width=2),
+                              marker=dict(size=8, color=theme.STRENGTH)))
+    charts.apply_theme(fig, height=280, legend="none")
+    fig.update_layout(yaxis_title=f"Weight ({unit})", xaxis_title="Date")
+    charts.show(fig, key="strength_progress")
 else:
     st.info("Log sessions with weights to see your strength progress over time.")
 

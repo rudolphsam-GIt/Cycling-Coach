@@ -64,16 +64,6 @@ def get_hr_zones(lthr: float) -> list[dict]:
     return zones
 
 
-def watts_to_zone(watts: float, ftp: float) -> int:
-    if not ftp or not watts:
-        return 0
-    pct = watts / ftp * 100
-    for i in range(len(POWER_ZONE_PCT) - 1):
-        if pct < POWER_ZONE_PCT[i + 1]:
-            return i + 1
-    return 7
-
-
 def _hr_to_zone(hr: float, lthr: float) -> int:
     """Map an HR value to zone 1-5."""
     pct = hr / lthr * 100

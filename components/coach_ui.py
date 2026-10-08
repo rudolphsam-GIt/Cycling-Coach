@@ -4,12 +4,21 @@ workouts the coach proposed with a confirm button.
 """
 from __future__ import annotations
 
+import json
+
 import pandas as pd
 import streamlit as st
 
 import claude_client
 import coach_tools
-from db.queries import add_workout
+import plan_changes
+from db.queries import add_workout, add_strength_session, save_phase_notes
+
+# Jumping to the Plan page's calendar. The Plan page copies PLAN_JUMP_KEY into its
+# tab bar state before drawing the tabs and maps the value to its own tab label.
+PLAN_PAGE = "pages/02_Training_Planner.py"
+PLAN_JUMP_KEY = "plan_jump"
+PLAN_JUMP_CALENDAR = "calendar"
 
 
 def local_time(utc_iso: str) -> str:
@@ -23,7 +32,7 @@ def local_time(utc_iso: str) -> str:
 
 
 def stream_reply(system: list[dict], messages: list[dict], effort: str,
-                 proposals: list[dict]) -> tuple[str, str | None]:
+                 proposals: list[dict], model: str = claude_client.MODEL) -> tuple[str, str | None]:
     """
     Stream the coach's reply into the current container, running tools as needed.
     Workouts the coach proposes are appended to `proposals`.
@@ -37,7 +46,7 @@ def stream_reply(system: list[dict], messages: list[dict], effort: str,
     events = claude_client.stream_chat(
         system, messages, coach_tools.TOOLS,
         lambda name, args: coach_tools.run_tool(name, args, proposals),
-        effort=effort,
+        effort=effort, model=model,
     )
     for kind, value in events:
         if kind == "text":
@@ -63,30 +72,169 @@ def stream_reply(system: list[dict], messages: list[dict], effort: str,
     return reply, error
 
 
-def proposal_card(state_key: str) -> None:
-    """Show proposed workouts stored in st.session_state[state_key] with confirm/discard."""
+def _proposal_key(p: dict) -> tuple:
+    """New items are identified by date and kind, changes by the item they change."""
+    if p.get("kind") == "change":
+        return plan_changes.key(p)
+    return (p.get("kind", "ride"), p["date"])
+
+
+def merge_proposals(existing: list[dict] | None, new: list[dict]) -> list[dict]:
+    """
+    Combine a new proposal with one the athlete hasn't confirmed yet. Anything
+    new for a date and kind replaces the old entry for that date and kind (a change
+    replaces an earlier change to the same workout), so a revised block doesn't
+    duplicate rows while an additive request ("also add a recovery day Friday")
+    keeps everything else already on screen.
+    """
+    replaced = {_proposal_key(p) for p in new}
+    kept = [p for p in (existing or []) if _proposal_key(p) not in replaced]
+    return sorted(kept + new, key=lambda p: (p["date"], p.get("kind", "ride")))
+
+
+def jump_to_calendar(day_iso: str, on_plan_page: bool = False) -> None:
+    """Open the Plan page's calendar on the month and day of `day_iso`."""
+    from datetime import date
+    d = date.fromisoformat(day_iso)
+    st.session_state["cal_ym"] = (d.year, d.month)
+    st.session_state["cal_sel"] = day_iso
+    st.session_state[PLAN_JUMP_KEY] = PLAN_JUMP_CALENDAR
+    if on_plan_page:
+        st.rerun()
+    else:
+        st.switch_page(PLAN_PAGE)
+
+
+def _ride_frame(items: list) -> pd.DataFrame:
+    """The proposed rides as a table, with why and how it should feel when given."""
+    df = pd.DataFrame(items).rename(columns={
+        "date": "Date", "name": "Workout", "workout_type": "Type", "description": "Details",
+        "tss_planned": "TSS", "week_number": "Week", "purpose": "Why", "feel": "Feel"})
+    cols = [c for c in ["Week", "Date", "Workout", "Type", "Why", "Feel", "Details", "TSS"]
+            if c in df.columns and df[c].notna().any()]
+    return df[cols]
+
+
+def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
+    """
+    Show workouts and/or strength sessions proposed by the coach, stored in
+    st.session_state[state_key], with confirm/discard. Each item is tagged
+    kind="ride" or kind="strength" (propose_workouts/propose_strength_sessions
+    in coach_tools.py); a multi-week ride block additionally carries phase /
+    week_number, which groups the preview instead of showing one flat list.
+
+    After the items are added, a "View on calendar" button opens the Plan page
+    on the earliest added date. `on_plan_page` says whether this card is already
+    drawn on the Plan page (then it just switches tab) or on another page (then
+    it navigates there).
+    """
     added_key = f"{state_key}_added"
-    if added := st.session_state.pop(added_key, None):
-        st.success(f"Added {added} workout{'s' if added > 1 else ''} to your Training Planner.")
+    added = st.session_state.get(added_key)
+    if added:
+        # Show this for the run that follows the add and one more, so a click on
+        # "View on calendar" in that second run still finds its button.
+        if added["shown"]:
+            st.session_state.pop(added_key)
+        else:
+            added["shown"] = True
+        parts = []
+        if added["rides"]:
+            parts.append(f"added {added['rides']} ride{'s' if added['rides'] > 1 else ''}")
+        if added["strength"]:
+            parts.append(f"added {added['strength']} strength session{'s' if added['strength'] > 1 else ''}")
+        for key, verb in (("moved", "moved"), ("updated", "edited"), ("removed", "removed")):
+            if added.get(key):
+                parts.append(f"{verb} {added[key]}")
+        if parts:
+            text = ", ".join(parts)
+            st.success(f"Done. {text[0].upper() + text[1:]}.")
+        for skipped in added.get("skipped", []):
+            st.warning(f"Skipped {skipped['name']}. {skipped['why']}.")
+        if parts and added.get("first"):
+            if st.button("View on calendar", key=f"{state_key}_viewcal", icon=":material/calendar_month:"):
+                jump_to_calendar(added["first"], on_plan_page)
 
     proposed = st.session_state.get(state_key)
     if not proposed:
         return
+
+    rides = [p for p in proposed if p.get("kind", "ride") == "ride"]
+    strength = [p for p in proposed if p.get("kind") == "strength"]
+    changes = [p for p in proposed if p.get("kind") == "change"]
+
     with st.container(border=True):
-        st.markdown("**Proposed workouts** · review before adding to your planner")
-        st.dataframe(
-            pd.DataFrame(proposed).rename(columns={
-                "date": "Date", "name": "Workout", "workout_type": "Type",
-                "description": "Details", "tss_planned": "TSS"}),
-            hide_index=True, width="stretch",
-        )
+        st.markdown("**Proposed changes** · review before they touch your calendar" if changes and not
+                    (rides or strength) else "**Proposed plan** · review before adding to your calendar")
+
+        if changes:
+            if rides or strength:
+                st.markdown(f"**Changes to your plan · {len(changes)}**")
+            for c in changes:
+                icon = {"remove": ":material/delete:", "move": ":material/event:",
+                        "update": ":material/edit:"}[c["action"]]
+                st.markdown(f"{icon} {plan_changes.describe(c)}")
+                st.caption(f"Why. {c['reason']}")
+
+        if rides:
+            by_phase: dict[str, list] = {}
+            for r in rides:
+                by_phase.setdefault(r.get("phase") or "Workouts", list()).append(r)
+            has_phases = any(r.get("phase") for r in rides)
+            for phase_name, items in by_phase.items():
+                if has_phases:
+                    phase_tss = sum(i.get("tss_planned") or 0 for i in items)
+                    # A plain heading rather than an expander, so this card can
+                    # sit inside the Weekly Check In expander without nesting.
+                    st.markdown(f"**{phase_name}** · {len(items)} rides · {phase_tss:.0f} TSS")
+                    note = next((i["phase_note"] for i in items if i.get("phase_note")), None)
+                    if note:
+                        st.markdown(f"**Focus.** {note['focus']}  \n{note['why']}")
+                st.dataframe(_ride_frame(items), hide_index=True, width="stretch",
+                             column_config={"Why": st.column_config.TextColumn(width="large"),
+                                            "Feel": st.column_config.TextColumn(width="medium"),
+                                            "Details": st.column_config.TextColumn(width="medium")})
+
+        if strength:
+            st.markdown(f"**Strength · {len(strength)} session{'s' if len(strength) > 1 else ''}**")
+            for s in strength:
+                ex_names = ", ".join(e["name"] for e in s.get("exercises", [])[:4])
+                more = f" +{len(s['exercises']) - 4} more" if len(s.get("exercises", [])) > 4 else ""
+                st.caption(f"{s['date']} · **{s['name']}** · {ex_names}{more}")
+                if s.get("purpose"):
+                    st.caption(f"Why. {s['purpose']}")
+
         c1, c2 = st.columns(2)
-        if c1.button("Add to Training Planner", type="primary", width="stretch",
-                     key=f"{state_key}_add"):
-            for w in proposed:
-                add_workout({**w, "structured_json": None, "notes": "Planned by AI Coach"})
+        adding = bool(rides or strength)
+        label = ("Add to Training Planner" if adding and not changes else
+                 "Apply changes" if changes and not adding else "Add and apply changes")
+        if c1.button(label, type="primary", width="stretch", key=f"{state_key}_add"):
+            for w in rides:
+                add_workout({
+                    "date": w["date"], "name": w["name"], "workout_type": w["workout_type"],
+                    "description": w["description"], "structured_json": None,
+                    "tss_planned": w["tss_planned"], "notes": "Planned by AI Coach",
+                    "phase": w.get("phase"), "week_number": w.get("week_number"),
+                    "purpose": w.get("purpose"), "feel": w.get("feel"),
+                })
+            save_phase_notes([{"name": w["phase"], **w["phase_note"]} for w in rides
+                              if w.get("phase") and w.get("phase_note")])
+            for s in strength:
+                add_strength_session({
+                    "date": s["date"], "plan_week": s.get("week_number"),
+                    "exercises_json": json.dumps(s["exercises"]),
+                    "duration_minutes": s.get("duration_minutes"),
+                    "notes": f"{s['name']} | Planned by AI Coach",
+                    "phase": s.get("phase"), "purpose": s.get("purpose"),
+                })
+            outcome = plan_changes.apply_changes(changes) if changes else {}
+            dates = [p["date"] for p in rides + strength] + ([outcome["first"]] if outcome.get("first") else [])
             st.session_state.pop(state_key)
-            st.session_state[added_key] = len(proposed)
+            st.session_state[added_key] = {"rides": len(rides), "strength": len(strength),
+                                           "moved": outcome.get("moved", 0), "updated": outcome.get("updated", 0),
+                                           "removed": outcome.get("removed", 0),
+                                           "skipped": outcome.get("skipped", []),
+                                           "first": min(dates) if dates else None,
+                                           "shown": False}
             st.rerun()
         if c2.button("Discard", width="stretch", key=f"{state_key}_discard"):
             st.session_state.pop(state_key)
@@ -94,7 +242,7 @@ def proposal_card(state_key: str) -> None:
 
 
 def report_block(kind: str, ref_key: str, title: str, prompt: str, *,
-                 button_label: str, auto: bool = False) -> None:
+                 button_label: str, auto: bool = False, on_plan_page: bool = False) -> None:
     """
     Show a saved coach report, or write one when asked (or right away if auto).
     Proposed workouts from the report get their own confirm card.
@@ -130,6 +278,7 @@ def report_block(kind: str, ref_key: str, title: str, prompt: str, *,
                 coach_context.system_blocks(coach_reports.REPORT_RULES),
                 [{"role": "user", "content": prompt}],
                 coach_reports.EFFORT.get(kind, "medium"), proposals,
+                coach_reports.MODEL.get(kind, claude_client.MODEL),
             )
             if not error and reply.strip():
                 save_report(kind, ref_key, title, reply)
@@ -141,4 +290,4 @@ def report_block(kind: str, ref_key: str, title: str, prompt: str, *,
                 st.session_state[run_key] = True
                 st.rerun()
 
-    proposal_card(state_key)
+    proposal_card(state_key, on_plan_page=on_plan_page)

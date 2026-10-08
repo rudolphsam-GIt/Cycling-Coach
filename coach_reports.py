@@ -10,13 +10,17 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import claude_client
+
 REPORT_RULES = """You are writing a saved report the athlete will read on its own page, not a chat
 reply. Start with a one line headline in bold that sums up the verdict. Use short sections with
 ### headings. Look up whatever data you need with your tools before writing, and only quote
 numbers you found. Don't call remember while writing a report; notes are only for things the
 athlete tells you in conversation."""
 
-EFFORT = {"ride_review": "medium", "weekly": "high", "race_plan": "high"}
+EFFORT = {"ride_review": "low", "weekly": "medium", "race_plan": "high"}
+# Ride reviews are short and routine, so they run on the cheaper model. Planning stays on Opus.
+MODEL = {"ride_review": claude_client.LIGHT_MODEL}
 
 
 def _fmt_minutes(seconds) -> str:
@@ -85,13 +89,15 @@ Look up that week's rides, the weekly summary for the last 4 weeks, my sleep and
 my daily check ins, my races, and what's already planned for {next_start} to {next_end}.
 Then write:
 ### How the week went
-Planned vs actual TSS, the key sessions, and the recovery trend.
+In plain words, what the week was meant to do, whether it did that, planned vs actual TSS, the
+key sessions, and the recovery trend.
 ### What I noticed
 Anything worth changing, grounded in the numbers and in what you know about me.
 ### The next 7 days
-The focus and why. Then call propose_workouts with the plan for {next_start} to {next_end},
-working around anything already planned and any race. Include rest days only as gaps, not as
-workouts.
+What next week builds toward, how it connects to my goal, and why it is shaped this way. Then call
+propose_workouts with the plan for {next_start} to {next_end}, giving every workout a purpose and
+a feel, working around anything already planned and any race. Include rest days only as gaps, not
+as workouts.
 
 Keep the written part under 350 words."""
     title = f"Week of {week_start:%b %d}"

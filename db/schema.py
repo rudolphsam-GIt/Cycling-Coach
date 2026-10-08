@@ -57,7 +57,9 @@ CREATE TABLE IF NOT EXISTS workouts (
     tss_planned REAL,
     completed INTEGER DEFAULT 0,
     activity_id INTEGER,
-    notes TEXT
+    notes TEXT,
+    phase TEXT,
+    week_number INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS races (
@@ -78,7 +80,8 @@ CREATE TABLE IF NOT EXISTS strength_sessions (
     exercises_json TEXT,
     completed INTEGER DEFAULT 0,
     duration_minutes INTEGER,
-    notes TEXT
+    notes TEXT,
+    phase TEXT
 );
 
 CREATE TABLE IF NOT EXISTS recovery_daily (
@@ -111,6 +114,57 @@ CREATE TABLE IF NOT EXISTS coach_memory (
     active INTEGER DEFAULT 1
 );
 
+CREATE TABLE IF NOT EXISTS activity_peaks (
+    activity_id INTEGER NOT NULL,
+    duration_s INTEGER NOT NULL,
+    watts REAL NOT NULL,
+    PRIMARY KEY (activity_id, duration_s)
+);
+
+CREATE TABLE IF NOT EXISTS activity_streams (
+    activity_id INTEGER PRIMARY KEY,
+    data TEXT NOT NULL,
+    source TEXT,
+    fetched_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS external_sync (
+    service TEXT NOT NULL,             -- intervals or trainingpeaks
+    workout_id INTEGER NOT NULL,
+    remote_id TEXT,
+    date TEXT NOT NULL,
+    fingerprint TEXT,
+    pushed_at TEXT NOT NULL,
+    PRIMARY KEY (service, workout_id)
+);
+
+CREATE TABLE IF NOT EXISTS programs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL,              -- draft, active, archived or discarded
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    content_json TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    executed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS plan_phases (
+    phase TEXT PRIMARY KEY,
+    focus TEXT,
+    why TEXT,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS activity_hr_peaks (
+    activity_id INTEGER NOT NULL,
+    duration_s INTEGER NOT NULL,
+    bpm REAL NOT NULL,
+    PRIMARY KEY (activity_id, duration_s)
+);
+
 CREATE TABLE IF NOT EXISTS ai_conversations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp TEXT NOT NULL,
@@ -118,6 +172,17 @@ CREATE TABLE IF NOT EXISTS ai_conversations (
     content TEXT NOT NULL,
     context_snapshot TEXT
 );
+"""
+
+# Date lookups drive nearly every page, so index them. Created after the
+# ALTER TABLE block so older databases have every column first.
+INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_activities_date ON activities(date);
+CREATE INDEX IF NOT EXISTS idx_workouts_date ON workouts(date);
+CREATE INDEX IF NOT EXISTS idx_workouts_activity ON workouts(activity_id);
+CREATE INDEX IF NOT EXISTS idx_strength_date ON strength_sessions(date);
+CREATE INDEX IF NOT EXISTS idx_races_date ON races(date);
+CREATE INDEX IF NOT EXISTS idx_programs_status ON programs(status);
 """
 
 
@@ -143,10 +208,24 @@ def run_migrations():
         "ALTER TABLE races ADD COLUMN legs_feel INTEGER",
         "ALTER TABLE races ADD COLUMN result_notes TEXT",
         "ALTER TABLE races ADD COLUMN result_logged INTEGER DEFAULT 0",
+        "ALTER TABLE workouts ADD COLUMN garmin_workout_id TEXT",
+        "ALTER TABLE workouts ADD COLUMN garmin_schedule_id TEXT",
+        "ALTER TABLE workouts ADD COLUMN garmin_sent_at TEXT",
+        "ALTER TABLE workouts ADD COLUMN phase TEXT",
+        "ALTER TABLE workouts ADD COLUMN week_number INTEGER",
+        "ALTER TABLE strength_sessions ADD COLUMN phase TEXT",
+        "ALTER TABLE workouts ADD COLUMN purpose TEXT",
+        "ALTER TABLE workouts ADD COLUMN feel TEXT",
+        "ALTER TABLE strength_sessions ADD COLUMN purpose TEXT",
+        "ALTER TABLE activities ADD COLUMN tss_locked INTEGER DEFAULT 0",
+        "ALTER TABLE activities ADD COLUMN edited INTEGER DEFAULT 0",
+        "ALTER TABLE activities ADD COLUMN original_json TEXT",
     ]:
         try:
             conn.execute(col_sql)
             conn.commit()
         except Exception:
             pass
+    conn.executescript(INDEXES)
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.close()

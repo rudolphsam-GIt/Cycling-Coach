@@ -1,5 +1,5 @@
-streamlit>=1.35.0
-plotly>=5.20.0
+streamlit>=1.64.0
+plotly>=6.0
 pandas>=2.0.0
 numpy>=1.24.0
 anthropic>=1.8.0
@@ -7,4 +7,6 @@ garminconnect>=0.3.16
 python-dotenv>=1.0.0
 requests>=2.31.0
 fitparse>=1.2.0
+fit-tool>=0.9.14
 pillow>=10.0.0
+reportlab>=4.0
