@@ -536,6 +536,7 @@ def strength_dialog(item_id) -> None:
 
 
 def render_calendar_tab() -> None:
+    plan_export.tp_status("cal_tp", invite=False)
     state = plan_impact.load_plan_state(today)
     sel = plan_cal.render_month_calendar("cal")
     plan_impact_ui.render_undo_bar()
