@@ -189,7 +189,9 @@ def tp_status(key: str = "export_tp", invite: bool = True) -> None:
                   help="Send every upcoming ride to your TrainingPeaks calendar now"):
         with st.spinner("Sending to TrainingPeaks…"):
             try:
-                trainingpeaks.sync_upcoming()
+                ran = trainingpeaks.run_locked()
             except trainingpeaks.TPError:
-                pass            # recorded as the last result, which the app shows as a toast
+                ran = True      # recorded as the last result, which the app shows as a toast
+        if ran is None:
+            st.toast("A sync is already running. It will finish on its own.")
         st.rerun()

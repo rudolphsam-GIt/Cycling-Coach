@@ -56,11 +56,17 @@ class SyncDueTests(Base):
         q.set_setting("plan_changed_at", "")
         self.assertTrue(tp.sync_due(now + timedelta(hours=25)))
 
-    def test_free_accounts_only_sync_today_and_tomorrow(self):
+    def test_premium_runs_to_the_last_planned_ride_and_free_to_tomorrow(self):
+        self.ride(D(3))
+        self.ride(D(180), name="Far")
+        q.set_setting(tp.PREMIUM_SETTING, "1")
+        self.assertEqual(tp.sync_range(TODAY), (D(0), D(180)))
         q.set_setting(tp.PREMIUM_SETTING, "0")
         self.assertEqual(tp.sync_range(TODAY), (D(0), D(1)))
+
+    def test_nothing_planned_means_just_today(self):
         q.set_setting(tp.PREMIUM_SETTING, "1")
-        self.assertEqual(tp.sync_range(TODAY), (D(0), D(tp.PREMIUM_DAYS - 1)))
+        self.assertEqual(tp.sync_range(TODAY), (D(0), D(0)))
 
 
 class SyncUpcomingTests(Base):
@@ -128,6 +134,90 @@ class SyncUpcomingTests(Base):
         self.assertTrue(tp.is_premium())
         self.assertFalse(tp.needs_signin())
         self.assertTrue(tp.sync_due())
+
+
+class NoDuplicatesTests(Base):
+    def setUp(self):
+        super().setUp()
+        q.set_setting(tp.COOKIE_SETTING, "abc")
+        q.set_setting(tp.ENABLED_SETTING, "1")
+        q.set_setting(tp.PREMIUM_SETTING, "1")
+
+    def deletes(self, s):
+        return sorted(c["url"].rsplit("/", 1)[-1] for c in s.calls if c["method"] == "DELETE")
+
+    def posts(self, s):
+        return [c for c in s.calls if c["method"] == "POST"]
+
+    def test_a_ride_six_months_out_is_sent(self):
+        _steps_saved([self.ride(D(180), name="Far")])
+        out = tp.sync_upcoming(TODAY, client=tp.Client("abc", session=tp_session()))
+        self.assertEqual(out["sent"], 1)
+
+    def test_a_zip_import_is_replaced_and_ridden_or_other_workouts_are_left(self):
+        w = self.ride(D(2), name="Tempo blocks")
+        _steps_saved([w])
+        listing = [
+            {"workoutId": 11, "title": f"{D(2)} Tempo blocks"},               # from the .zwo download
+            {"workoutId": 12, "title": "tempo blocks"},                        # dragged in by name
+            {"workoutId": 13, "title": "Tempo blocks", "totalTime": 1.2},      # ridden, keep
+            {"workoutId": 14, "title": "Coach's recovery spin"},               # someone else's, keep
+        ]
+        s = tp_session(listing=listing)
+        out = tp.sync_upcoming(TODAY, client=tp.Client("abc", session=s))
+        self.assertEqual(out["sent"], 1)
+        self.assertEqual(self.deletes(s), ["11", "12"])
+        self.assertEqual(len(self.posts(s)), 1)
+
+    def test_our_own_copy_is_never_mistaken_for_an_import(self):
+        w = self.ride(D(2), name="A")
+        _steps_saved([w])
+        tp.sync_upcoming(TODAY, client=tp.Client("abc", session=tp_session()))    # sent as 555
+        q.update_workout(w["id"], {**q.get_workout(w["id"]), "tss_planned": 90})
+        _steps_saved([w])
+        s = tp_session(listing=[{"workoutId": 555, "title": "A"}], created={"workoutId": 556})
+        tp.sync_upcoming(TODAY, client=tp.Client("abc", session=s))
+        self.assertEqual(self.deletes(s), ["555"])                                  # replaced once
+        self.assertEqual(len(self.posts(s)), 1)
+
+    def test_a_send_with_no_id_back_is_cleaned_up_next_time(self):
+        w = self.ride(D(2), name="A")
+        _steps_saved([w])
+        q.save_synced(tp.SERVICE, [{"workout_id": w["id"], "remote_id": None, "date": D(2),
+                                    "fingerprint": "old"}])
+        s = tp_session(listing=[{"workoutId": 40, "title": "A"}], created={"workoutId": 41})
+        tp.sync_upcoming(TODAY, client=tp.Client("abc", session=s))
+        self.assertEqual(self.deletes(s), ["40"])
+        self.assertEqual(q.get_synced(tp.SERVICE)[w["id"]]["remote_id"], "41")
+
+    def test_marking_a_ride_done_keeps_it_on_trainingpeaks(self):
+        w = self.ride(D(0), name="Today")
+        _steps_saved([w])
+        tp.sync_upcoming(TODAY, client=tp.Client("abc", session=tp_session()))
+        q.update_workout(w["id"], {**q.get_workout(w["id"]), "completed": 1})
+        s = tp_session()
+        out = tp.sync_upcoming(TODAY, client=tp.Client("abc", session=s))
+        self.assertEqual((out["removed"], self.deletes(s)), (0, []))
+
+    def test_deleting_the_furthest_ride_removes_it(self):
+        near, far = self.ride(D(3), name="Near"), self.ride(D(150), name="Far")
+        _steps_saved([near, far])
+        tp.sync_upcoming(TODAY, client=tp.Client("abc", session=tp_session(created={"workoutId": 9})))
+        q.delete_workout(far["id"])
+        s = tp_session()
+        out = tp.sync_upcoming(TODAY, client=tp.Client("abc", session=s))
+        self.assertEqual(out["removed"], 1)
+        self.assertNotIn(far["id"], q.get_synced(tp.SERVICE))
+
+    def test_only_one_sync_runs_at_a_time(self):
+        with mock.patch.object(tp, "sync_upcoming", return_value={"sent": 0}) as run:
+            tp._sync_lock.acquire()
+            try:
+                self.assertIsNone(tp.run_locked())
+            finally:
+                tp._sync_lock.release()
+            self.assertEqual(tp.run_locked(), {"sent": 0})
+        run.assert_called_once()
 
 
 class LoginWindowTests(unittest.TestCase):

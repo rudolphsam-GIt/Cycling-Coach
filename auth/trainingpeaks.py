@@ -163,12 +163,40 @@ def fingerprint(workout: dict, steps: list) -> str:
                                     workout.get("purpose"), workout.get("feel"), steps]).encode()).hexdigest()
 
 
-def sync(rows: list[tuple[dict, list]], start: str, end: str, client: Client | None = None) -> dict:
+def _planned_only(tp_workout: dict) -> bool:
+    """True for a workout that is only a plan, with no ride recorded against it."""
+    return not any(tp_workout.get(k) for k in ("totalTime", "distance", "tssActual", "completed"))
+
+
+def _clear_imports(c: Client, workout: dict, listings: dict, known: set) -> None:
+    """Delete planned workouts on this ride's day that are copies of it this app didn't send, such
+    as ones dragged in from the .zwo download, so the calendar never shows the ride twice. Only
+    matching titles, only plans with nothing ridden, and never a copy this app tracks."""
+    from exporters import dated_title
+    day = workout["date"]
+    if day not in listings:
+        listings[day] = c.workouts(day, day)
+    titles = {(workout.get("name") or "Workout").strip().lower(), dated_title(workout).strip().lower()}
+    for w in listings[day]:
+        wid = str(w.get("workoutId") or "")
+        if (wid and wid not in known and (w.get("title") or "").strip().lower() in titles
+                and _planned_only(w)):
+            c.delete(wid)
+            known.add(wid)          # gone now, never delete it twice
+
+
+def sync(rows: list[tuple[dict, list]], start: str, end: str, client: Client | None = None,
+         keep_ids: set | None = None) -> dict:
     """Put these rides on the TrainingPeaks calendar. Unchanged ones are skipped, changed or moved
-    ones are replaced, and ones removed from the plan in this range are deleted. A failure on one
-    ride is reported and the rest carry on, except a sign in failure, which stops the sync."""
+    ones are replaced, and ones removed from the plan are deleted. A ride sent for the first time
+    replaces a matching plan already on that day (a .zwo import), so nothing is duplicated.
+    `keep_ids` are workouts still in the plan that aren't being sent (done, or no steps yet), which
+    must not be deleted. A failure on one ride is reported and the rest carry on, except a sign in
+    failure, which stops the sync."""
     c = client or Client()
     synced = q.get_synced(SERVICE)
+    known = {str(r["remote_id"]) for r in synced.values() if r.get("remote_id")}
+    listings: dict[str, list] = {}
     done, failed, unchanged = [], [], 0
     for workout, steps in rows:
         fp = fingerprint(workout, steps)
@@ -179,7 +207,11 @@ def sync(rows: list[tuple[dict, list]], start: str, end: str, client: Client | N
         try:
             if old and old.get("remote_id"):
                 c.delete(old["remote_id"])
+            else:
+                _clear_imports(c, workout, listings, known)
             remote = c.create(payload(c.user_id, workout, steps))
+            if remote:
+                known.add(str(remote))
             done.append({"workout_id": workout["id"], "remote_id": remote, "date": workout["date"],
                          "fingerprint": fp})
         except TPAuthError:
@@ -188,8 +220,10 @@ def sync(rows: list[tuple[dict, list]], start: str, end: str, client: Client | N
         except (TPError, requests.RequestException) as e:
             failed.append({"name": f"{workout['date']} {workout.get('name')}", "why": str(e)})
     q.save_synced(SERVICE, done)
-    current = {w["id"] for w, _ in rows}
-    stale = [wid for wid, r in synced.items() if start <= r["date"] <= end and wid not in current]
+    # Anything sent for today or later that is no longer in the plan comes off, even past `end`,
+    # so deleting the last ride of a plan still removes its copy.
+    keep = {w["id"] for w, _ in rows} | set(keep_ids or ())
+    stale = [wid for wid, r in synced.items() if r["date"] >= start and wid not in keep]
     removed = []
     for wid in stale:
         try:
@@ -225,7 +259,6 @@ NAME_SETTING = "tp_name"
 NEEDS_SIGNIN_SETTING = "tp_needs_signin"
 LAST_SYNC_SETTING = "tp_last_sync"
 LAST_RESULT_SETTING = "tp_last_result"
-PREMIUM_DAYS = 84        # how far ahead the automatic sync looks
 FREE_DAYS = 2            # without Premium, TrainingPeaks only holds planned workouts for today and tomorrow
 RESYNC_AFTER_HOURS = 24  # sync again at least daily, so a free account rolls forward
 
@@ -260,9 +293,13 @@ def needs_signin() -> bool:
 
 
 def sync_range(today) -> tuple[str, str]:
+    """Premium: today through the last planned ride, however far out. Free accounts: today and
+    tomorrow, all TrainingPeaks lets them plan."""
     from datetime import timedelta
-    days = FREE_DAYS if is_premium() is False else PREMIUM_DAYS
-    return today.isoformat(), (today + timedelta(days=days - 1)).isoformat()
+    if is_premium() is False:
+        return today.isoformat(), (today + timedelta(days=FREE_DAYS - 1)).isoformat()
+    planned = [w["date"] for w in q.get_workouts(today.isoformat(), "9999-12-31") if not w.get("completed")]
+    return today.isoformat(), max(planned, default=today.isoformat())
 
 
 def sync_due(now=None) -> bool:
@@ -337,8 +374,11 @@ def sync_upcoming(today=None, client: Client | None = None, build_steps=None) ->
             skipped += 1
         else:
             rows.append((w, steps))
+    # Every ride still in the plan stays on TrainingPeaks, even ones not sent this time
+    # (done today, or steps not built), so planned vs done survives in TrainingPeaks.
+    keep = {w["id"] for w in q.get_workouts(start, end)}
     try:
-        out = sync(rows, start, end, client or _signed_in_client())
+        out = sync(rows, start, end, client or _signed_in_client(), keep_ids=keep)
     except TPError as e:
         q.set_setting(LAST_RESULT_SETTING, f"err|{started}|{e}")
         raise
@@ -378,19 +418,28 @@ def last_sync_text() -> str:
 _sync_lock = threading.Lock()
 
 
-def start_background_sync() -> bool:
-    """Run sync_upcoming on a background thread so no page waits on TrainingPeaks. Only one runs
-    at a time. Returns False when one was already running."""
+def run_locked(**kwargs) -> dict | None:
+    """sync_upcoming, but only if no other sync is running, so two can never send the same ride
+    twice. None when one was already running."""
     if not _sync_lock.acquire(blocking=False):
+        return None
+    try:
+        return sync_upcoming(**kwargs)
+    finally:
+        _sync_lock.release()
+
+
+def start_background_sync() -> bool:
+    """Run a sync on a background thread so no page waits on TrainingPeaks. False when one is
+    already running."""
+    if is_syncing():
         return False
 
     def run():
         try:
-            sync_upcoming()
+            run_locked()
         except Exception:
             pass        # sync_upcoming records TrainingPeaks errors; anything else waits for the next try
-        finally:
-            _sync_lock.release()
 
     threading.Thread(target=run, name="tp-sync", daemon=True).start()
     return True
