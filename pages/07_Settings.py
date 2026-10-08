@@ -10,6 +10,7 @@ import auth.strava as strava_auth
 import auth.garmin as garmin_auth
 import auth.intervals as intervals_auth
 import auth.trainingpeaks as tp_auth
+from auth import tp_login
 from components import ftp_help
 from components.units import distance_switch, unit_switch, weight_input
 from metrics.explain import (DEFAULT_GENDER, GENDER_LABELS, GENDER_PROFILE_TABLE,
@@ -315,49 +316,76 @@ with tab_connections:
 
     with col_tp:
         st.subheader("TrainingPeaks calendar")
-        st.caption("Optional and unofficial. TrainingPeaks has no public way for apps like this one to add "
-                   "workouts, so this uses the same connection the TrainingPeaks website uses. It can stop "
-                   "working whenever TrainingPeaks changes its site and may go against their terms. The "
-                   "TrainingPeaks download on the export panel always works without it.")
+        st.info("**Needs TrainingPeaks Premium.** Free accounts can only hold planned workouts for today "
+                "and tomorrow. On a free account, use Download for TrainingPeaks on the Plan page "
+                "instead.", icon=":material/workspace_premium:")
+        st.caption("Puts your planned rides on their days in TrainingPeaks and keeps them up to date on its "
+                   "own as your plan changes. Unofficial: TrainingPeaks has no public way for apps like this "
+                   "one to add workouts, so this uses the same connection their website uses. It can stop "
+                   "working whenever TrainingPeaks changes its site and may go against their terms.")
         if msg := st.session_state.pop("tp_msg", None):
-            (st.success if msg[0] == "ok" else st.error)(msg[1])
+            {"ok": st.success, "warn": st.warning}.get(msg[0], st.error)(msg[1])
+
+        def _connected(info: dict) -> None:
+            note = (" Your account isn't Premium, so only today and tomorrow will sync."
+                    if info["premium"] is False else "")
+            st.session_state["tp_msg"] = ("warn" if note else "ok",
+                                          f"Connected as {info['name']}. Your plan syncs on its own.{note}")
+
         if tp_auth.is_enabled():
-            st.success("On. Send rides from Plan, Manage, Export your plan.")
-            if st.button("Test connection", key="tp_test", width="stretch"):
+            if tp_auth.needs_signin():
+                st.warning("TrainingPeaks signed you out, so syncing has paused. Sign in again below.",
+                           icon=":material/lock:")
+            else:
+                name = get_setting(tp_auth.NAME_SETTING, "") or "your account"
+                plan = " (Premium)" if tp_auth.is_premium() else ""
+                st.success(f"Connected as {name}{plan}. {tp_auth.last_sync_text()}.")
+            if tp_auth.is_premium() is False:
+                st.warning("This account isn't Premium, so only today's and tomorrow's rides sync.")
+        ok_unofficial = tp_auth.is_enabled() or st.checkbox(
+            "I understand this is unofficial and may stop working", key="tp_ok")
+        if not tp_auth.is_enabled() or tp_auth.needs_signin():
+            if not tp_login.available():
+                st.caption(tp_login.INSTALL_HINT)
+            elif st.button("Sign in to TrainingPeaks", type="primary", icon=":material/login:",
+                           width="stretch", disabled=not ok_unofficial, key="tp_signin",
+                           help="Opens a Chrome window. Sign in there as you normally would. The app never "
+                                "sees your password."):
+                with st.spinner("A Chrome window opened. Sign in to TrainingPeaks there…"):
+                    try:
+                        _connected(tp_auth.connect(tp_login.sign_in()))
+                    except (tp_login.LoginError, tp_auth.TPError) as e:
+                        st.session_state["tp_msg"] = ("err", str(e))
+                st.rerun()
+        if tp_auth.is_enabled():
+            b1, b2 = st.columns(2)
+            if b1.button("Test connection", key="tp_test", width="stretch"):
                 try:
-                    info = tp_auth.check()
-                    note = "" if info["premium"] is not False else " This account isn't Premium, so only today " \
-                                                                  "and tomorrow can hold planned workouts."
-                    st.session_state["tp_msg"] = ("ok", f"Working. Signed in as {info['name']}.{note}")
+                    _connected(tp_auth.check())
                 except tp_auth.TPError as e:
                     st.session_state["tp_msg"] = ("err", str(e))
                 st.rerun()
-            if st.button("Turn off", key="tp_off", width="stretch"):
-                set_setting(tp_auth.ENABLED_SETTING, "0")
-                set_setting(tp_auth.COOKIE_SETTING, "")
+            if b2.button("Turn off", key="tp_off", width="stretch"):
+                tp_auth.disconnect()
                 st.rerun()
         else:
-            with st.expander("Turn it on"):
-                st.markdown("1. Sign in at app.trainingpeaks.com in Chrome or Safari.\n"
+            with st.expander("Other way: paste a cookie"):
+                st.caption("For when Chrome isn't installed.")
+                st.markdown("1. Sign in at app.trainingpeaks.com.\n"
                             "2. Open the developer tools (in Chrome, View, Developer, Developer Tools), then the "
                             "Application tab (Storage in Safari), then Cookies, tpapi.trainingpeaks.com.\n"
                             "3. Copy the value of the cookie named Production_tpAuth and paste it here.\n"
                             "4. It lasts a few weeks. When it runs out the app asks for a fresh one.")
                 with st.form("tp_form"):
                     cookie = st.text_input("Production_tpAuth cookie", type="password")
-                    ok = st.checkbox("I understand this is unofficial and may stop working")
-                    if st.form_submit_button("Turn on", type="primary", width="stretch"):
-                        if not ok:
-                            st.session_state["tp_msg"] = ("err", "Tick the box first.")
+                    if st.form_submit_button("Turn on", width="stretch"):
+                        if not ok_unofficial:
+                            st.session_state["tp_msg"] = ("err", "Tick the box above first.")
                         else:
                             try:
-                                info = tp_auth.check(cookie.strip())
+                                _connected(tp_auth.connect(cookie.strip()))
                             except tp_auth.TPError as e:
                                 st.session_state["tp_msg"] = ("err", str(e))
-                            else:
-                                set_setting(tp_auth.COOKIE_SETTING, cookie.strip())
-                                set_setting(tp_auth.ENABLED_SETTING, "1")
-                                st.session_state["tp_msg"] = ("ok", f"On. Signed in as {info['name']}.")
                         st.rerun()
 
 # ── Tab 3: Data Tools ─────────────────────────────────────────────────────────

@@ -482,6 +482,14 @@ WORKOUT_TYPES = ["Endurance", "Tempo", "Threshold", "VO2 Max", "Sprint/Anaerobic
                  "Recovery", "Long Ride", "Race", "Other"]
 
 
+def _plan_changed(conn) -> None:
+    """Note that planned workouts changed, so the TrainingPeaks sync knows to run. Written in
+    the caller's connection so it commits with the change itself."""
+    conn.execute("INSERT OR REPLACE INTO athlete_settings (key, value, updated_at) VALUES (?,?,?)",
+                 ("plan_changed_at", datetime.utcnow().isoformat(), datetime.utcnow().isoformat()))
+    _settings_cache.clear()
+
+
 def _insert_workout(conn, data: dict) -> int:
     return conn.execute(
         """INSERT INTO workouts (date, name, workout_type, description,
@@ -496,6 +504,7 @@ def _insert_workout(conn, data: dict) -> int:
 def add_workout(data: dict) -> int:
     conn = get_conn()
     wid = _insert_workout(conn, data)
+    _plan_changed(conn)
     conn.commit()
     conn.close()
     return wid
@@ -526,6 +535,7 @@ def update_workout(wid: int, data: dict):
            WHERE id=:id""",
         {**data, "purpose": data.get("purpose"), "feel": data.get("feel"), "id": wid},
     )
+    _plan_changed(conn)
     conn.commit()
     conn.close()
 
@@ -545,6 +555,7 @@ def move_workout(wid: int, new_date: str) -> dict | None:
            garmin_sent_at=NULL WHERE id=?""",
         (new_date, wid),
     )
+    _plan_changed(conn)
     conn.commit()
     conn.close()
     return dict(row)
@@ -660,6 +671,7 @@ def apply_program_rows(pid: int, *, remove_workout_ids: list, remove_strength_id
         for s_ in strength:
             _insert_strength(conn, s_)
         _upsert_phase_notes(conn, phases)
+        _plan_changed(conn)
         conn.commit()
     except Exception:
         conn.rollback()
@@ -741,6 +753,7 @@ def garmin_status(workout: dict) -> str:
 def delete_workout(wid: int):
     conn = get_conn()
     conn.execute("DELETE FROM workouts WHERE id=?", (wid,))
+    _plan_changed(conn)
     conn.commit()
     conn.close()
 

@@ -99,4 +99,18 @@ if is_setup_complete() and is_onboarding_complete() and not st.session_state.get
         if result:
             st.toast(result[1])
 
+if is_setup_complete() and is_onboarding_complete():
+    # Keep the TrainingPeaks calendar in step with the plan, in the background.
+    import auth.trainingpeaks as tp
+    if tp.is_enabled():
+        if tp.sync_due() and not tp.is_syncing():
+            tp.start_background_sync()
+        res = tp.last_result()
+        when = res[1] if res else ""
+        if "tp_result_seen" not in st.session_state:
+            st.session_state["tp_result_seen"] = when      # don't repeat an old result on arrival
+        elif res and st.session_state["tp_result_seen"] != when:
+            st.toast(res[2], icon=":material/event_upcoming:" if res[0] == "ok" else ":material/warning:")
+            st.session_state["tp_result_seen"] = when
+
 pg.run()

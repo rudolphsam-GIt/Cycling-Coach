@@ -7,7 +7,7 @@ route here, the Garmin send and the single .fit download.
   Download for TrainingPeaks   .zwo files titled with their dates, for the TrainingPeaks library
   Download all files           .zwo, .fit, plan.csv and how to import
   Sync to intervals.icu        dated, on to Zwift on every computer and to Garmin (official API)
-  Send to TrainingPeaks        dated on the TrainingPeaks calendar (unofficial, off unless turned on)
+  TrainingPeaks calendar       synced on its own once signed in (unofficial, needs Premium)
 """
 from __future__ import annotations
 
@@ -135,8 +135,9 @@ def render(today: date | None = None) -> None:
         c1.download_button("Download for TrainingPeaks", data=lambda: exporters.trainingpeaks_zip(rows, folder),
                            file_name=f"{exporters.slug(folder)}_trainingpeaks.zip", mime="application/zip",
                            icon=":material/download:", width="stretch", on_click="ignore",
-                           help="Zwift workout files with the date in each title. Import them all into one "
-                                "TrainingPeaks library folder, then drag each onto its day.")
+                           help="For free TrainingPeaks accounts. Zwift workout files with the date in each "
+                                "title. Import them all into one TrainingPeaks library folder, then drag each "
+                                "onto its day.")
         c2.download_button("Download all files", data=lambda: exporters.all_files_zip(rows, folder),
                            file_name=f"{exporters.slug(folder)}_workouts.zip", mime="application/zip",
                            icon=":material/folder_zip:", width="stretch", on_click="ignore",
@@ -163,26 +164,32 @@ def render(today: date | None = None) -> None:
                 st.rerun()
         else:
             s1.caption("Connect intervals.icu in Settings to get these into Zwift on their dates, on any computer.")
-        if trainingpeaks.is_enabled():
-            if s2.button("Send to TrainingPeaks calendar", icon=":material/event_upcoming:", width="stretch",
-                         key="export_tp",
-                         help="Puts each ride on its date in TrainingPeaks. Uses TrainingPeaks' website, not an "
-                              "official API, so it may stop working."):
-                with st.spinner("Sending to TrainingPeaks…"):
-                    try:
-                        out = trainingpeaks.sync(rows, start, end)
-                    except trainingpeaks.TPError as e:
-                        st.session_state[MSG_KEY] = ("err", str(e))
-                    else:
-                        bits = [f"Sent {out['sent']} rides to TrainingPeaks"]
-                        if out["unchanged"]:
-                            bits.append(f"{out['unchanged']} were already up to date")
-                        if out["removed"]:
-                            bits.append(f"took off {out['removed']} you removed")
-                        text = ", ".join(bits) + "."
-                        if out["failed"]:
-                            text += " Couldn't send " + "; ".join(f"{f['name']} ({f['why']})" for f in out["failed"])
-                        st.session_state[MSG_KEY] = ("warn" if out["failed"] else "ok", text)
-                st.rerun()
-        else:
-            s2.caption("To put rides straight onto your TrainingPeaks calendar, turn it on in Settings.")
+        with s2:
+            tp_status()
+
+
+def tp_status(key: str = "export_tp", invite: bool = True) -> None:
+    """One line on the TrainingPeaks calendar sync, with Sync now. Also used on the Plan calendar,
+    where `invite` is off so riders who don't use TrainingPeaks see nothing."""
+    if not trainingpeaks.is_enabled():
+        if invite:
+                st.caption("Have TrainingPeaks Premium? Sign in from Settings and your rides go onto your "
+                       "TrainingPeaks calendar on their own.")
+        return
+    if trainingpeaks.needs_signin():
+        st.caption("TrainingPeaks signed you out, so syncing has paused.")
+        st.page_link("pages/07_Settings.py", label="Sign in to TrainingPeaks again", icon=":material/login:")
+        return
+    if trainingpeaks.is_syncing():
+        st.caption("Syncing to TrainingPeaks in the background…")
+        return
+    line, btn = st.columns([3, 1.3], vertical_alignment="center")
+    line.caption(f"TrainingPeaks syncs on its own. {trainingpeaks.last_sync_text()}.")
+    if btn.button("Sync now", key=f"{key}_now", icon=":material/sync:", width="stretch",
+                  help="Send every upcoming ride to your TrainingPeaks calendar now"):
+        with st.spinner("Sending to TrainingPeaks…"):
+            try:
+                trainingpeaks.sync_upcoming()
+            except trainingpeaks.TPError:
+                pass            # recorded as the last result, which the app shows as a toast
+        st.rerun()

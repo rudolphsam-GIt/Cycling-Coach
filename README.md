@@ -233,6 +233,8 @@ After that, the program stays on the Coach tab with its PDF, and the coach knows
 
 ## Getting your plan into TrainingPeaks, Zwift and Garmin
 
+**TrainingPeaks, the easy way (needs TrainingPeaks Premium).** Open Settings, Connections, tick the box that says you understand it is unofficial, and press **Sign in to TrainingPeaks**. A Chrome window opens on the TrainingPeaks sign in page. Sign in as you normally would (the app never sees your password) and the window closes itself. From then on your upcoming rides, 12 weeks ahead, go onto your TrainingPeaks calendar on their own: whenever the plan changes (the coach adds a week, you move, edit or delete a ride) the app syncs in the background and shows a short note when it is done. It also syncs once a day. The Plan calendar shows when it last synced and has a Sync now button. When TrainingPeaks eventually signs you out, the app first tries to sign back in quietly with the same Chrome profile. If that does not work, syncing pauses and the Plan page asks you to sign in again. Free TrainingPeaks accounts can only hold planned workouts for today and tomorrow, so on a free account only those two days sync. Use Download for TrainingPeaks below instead. The sign in window needs Google Chrome and the `playwright` package (in `requirements.txt`). Without Chrome, Settings still lets you paste the `Production_tpAuth` cookie by hand.
+
 Open Plan, then Manage. **Export your plan** at the top sends a whole range of rides at once: this week, the next 4 or 12 weeks, your current program, or dates you pick. The Export button on your program card opens it on the program's dates.
 
 The first time, press **Prepare steps**. The coach turns each written workout into steps (warm up, intervals with power targets from your FTP, cool down), a few at a time, and keeps them. After that, every route below is instant and free until you edit a workout. A workout that can't be converted is listed with the reason, never silently left out.
@@ -240,7 +242,7 @@ The first time, press **Prepare steps**. The coach turns each written workout in
 | Route | What you get | Setup |
 |---|---|---|
 | **Download for TrainingPeaks** | Zwift workout files (`.zwo`) with the date at the start of each title. In TrainingPeaks open the Workout Library, make a folder, choose Import from its menu and select them all. They list in date order, then you drag each onto its day. | None. This is the official TrainingPeaks route and always works. |
-| **Send to TrainingPeaks calendar** | Each ride on its date in TrainingPeaks, with its structure. Run it again after changes and moved or edited rides are updated, removed ones deleted. Zwift shows TrainingPeaks workouts on their day when the two are linked. | Optional and **unofficial**. TrainingPeaks has no public API for athletes, so this uses the connection their website uses (like the open source tp2intervals tool). It can stop working whenever TrainingPeaks changes its site and may go against their terms. Turn it on in Settings by pasting your `Production_tpAuth` cookie. Future dates need TrainingPeaks Premium. |
+| **TrainingPeaks calendar** | Each ride on its date in TrainingPeaks, with its structure, kept in step automatically as described above. Moved or edited rides are updated and removed ones deleted. Zwift shows TrainingPeaks workouts on their day when the two are linked. | Optional and **unofficial**, needs **TrainingPeaks Premium**. TrainingPeaks has no public API for athletes, so this uses the connection their website uses (like the open source tp2intervals tool). It can stop working whenever TrainingPeaks changes its site and may go against their terms. Press Sign in to TrainingPeaks in Settings. |
 | **Sync to intervals.icu** | Each ride on its date in intervals.icu (free), which passes them to Zwift on every computer you ride on, under Custom Workouts, intervals.icu, and to Garmin. Run it again after changes. | Paste your intervals.icu API key in Settings (intervals.icu Settings, Developer Settings), then connect Zwift in intervals.icu. This is an official API. |
 | **Download all files** | `.zwo` for Zwift and TrainingPeaks, `.fit` for Garmin, Wahoo and other bike computers, `plan.csv` listing every ride, and how to import each. | None. |
 
@@ -257,7 +259,7 @@ Where things are kept.
 1. Your rides, plans, settings, chat history and coach memory are in `data/cycling.db` inside the project folder. This file is listed in `.gitignore`, so it is never committed to git.
 2. Your API keys are in `.env`, which is also in `.gitignore`.
 3. Your Garmin sign in tokens are in `.cycling_coach_garmin` in your home folder, outside the project.
-4. An intervals.icu API key or TrainingPeaks cookie, if you add one, is kept in `data/cycling.db` and only ever sent to that service.
+4. An intervals.icu API key or TrainingPeaks cookie, if you add one, is kept in `data/cycling.db` and only ever sent to that service. The TrainingPeaks sign in window keeps its own Chrome profile in `data/tp_browser`, also in `.gitignore`. Turn off in Settings deletes it.
 
 What leaves your computer.
 
@@ -307,7 +309,8 @@ program_pdf.py            The program as a PDF
 exporters.py              Zwift workout files and the export zips
 sync.py                   Removing rides from intervals.icu and TrainingPeaks when removed here
 auth/intervals.py         Intervals.icu sync (official API)
-auth/trainingpeaks.py     TrainingPeaks calendar sync (unofficial, optional)
+auth/trainingpeaks.py     TrainingPeaks calendar sync, automatic in the background (unofficial, optional)
+auth/tp_login.py          The Chrome sign in window for TrainingPeaks
 plan_changes.py           Moves, edits and removals of planned workouts, shared by the coach and the buttons
 garmin_workouts.py        Turns workouts into Garmin steps and .fit files
 claude_client.py          Claude calls, streaming, tool loop, error handling

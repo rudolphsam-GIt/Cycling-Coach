@@ -18,6 +18,7 @@ Calls (from tp2intervals, github.com/freekode/tp2intervals):
 from __future__ import annotations
 
 import hashlib
+import threading
 import json
 
 import requests
@@ -215,3 +216,185 @@ def remove(workout_ids: list[int]) -> None:
     except (TPError, requests.RequestException):
         return
     q.drop_synced(SERVICE, ids)
+
+
+# ── Connecting and automatic sync ─────────────────────────────────────────────
+
+PREMIUM_SETTING = "tp_premium"
+NAME_SETTING = "tp_name"
+NEEDS_SIGNIN_SETTING = "tp_needs_signin"
+LAST_SYNC_SETTING = "tp_last_sync"
+LAST_RESULT_SETTING = "tp_last_result"
+PREMIUM_DAYS = 84        # how far ahead the automatic sync looks
+FREE_DAYS = 2            # without Premium, TrainingPeaks only holds planned workouts for today and tomorrow
+RESYNC_AFTER_HOURS = 24  # sync again at least daily, so a free account rolls forward
+
+
+def connect(cookie: str, session: requests.Session | None = None) -> dict:
+    """Check the cookie, then save it and turn the calendar sync on. Returns {"name", "premium"}."""
+    info = check(cookie, session)
+    q.set_setting(COOKIE_SETTING, clean_cookie(cookie))
+    q.set_setting(ENABLED_SETTING, "1")
+    q.set_setting(PREMIUM_SETTING, "" if info["premium"] is None else ("1" if info["premium"] else "0"))
+    q.set_setting(NAME_SETTING, info["name"])
+    q.set_setting(NEEDS_SIGNIN_SETTING, "")
+    q.set_setting(LAST_SYNC_SETTING, "")     # sync everything on the next page load
+    return info
+
+
+def disconnect() -> None:
+    from auth import tp_login
+    for key in (ENABLED_SETTING, COOKIE_SETTING, PREMIUM_SETTING, NAME_SETTING, NEEDS_SIGNIN_SETTING,
+                LAST_SYNC_SETTING, LAST_RESULT_SETTING):
+        q.set_setting(key, "")
+    tp_login.forget()
+
+
+def is_premium() -> bool | None:
+    v = q.get_setting(PREMIUM_SETTING, "")
+    return None if v == "" else v == "1"
+
+
+def needs_signin() -> bool:
+    return q.get_setting(NEEDS_SIGNIN_SETTING, "") == "1"
+
+
+def sync_range(today) -> tuple[str, str]:
+    from datetime import timedelta
+    days = FREE_DAYS if is_premium() is False else PREMIUM_DAYS
+    return today.isoformat(), (today + timedelta(days=days - 1)).isoformat()
+
+
+def sync_due(now=None) -> bool:
+    """True when the plan changed since the last sync, or it has been a day."""
+    from datetime import datetime, timedelta
+    if not is_enabled() or needs_signin():
+        return False
+    last = q.get_setting(LAST_SYNC_SETTING, "")
+    if not last:
+        return True
+    changed = q.get_setting("plan_changed_at", "")
+    if changed and changed > last:
+        return True
+    try:
+        return (now or datetime.utcnow()) - datetime.fromisoformat(last) > timedelta(hours=RESYNC_AFTER_HOURS)
+    except ValueError:
+        return True
+
+
+def _signed_in_client() -> Client:
+    """A client, fetching a fresh cookie from the saved Chrome profile once if the stored one was
+    refused. Marks that a real sign in is needed when that fails too."""
+    try:
+        return Client()
+    except TPAuthError:
+        from auth import tp_login
+        cookie = tp_login.refresh()
+        if cookie:
+            try:
+                c = Client(cookie)
+                q.set_setting(COOKIE_SETTING, clean_cookie(cookie))
+                return c
+            except TPAuthError:
+                pass
+        q.set_setting(NEEDS_SIGNIN_SETTING, "1")
+        raise TPAuthError("TrainingPeaks signed you out. Sign in again in Settings.")
+
+
+def result_text(out: dict) -> str:
+    bits = [f"Sent {out['sent']} ride{'s' if out['sent'] != 1 else ''} to TrainingPeaks"]
+    if out.get("unchanged"):
+        bits.append(f"{out['unchanged']} already up to date")
+    if out.get("removed"):
+        bits.append(f"took off {out['removed']} you removed")
+    text = ", ".join(bits) + "."
+    if out.get("failed"):
+        text += " Couldn't send " + "; ".join(f"{f['name']} ({f['why']})" for f in out["failed"])
+    return text
+
+
+def sync_upcoming(today=None, client: Client | None = None, build_steps=None) -> dict:
+    """Put every upcoming planned ride on the TrainingPeaks calendar. Steps a ride doesn't have yet
+    are built once with the coach (and saved). Records when it ran and what happened."""
+    from datetime import date, datetime
+    import garmin_workouts
+    today = today or date.today()
+    start, end = sync_range(today)
+    started = datetime.utcnow().isoformat()
+    rides = [w for w in q.get_workouts(start, end) if not w.get("completed")]
+    missing = [w for w in rides if garmin_workouts.saved_steps(w) is None]
+    skipped = 0
+    if missing:
+        try:
+            (build_steps or garmin_workouts.ensure_steps)(missing)
+        except garmin_workouts.WorkoutError:
+            pass
+        rides = [w for w in q.get_workouts(start, end) if not w.get("completed")]
+    rows = []
+    for w in rides:
+        steps = garmin_workouts.saved_steps(w)
+        if steps is None:
+            skipped += 1
+        else:
+            rows.append((w, steps))
+    try:
+        out = sync(rows, start, end, client or _signed_in_client())
+    except TPError as e:
+        q.set_setting(LAST_RESULT_SETTING, f"err|{started}|{e}")
+        raise
+    out["skipped"] = skipped
+    text = result_text(out)
+    if skipped:
+        text += f" {skipped} ride{'s' if skipped != 1 else ''} waiting for steps, which the coach couldn't build."
+    q.set_setting(LAST_SYNC_SETTING, started)
+    kind = "warn" if out["failed"] or skipped else "ok"
+    q.set_setting(LAST_RESULT_SETTING, f"{kind}|{started}|{text}")
+    return out
+
+
+def last_result() -> tuple[str, str, str] | None:
+    """(kind, when, text) of the last automatic or manual sync, or None."""
+    raw = q.get_setting(LAST_RESULT_SETTING, "")
+    parts = raw.split("|", 2)
+    return tuple(parts) if len(parts) == 3 else None
+
+
+def last_sync_text() -> str:
+    from datetime import datetime
+    last = q.get_setting(LAST_SYNC_SETTING, "")
+    try:
+        mins = int((datetime.utcnow() - datetime.fromisoformat(last)).total_seconds() // 60)
+    except (TypeError, ValueError):
+        return "Not synced yet"
+    if mins < 2:
+        return "Last synced just now"
+    if mins < 60:
+        return f"Last synced {mins} min ago"
+    if mins < 48 * 60:
+        return f"Last synced {mins // 60} h ago"
+    return f"Last synced {mins // 1440} days ago"
+
+
+_sync_lock = threading.Lock()
+
+
+def start_background_sync() -> bool:
+    """Run sync_upcoming on a background thread so no page waits on TrainingPeaks. Only one runs
+    at a time. Returns False when one was already running."""
+    if not _sync_lock.acquire(blocking=False):
+        return False
+
+    def run():
+        try:
+            sync_upcoming()
+        except Exception:
+            pass        # sync_upcoming records TrainingPeaks errors; anything else waits for the next try
+        finally:
+            _sync_lock.release()
+
+    threading.Thread(target=run, name="tp-sync", daemon=True).start()
+    return True
+
+
+def is_syncing() -> bool:
+    return _sync_lock.locked()
