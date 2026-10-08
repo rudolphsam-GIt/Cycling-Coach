@@ -21,8 +21,11 @@ page_header("Races", "Race day plans, your calendar, taper and pacing")
 ftp = float(get_setting("ftp_watts", 200) or 200)
 weight = float(get_setting("weight_kg", 70) or 70)
 
-tab_plan, tab1, tab2, tab3 = st.tabs([":material/auto_awesome: Race Day Plan", ":material/event: Calendar",
-                                     ":material/trending_down: Taper", ":material/speed: Pacing"])
+_RACE_TABS = [":material/auto_awesome: Race Day Plan", ":material/event: Calendar",
+              ":material/trending_down: Taper", ":material/speed: Pacing"]
+# With no race coming up the plan tab has nothing to show, so open on the calendar.
+_has_upcoming = any(r["date"] >= date.today().isoformat() for r in get_races())
+tab_plan, tab1, tab2, tab3 = st.tabs(_RACE_TABS, default=_RACE_TABS[0] if _has_upcoming else _RACE_TABS[1])
 
 # ── Tab 0: AI race day plan ───────────────────────────────────────────────────
 with tab_plan:
@@ -235,7 +238,7 @@ with tab2:
     upcoming_races = get_races(upcoming_only=True)
 
     if not upcoming_races:
-        st.info("Add an upcoming race in the Race Calendar tab to use the taper planner.")
+        st.info("Add an upcoming race in the Calendar tab to use the taper planner.")
     else:
         race_options = {f"{r['name']} ({r['date']})": r for r in upcoming_races}
         chosen_name = st.selectbox("Select race to taper for", list(race_options.keys()))
@@ -253,7 +256,7 @@ with tab2:
         if days_out < 3:
             st.warning("Race is in 3 or fewer days — focus on rest and openers only.")
         elif days_out > 60:
-            st.info("More than 60 days out. Use the Training Planner to build fitness first.")
+            st.info("More than 60 days out. Use the Plan page to build fitness first.")
 
         # Build taper TSS schedule
         taper_tss: dict[str, float] = {}
@@ -312,7 +315,7 @@ with tab2:
         fig.update_layout(hovermode="x unified")
         charts.show(fig, key="taper_chart")
 
-        if st.button("Generate Taper Workouts in Planner"):
+        if st.button("Add taper workouts to my plan"):
             count = 0
             for d_str, tss in taper_tss.items():
                 d = date.fromisoformat(d_str)
@@ -333,7 +336,7 @@ with tab2:
                     "structured_json": None, "tss_planned": round(tss), "notes": "",
                 })
                 count += 1
-            st.success(f"Added {count} taper workouts to the planner.")
+            st.success(f"Added {count} taper workouts to your plan.")
 
 # ── Tab 3: Pacing Strategy ────────────────────────────────────────────────────
 with tab3:

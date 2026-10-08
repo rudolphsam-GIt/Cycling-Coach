@@ -1,7 +1,7 @@
 """
-Dashboard: charts for a date range and search, in the spirit of the
-TrainingPeaks dashboard. It only runs when the page is open, and each tab only
-draws when it is selected.
+Progress: charts and the ride list for a date range and search, in the spirit
+of the TrainingPeaks dashboard. It only runs when the page is open, and each tab
+only draws when it is selected.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from components import charts, data_filters, history_table, theme
+from components import charts, data_filters, history_table, ride_analysis, ride_detail, theme
 from components.cards import page_header, section_header
 from db.queries import (get_activities_between, get_ftp_history, get_hr_peaks_between,
                         get_peaks_between, get_races, get_recovery_range, get_setting,
@@ -23,8 +23,14 @@ from metrics.units import climb_from_m, climb_unit, dist_from_km, fmt_weight
 from metrics.training_load import compute_pmc
 from components.theme import rgba as _rgba
 
+SETTINGS_PAGE = "pages/07_Settings.py"
 
-page_header("Dashboard", "Training load, power and recovery for the dates and search you pick.")
+
+def _settings_link(label: str = "Open Settings") -> None:
+    st.page_link(SETTINGS_PAGE, label=label, icon=":material/settings:")
+
+
+page_header("Progress", "Training load, rides, power and recovery for the dates and search you pick.")
 
 ctx = data_filters.render()
 f = ctx["filters"]
@@ -33,9 +39,11 @@ st.caption(data_filters.describe(ctx)
               if f.narrowed() else ""))
 data_filters.summary_tiles(ctx)
 
-TAB_LOAD, TAB_POWER, TAB_HISTORY, TAB_RECOVERY = "Load", "Power", "History", "Recovery"
-tab_load, tab_power, tab_hist, tab_rec = st.tabs([TAB_LOAD, TAB_POWER, TAB_HISTORY, TAB_RECOVERY],
-                                                 key="dash_tab", on_change="rerun")
+TABS = ["Load", "Rides", "Power", "History", "Recovery"]
+# A link from another page can ask for a tab, for example Today's "See all rides".
+if (wanted := st.session_state.pop("progress_tab", None)) in TABS:
+    st.session_state["dash_tab"] = wanted
+tab_load, tab_rides, tab_power, tab_hist, tab_rec = st.tabs(TABS, key="dash_tab", on_change="rerun")
 
 
 def _pmc() -> pd.DataFrame:
@@ -118,6 +126,34 @@ def planned_vs_done() -> None:
     charts.show(fig, key="dsh_planned")
 
 
+# ── Rides ─────────────────────────────────────────────────────────────────────
+
+def rides_list() -> None:
+    rides = sorted(ctx["rides"], key=lambda a: a.get("date") or "", reverse=True)
+    head, dl = st.columns([4, 1.4], vertical_alignment="bottom")
+    with head:
+        section_header("Rides", "Click a column to sort. Select a row to open the ride.")
+    if not rides:
+        if ctx["all"]:
+            st.info("No rides match your search. Try fewer words, or Clear filters.")
+        else:
+            st.info("No rides in this date range. Pick a longer range, or sync your rides.")
+            _settings_link("Connect or sync in Settings")
+        return
+    dl.download_button(
+        "Download CSV", data=ride_detail.rides_frame(rides, distance_unit()).to_csv(index=False).encode(),
+        file_name=f"rides_{f.start.isoformat()}_{f.end.isoformat()}.csv", mime="text/csv",
+        icon=":material/download:", width="stretch")
+    # A new key whenever the filters change, so a selected row never points at a different ride.
+    picked = ride_detail.ride_table(rides, key=f"data_rides_{abs(hash(repr(f))) % 10**8}", max_height=560)
+    if picked:
+        if st.button("Analyze this ride", key="data_analyze", type="primary", icon=":material/query_stats:"):
+            ride_analysis.open_analysis(picked["id"])
+        ride_detail.ride_detail(picked, key="data_ride")
+    else:
+        st.caption("Select a ride to see its details.")
+
+
 # ── Power ─────────────────────────────────────────────────────────────────────
 
 def peak_power() -> None:
@@ -128,8 +164,9 @@ def peak_power() -> None:
     with_peaks = len({p["activity_id"] for p in now_rows if p["activity_id"] in ride_ids})
     if not curve:
         st.info("No peak power yet for these rides. Peak power comes from Garmin. "
-                "Open Settings and use Load peak power history to fill in past rides.",
+                "Use Load peak power history in Settings to fill in past rides.",
                 icon=":material/bolt:")
+        _settings_link("Load peak power history")
         return
 
     compare = st.segmented_control("Compare with", ["Period before", "All time"], default="Period before",
@@ -243,12 +280,13 @@ def ftp_and_zones() -> None:
                       help=f"Set on {str(hist[-1]['date'])[:10]}. Update it in Settings after a test "
                            "and the history fills in here.")
         else:
-            st.caption("No FTP history yet. Set your FTP in Settings.")
+            st.caption("No FTP history yet.")
+            _settings_link("Set your FTP")
     with right:
         section_header("Time in zones", "Estimated heart rate zones", explain="hr_zones")
         hours = an.zone_hours(ctx["rides"])
         if sum(hours) <= 0:
-            st.caption("No zone estimates for these rides. Use Recalculate TSS in Settings.")
+            st.caption("No zone estimates for these rides. They need power or heart rate data.")
         else:
             total = sum(hours)
             fig = go.Figure(go.Bar(
@@ -292,8 +330,9 @@ def fitness_history() -> None:
         history_table.render(rows, "hr", unit)
     else:
         st.info("No peak heart rate yet. It comes from each ride's file on Garmin. New rides get it "
-                "when they sync. For older rides, open Settings and use Load peak power and heart "
-                "rate history.", icon=":material/favorite:")
+                "when they sync. For older rides, use Load peak power and heart rate history in "
+                "Settings.", icon=":material/favorite:")
+        _settings_link("Load peak history")
     if not power:
         st.caption("No peak power yet. Settings, Load peak power and heart rate history fills it in.")
 
@@ -303,7 +342,8 @@ def power_profile_chart() -> None:
                    explain="power_profile")
     weight = float(get_setting("weight_kg", 0) or 0)
     if not weight:
-        st.info("Add your weight in Settings to see your power profile.", icon=":material/scale:")
+        st.info("Add your weight to see your power profile.", icon=":material/scale:")
+        _settings_link("Add your weight")
         return
     c1, c2 = st.columns(2)
     with c1:
@@ -347,7 +387,8 @@ def recovery(pmc: pd.DataFrame) -> None:
     rows = get_recovery_range(f.start.isoformat(), f.end.isoformat())
     if not rows:
         st.info("No recovery data for these dates. HRV, resting heart rate and sleep come from Garmin. "
-                "Connect Garmin in Settings and sync.", icon=":material/bedtime:")
+                "Connect Garmin and sync.", icon=":material/bedtime:")
+        _settings_link("Connect Garmin")
         return
     df = pd.DataFrame(rows)
     df["date"] = pd.to_datetime(df["date"])
@@ -411,6 +452,10 @@ with tab_load:
             performance_chart(pmc)
         weekly_volume()
         planned_vs_done()
+
+with tab_rides:
+    if tab_rides.open:
+        rides_list()
 
 with tab_power:
     if tab_power.open:

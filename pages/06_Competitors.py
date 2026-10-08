@@ -5,6 +5,8 @@ from datetime import date
 from html import escape
 
 from components import section_header, page_header
+from components.units import distance_unit
+from metrics.units import fmt_climb, fmt_distance
 
 from db.queries import get_races
 from research.obra import research_competitors, get_riders_for_event, get_event_categories
@@ -114,8 +116,8 @@ if obra_sel:
     # Metric row
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Date", obra_sel.get("date", "—"))
-    m2.metric("Distance", f"{race_dist:.0f} km" if obra_details.get("distance_km") else "—")
-    m3.metric("Elevation", f"{race_elev:.0f} m" if obra_details.get("elevation_m") else "—")
+    m2.metric("Distance", fmt_distance(race_dist * 1000, distance_unit()) if obra_details.get("distance_km") else "—")
+    m3.metric("Elevation", fmt_climb(race_elev, distance_unit()) if obra_details.get("elevation_m") else "—")
     m4.metric("Start", obra_details.get("start_time", "—"))
 
     # Links row
@@ -172,8 +174,8 @@ else:
         st.markdown(f"### {race_name}")
         cols = st.columns(3)
         cols[0].metric("Date", chosen_race.get("date", "—"))
-        cols[1].metric("Distance", f"{race_dist:.0f} km")
-        cols[2].metric("Elevation", f"{race_elev:.0f} m")
+        cols[1].metric("Distance", fmt_distance(race_dist * 1000, distance_unit()) or "—")
+        cols[2].metric("Elevation", fmt_climb(race_elev, distance_unit()) or "—")
     else:
         race_name, race_dist, race_elev, race_notes = "", 80.0, 500.0, ""
         st.caption("Select a race from the OBRA schedule above, or pick one from your calendar.")

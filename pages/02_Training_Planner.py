@@ -637,11 +637,16 @@ def render_memories() -> None:
 
 
 def render_checkin() -> None:
-    from db.queries import get_reports
-    with st.expander("Weekly check in"):
+    from db.queries import get_report, get_reports
+    start = coach_reports.checkin_week()
+    key, title, prompt = coach_reports.weekly_checkin(start)
+    # Saturday to Monday, until it has been run, the check in sits open at the top.
+    due = today.weekday() in (5, 6, 0) and not get_report("weekly", key)
+    box = st.container(border=True) if due else st.expander("Weekly check in")
+    with box:
+        if due:
+            st.markdown(f"**Weekly check in for the week of {start:%b %-d} is ready**")
         st.caption("Your coach reviews the week and drafts the next one.")
-        start = coach_reports.checkin_week()
-        key, title, prompt = coach_reports.weekly_checkin(start)
         coach_ui.report_block("weekly", key, title, prompt,
                               button_label="Run my weekly check in", on_plan_page=True)
     past = [r for r in get_reports("weekly", limit=7) if r["ref_key"] != key]
@@ -689,8 +694,8 @@ def render_coach_tab(next_race) -> None:
                      on_click=clear_chat):
             st.rerun()
 
-    render_memories()
     render_checkin()
+    render_memories()
 
     # The program card sits above the chat but is filled in after the reply streams, so a draft the
     # coach has just saved shows straight away.

@@ -1,5 +1,5 @@
 """
-Numbers for the Dashboard and Data pages. Everything here is pure: lists of
+Numbers for the Progress page. Everything here is pure: lists of
 activity dicts in, plain values out, so it is tested without a database.
 """
 from __future__ import annotations

@@ -1,5 +1,5 @@
 """
-The date range, search and filters shared by the Dashboard and Data pages, plus
+The date range, search and filters used by the Progress page, plus
 the summary tiles. The chosen filters are kept in st.session_state under
 "df_*" keys, so a search made on one page is still there on the other.
 

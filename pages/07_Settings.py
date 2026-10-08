@@ -75,7 +75,7 @@ with tab_profile:
             help=setting_help("ctl_start"),
         )
 
-    if st.button("Save Profile", type="primary", icon=":material/save:"):
+    if st.button("Save profile", type="primary", icon=":material/save:"):
         old_ftp = int(get_setting("ftp_watts", 0) or 0)
         old_lthr = int(get_setting("lthr", 0) or 0)
         set_setting("ftp_watts", ftp)
@@ -97,7 +97,13 @@ with tab_profile:
             set_setting("ftp_estimated", "0")   # the rider set it themselves
         if lthr != old_lthr:
             set_setting("lthr_estimated", "0")
-        st.success("Profile saved!")
+        if (ftp != old_ftp and ftp > 0) or (lthr != old_lthr and lthr > 0):
+            # TSS and zones depend on FTP and LTHR, so bring every ride up to date now.
+            with st.spinner("Updating TSS and zones for your rides…"):
+                n = recalculate_all_tss()
+            st.success(f"Profile saved. TSS and zones updated for {n} rides.")
+        else:
+            st.success("Profile saved.")
 
 # ── Tab 2: Connections ────────────────────────────────────────────────────────
 with tab_connections:
@@ -147,7 +153,8 @@ with tab_connections:
                             strava_auth.sync_activities(STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET)
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Connection failed: {e}")
+                            st.error("Couldn't connect to Strava. Copy the whole address from your browser after you approve, "
+                                     f"then paste it again. Details: {e}")
                 else:
                     st.error("Couldn't find the auth code in that URL. Make sure you copied the full address bar.")
 
@@ -187,7 +194,7 @@ with tab_connections:
             if st.button("Load peak power and heart rate history (1 year)", icon=":material/bolt:",
                          width="stretch",
                          help="Reads your best power and heart rate for 5 s up to 2 h from Garmin for rides "
-                              "already in the app, for the Dashboard. Adds no rides. Heart rate needs each "
+                              "already in the app, for the Progress page. Adds no rides. Heart rate needs each "
                               "ride's file, so the first run takes a minute or two."):
                 bar = st.progress(0.0, text="Reading rides from Garmin…")
                 try:
@@ -360,14 +367,17 @@ with tab_data:
     col_a, col_b = st.columns(2)
     with col_a:
         st.markdown("**Recalculate TSS**")
-        st.caption("Recomputes TSS and zone estimates for every ride using your current FTP and LTHR.")
+        st.caption("Recomputes TSS and zone estimates for every ride using your current FTP and LTHR. "
+                   "This runs on its own when you change FTP or LTHR.")
         if st.button("Recalculate TSS", width="stretch"):
-            n = recalculate_all_tss()
+            with st.spinner("Recalculating TSS for every ride…"):
+                n = recalculate_all_tss()
             st.success(f"Recalculated TSS for {n} activities.")
 
     with col_b:
-        st.markdown("**Remove Duplicate Rides**")
-        st.caption("Removes rides logged on both Strava and Garmin — keeps the one with more data.")
-        if st.button("Remove Duplicates", width="stretch"):
-            n = deduplicate_activities()
+        st.markdown("**Remove duplicate rides**")
+        st.caption("Removes rides logged on both Strava and Garmin and keeps the one with more data.")
+        if st.button("Remove duplicates", width="stretch"):
+            with st.spinner("Looking for duplicate rides…"):
+                n = deduplicate_activities()
             st.success(f"Removed {n} duplicate ride{'s' if n != 1 else ''}." if n else "No duplicates found.")

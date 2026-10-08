@@ -1,5 +1,5 @@
 """
-The fitness history tables on the Dashboard: recent weeks, recent months and
+The fitness history tables on the Progress page: recent weeks, recent months and
 all time, with totals and the best power or heart rate for each duration.
 Rows come from metrics.analysis.period_history.
 """

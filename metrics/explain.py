@@ -522,7 +522,7 @@ DEFAULT_RIDER_TYPE = "New to cycling"
 GENDER_LABELS = {"Woman": "woman", "Man": "man", "Non-binary": "nonbinary",
                  "Prefer not to say": "unspecified"}
 GENDER_FACTOR = {"man": 1.0, "woman": 0.85, "nonbinary": 0.925, "unspecified": 0.925}
-GENDER_PROFILE_TABLE = {"man": "Men", "woman": "Women"}      # others pick on the Dashboard
+GENDER_PROFILE_TABLE = {"man": "Men", "woman": "Women"}      # others pick on the Progress page
 DEFAULT_GENDER = "unspecified"
 
 

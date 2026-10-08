@@ -355,10 +355,8 @@ def needs_auto_sync() -> bool:
         return True
 
 
-def auto_sync() -> tuple[int, str] | None:
-    """Sync the last few days if it's been a while. Returns None if skipped."""
-    if not needs_auto_sync():
-        return None
+def sync_recent() -> tuple[int, str]:
+    """Sync from a couple of days before the last sync up to today."""
     last = get_setting("garmin_last_sync", "")
     days = 30
     if last:
@@ -367,3 +365,27 @@ def auto_sync() -> tuple[int, str] | None:
         except ValueError:
             pass
     return sync(days_back=min(days, 90))
+
+
+def auto_sync() -> tuple[int, str] | None:
+    """Sync the last few days if it's been a while. Returns None if skipped."""
+    if not needs_auto_sync():
+        return None
+    return sync_recent()
+
+
+def last_sync_text() -> str:
+    """For example "Synced 2 hours ago", or "" when Garmin has never synced."""
+    last = get_setting("garmin_last_sync", "")
+    try:
+        mins = int((datetime.utcnow() - datetime.fromisoformat(last)).total_seconds() // 60)
+    except (TypeError, ValueError):
+        return ""
+    if mins < 2:
+        return "Synced just now"
+    if mins < 60:
+        return f"Synced {mins} min ago"
+    if mins < 48 * 60:
+        hours = mins // 60
+        return f"Synced {hours} hour{'s' if hours != 1 else ''} ago"
+    return f"Synced {mins // 1440} days ago"

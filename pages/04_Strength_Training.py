@@ -5,7 +5,7 @@ import pandas as pd
 import json
 from datetime import date, timedelta
 from components import section_header, page_header, theme, charts
-from components.units import unit_switch, weight_input
+from components.units import weight_input, weight_unit
 from metrics.units import from_kg
 
 from db.queries import (add_strength_session, get_strength_sessions,
@@ -14,7 +14,7 @@ from db.queries import (add_strength_session, get_strength_sessions,
 
 page_header("Strength", "Phase based gym work that supports your riding")
 
-unit = unit_switch("strength_unit")
+unit = weight_unit()   # set once in Settings
 
 # ── Cycling-specific strength plans ──────────────────────────────────────────
 

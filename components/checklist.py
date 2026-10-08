@@ -65,4 +65,4 @@ def render() -> None:
                 elif step["key"] == "block":
                     first_block_button("check_first_block")
         if done == len(steps):
-            st.success("You have done the basics. Keep riding, and use the Dashboard to watch your fitness build.")
+            st.success("You have done the basics. Keep riding, and use Progress to watch your fitness build.")

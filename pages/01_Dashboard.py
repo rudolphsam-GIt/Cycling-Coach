@@ -3,19 +3,26 @@ from __future__ import annotations
 import html
 import streamlit as st
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import pandas as pd
 from datetime import date, datetime, timedelta
 
-from db.queries import (get_activities, get_setting, get_races, get_workouts,
+from db.queries import (get_activities, get_setting, get_workouts,
                         get_weekly_tss_summary, log_wellness, get_wellness,
                         get_recovery_range, is_ride)
-from metrics.training_load import compute_pmc, get_current_metrics
-from metrics.zones import get_power_zones, get_hr_zones
-from components import charts, checklist, ftp_help, ride_detail, theme
+from metrics.training_load import get_current_metrics
+from components import charts, checklist, ftp_help, ride_analysis, ride_detail, theme
 from components.explain import help_icon, tip
 from components.cards import metric_card, section_header, tsb_banner, page_header
 from components.theme import rgba as _rgba
+import auth.garmin as _garmin
+
+SETTINGS_PAGE = "pages/07_Settings.py"
+PLAN_PAGE = "pages/02_Training_Planner.py"
+PROGRESS_PAGE = "pages/05_Dashboard_Charts.py"
+
+
+def _see_all_rides() -> None:
+    st.session_state["progress_tab"] = "Rides"
+    st.switch_page(PROGRESS_PAGE)
 
 
 
@@ -35,8 +42,21 @@ w_per_kg = round(ftp / weight, 2) if weight else 0.0
 _hour = datetime.now().hour
 _greeting = "Good morning" if _hour < 12 else "Good afternoon" if _hour < 18 else "Good evening"
 _first_name = (get_setting("strava_athlete_name", "") or "").split(" ")[0]
-page_header(f"{_greeting}{', ' + _first_name if _first_name else ''}",
-            date.today().strftime("%A, %B %-d"), eyebrow="Today")
+_head, _sync = st.columns([3, 1.5], vertical_alignment="bottom")
+with _head:
+    page_header(f"{_greeting}{', ' + _first_name if _first_name else ''}",
+                date.today().strftime("%A, %B %-d"), eyebrow="Today")
+with _sync:
+    if _garmin.is_connected():
+        if st.button("Sync now", icon=":material/sync:", width="stretch",
+                     help="Pull new rides, sleep and recovery from Garmin"):
+            with st.spinner("Syncing from Garmin…"):
+                _, _msg = _garmin.sync_recent()
+            st.toast(_msg)
+            st.rerun()
+        st.caption(_garmin.last_sync_text())
+    else:
+        st.page_link(SETTINGS_PAGE, label="Connect Garmin", icon=":material/link:")
 
 from components.onboarding import render_onboarding_welcome_banner
 render_onboarding_welcome_banner()
@@ -73,7 +93,6 @@ with col_plan:
         )
 
 with col_recovery:
-    import auth.garmin as _garmin
     _rec = get_recovery_range((date.today() - timedelta(days=21)).isoformat(), today_str)
     _r = _rec[-1] if _rec else None
     _status = _garmin.recovery_status()
@@ -116,10 +135,11 @@ with col_recovery:
         st.markdown(
             "<div class='today-card'><div class='today-card-label'>Recovery</div>"
             "<div class='today-card-title'>No recovery data yet</div>"
-            "<div class='today-card-body'>Connect Garmin in Settings to see sleep, HRV, "
+            "<div class='today-card-body'>Connect Garmin to see sleep, HRV, "
             "resting heart rate and readiness here.</div></div>",
             unsafe_allow_html=True,
         )
+        st.page_link(SETTINGS_PAGE, label="Connect Garmin in Settings", icon=":material/link:")
 
 with col_feel:
     with st.container(border=True):
@@ -186,95 +206,11 @@ if _recent_rides:
 
 _week = coach_reports.checkin_week()
 if date.today().weekday() in (5, 6, 0) and not get_report("weekly", _week.isoformat()):
-    st.info(f"Your weekly check in for the week of {_week:%b %d} is ready. "
-            "Open **Plan** to run it.")
-
-# ── PMC Chart ────────────────────────────────────────────────────────────────
-section_header("Performance Management Chart", "120-day CTL, ATL, TSB and daily TSS",
-               explain="performance_chart")
-
-start = date.today() - timedelta(days=120)
-end = date.today()
-init_ctl_val = float(get_setting("ctl_start", 0) or 0)
-pmc = compute_pmc(start, end, init_ctl_val)
-
-races = get_races(upcoming_only=False)
-race_dates = {r["date"] for r in races if start.isoformat() <= r["date"] <= end.isoformat()}
-
-pmc["date"] = pd.to_datetime(pmc["date"])
-
-fig = make_subplots(specs=[[{"secondary_y": True}]])
-
-# TSS bars (background layer, neutral so the lines stand out)
-fig.add_trace(
-    go.Bar(
-        x=pmc["date"],
-        y=pmc["tss"],
-        name="Daily TSS",
-        marker_color=_rgba(theme.TEXT3, 0.35),
-        marker_line_width=0,
-        width=86400000,
-        hovertemplate="<b>TSS</b>: %{y:.0f}<extra></extra>",
-    ),
-    secondary_y=False,
-)
-
-fig.add_trace(
-    go.Scatter(
-        x=pmc["date"],
-        y=pmc["ctl"],
-        name="CTL (fitness)",
-        line=dict(color=charts.SERIES["ctl"], width=2.5),
-        hovertemplate="<b>CTL</b>: %{y:.1f}<extra></extra>",
-    ),
-    secondary_y=False,
-)
-
-fig.add_trace(
-    go.Scatter(
-        x=pmc["date"],
-        y=pmc["atl"],
-        name="ATL (fatigue)",
-        line=dict(color=charts.SERIES["atl"], width=2.5),
-        hovertemplate="<b>ATL</b>: %{y:.1f}<extra></extra>",
-    ),
-    secondary_y=False,
-)
-
-# TSB line on the secondary axis with a subtle fill
-fig.add_trace(
-    go.Scatter(
-        x=pmc["date"],
-        y=pmc["tsb"],
-        name="TSB (form)",
-        line=dict(color=charts.SERIES["tsb"], width=2.5),
-        fill="tozeroy",
-        fillcolor=_rgba(charts.SERIES["tsb"], 0.08),
-        hovertemplate="<b>TSB</b>: %{y:+.1f}<extra></extra>",
-    ),
-    secondary_y=True,
-)
-
-for rd in race_dates:
-    fig.add_vline(
-        x=pd.Timestamp(rd).value,
-        line_dash="dash",
-        line_color=theme.RACE,
-        line_width=1.5,
-        annotation_text="Race",
-        annotation_position="top",
-        annotation_font_size=12,
-        annotation_font_color=theme.RACE,
-    )
-
-charts.apply_theme(fig, height=380, legend="top", dual_y=True)
-fig.update_layout(hovermode="x unified")
-fig.update_xaxes(showgrid=False, tickformat="%b %-d")
-fig.update_yaxes(title_text="CTL / ATL / TSS", secondary_y=False)
-fig.update_yaxes(title_text="TSB (form)", secondary_y=True,
-                 title_font=dict(size=12, color=charts.SERIES["tsb"]))
-
-charts.show(fig, key="dash_pmc")
+    with st.container(border=True):
+        st.markdown(f"**Your weekly check in for the week of {_week:%b %d} is ready.**")
+        if st.button("Open the check in", icon=":material/forum:", key="open_checkin"):
+            st.session_state["plan_jump"] = "coach"
+            st.switch_page(PLAN_PAGE)
 
 # ── Weekly Training Summary ───────────────────────────────────────────────────
 section_header("Weekly Summary", "Planned vs actual TSS and zone distribution",
@@ -354,79 +290,28 @@ if any(w["rides"] > 0 or w["planned_tss"] > 0 for w in weekly):
             zone_fig.update_yaxes(title_text="Hours")
             charts.show(zone_fig, key="dash_weekly_zones", zoom=None)
     else:
-        st.caption("Zone distribution will appear after syncing rides and using Recalculate TSS in Settings.")
+        st.caption("Time in zones appears once synced rides have power or heart rate data.")
 else:
     st.info("No training data yet. Sync rides and add planned workouts to see your weekly summary.")
 
 # ── Recent Activities ─────────────────────────────────────────────────────────
-section_header("Recent Activities", "Last 30 days. Select a ride to see its details.")
+_rh, _rl = st.columns([4, 1.3], vertical_alignment="bottom")
+with _rh:
+    section_header("Recent Activities", "Last 30 days. Select a ride to see its details.")
+with _rl:
+    if st.button("See all rides", icon=":material/arrow_forward:", type="tertiary", width="stretch"):
+        _see_all_rides()
 
 activities = get_activities(days_back=30)
 if activities:
     activities = sorted(activities, key=lambda a: a.get("date") or "", reverse=True)
     picked = ride_detail.ride_table(activities, key="dash_recent_rides")
     if picked:
+        if st.button("Analyze this ride", key="dash_analyze", type="primary", icon=":material/query_stats:"):
+            ride_analysis.open_analysis(picked["id"])
         ride_detail.ride_detail(picked, key="dash_ride")
     else:
         st.caption("Select a ride to see its details.")
 else:
-    st.info("No activities yet. Connect Strava or Garmin in Settings to sync your rides.")
-
-# ── Power & HR Zones + FTP History ───────────────────────────────────────────
-with st.expander("Power & HR Zones"):
-    _zh, _zb = st.columns(2)
-    with _zh:
-        help_icon("zones", "today_zones", label="What are zones?")
-    with _zb:
-        help_icon("hr_zones", "today_hr_zones", label="What are heart rate zones?")
-    z1, z2 = st.columns(2)
-    with z1:
-        st.markdown("**Power Zones**")
-        zones = get_power_zones(ftp)
-        if zones:
-            zdf = pd.DataFrame(zones)[["zone", "name", "min_watts", "max_watts"]]
-            zdf["max_watts"] = zdf["max_watts"].fillna("∞").astype(str)
-            st.dataframe(
-                zdf.rename(columns={
-                    "zone": "Zone", "name": "Name",
-                    "min_watts": "Min (W)", "max_watts": "Max (W)",
-                }),
-                hide_index=True,
-                width="stretch",
-            )
-        else:
-            st.info("Set FTP above to see power zones.")
-    with z2:
-        st.markdown("**HR Zones**")
-        hrzones = get_hr_zones(lthr)
-        if hrzones:
-            hzdf = pd.DataFrame(hrzones)[["zone", "name", "min_bpm", "max_bpm"]]
-            hzdf["max_bpm"] = hzdf["max_bpm"].fillna("∞").astype(str)
-            st.dataframe(
-                hzdf.rename(columns={
-                    "zone": "Zone", "name": "Name",
-                    "min_bpm": "Min (bpm)", "max_bpm": "Max (bpm)",
-                }),
-                hide_index=True,
-                width="stretch",
-            )
-        else:
-            st.info("Set LTHR above to see HR zones.")
-
-    # FTP history
-    from db.queries import get_ftp_history
-    ftp_hist = get_ftp_history()
-    if len(ftp_hist) > 1:
-        st.divider()
-        st.markdown("**FTP History**")
-        ftp_fig = go.Figure(go.Scatter(
-            x=[r["date"] for r in ftp_hist],
-            y=[r["ftp_watts"] for r in ftp_hist],
-            mode="lines+markers",
-            line=dict(color=theme.ACCENT, width=2),
-            marker=dict(size=7),
-            hovertemplate="<b>%{x}</b><br>FTP: %{y} W<extra></extra>",
-        ))
-        charts.apply_theme(ftp_fig, height=220, legend="none")
-        ftp_fig.update_yaxes(title_text="FTP (W)")
-        charts.show(ftp_fig, key="dash_ftp_history")
+    st.info("No activities yet. Connect Strava or Garmin to sync your rides.")
+    st.page_link(SETTINGS_PAGE, label="Connect in Settings", icon=":material/link:")

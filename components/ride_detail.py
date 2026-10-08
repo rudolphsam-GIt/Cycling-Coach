@@ -1,5 +1,5 @@
 """
-The rides table and the selected ride panel, shared by the Today and Data pages
+The rides table and the selected ride panel, shared by the Today and Progress pages
 so they always look and behave the same.
 """
 from __future__ import annotations
@@ -141,7 +141,7 @@ def ride_detail(act: dict, key: str) -> None:
 
         with dc2:
             if not zone_secs or sum(zone_secs) <= 0:
-                st.caption("Zone breakdown not available. Use Recalculate TSS in Settings to estimate zones.")
+                st.caption("No zone breakdown for this ride. It needs power or heart rate data.")
                 return
             total_s = sum(zone_secs)
             zfig = go.Figure()

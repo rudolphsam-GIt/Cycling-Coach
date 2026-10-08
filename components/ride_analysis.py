@@ -1,5 +1,5 @@
 """
-The ride analysis popup: open a ride from the calendar (or the Data page) and see what
+The ride analysis popup: open a ride from the calendar (or the Progress page) and see what
 happened, with the right charts for it.
 
 It shows the numbers, what was planned that day, a timeline of power, heart rate and
