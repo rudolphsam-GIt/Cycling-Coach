@@ -8,11 +8,9 @@ from components import section_header, page_header, theme, charts
 from components.units import unit_switch, weight_input
 from metrics.units import from_kg
 
-from db.schema import run_migrations
 from db.queries import (add_strength_session, get_strength_sessions,
                          mark_strength_complete, get_setting, delete_strength_session)
 
-run_migrations()
 
 page_header("Strength", "Phase based gym work that supports your riding")
 

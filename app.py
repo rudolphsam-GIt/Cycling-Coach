@@ -14,7 +14,16 @@ st.set_page_config(
 )
 
 inject_styles()
-run_migrations()
+
+
+@st.cache_resource
+def _migrate_once():
+    # Schema setup only needs to run once per server process, not every rerun.
+    run_migrations()
+    return True
+
+
+_migrate_once()
 
 
 def render_setup_needed():

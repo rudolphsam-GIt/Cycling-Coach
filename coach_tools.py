@@ -459,9 +459,7 @@ def _ride_row(a: dict) -> dict:
 
 def _training_load(days_back: int) -> list[dict]:
     start, end = date.today() - timedelta(days=days_back), date.today()
-    df = compute_pmc(start, end,
-                     float(get_setting("ctl_start", 0) or 0),
-                     float(get_setting("atl_start", 0) or 0))
+    df = compute_pmc(start, end)
     rows = [
         {"date": str(r["date"])[:10], "tss": round(r["tss"]), "ctl": round(r["ctl"], 1),
          "atl": round(r["atl"], 1), "tsb": round(r["tsb"], 1)}

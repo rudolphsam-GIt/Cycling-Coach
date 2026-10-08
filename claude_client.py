@@ -25,8 +25,15 @@ REFUSAL_MESSAGE = "Claude declined to answer that one. Try rephrasing the questi
 CUT_OFF_NOTE = "\n\n_(This reply hit the length limit and was cut off.)_"
 
 
+_shared_client: anthropic.Anthropic | None = None
+
+
 def _client() -> anthropic.Anthropic:
-    return anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    # One client per process so HTTP connections are reused between calls.
+    global _shared_client
+    if _shared_client is None:
+        _shared_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    return _shared_client
 
 
 def _request(system: list[dict], messages: list[dict], effort: str, max_tokens: int,

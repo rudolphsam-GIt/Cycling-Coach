@@ -174,13 +174,12 @@ def warnings(plan: dict, races: list, today: date, horizon_end: date) -> list[st
 def load_plan_state(today: date | None = None) -> dict:
     """Read what the projection needs: the plan so far, CTL and ATL as of
     yesterday, and the races. One call per page run."""
-    from db.queries import get_daily_tss, get_races, get_setting, get_workouts
+    from db.queries import get_daily_tss, get_races, get_workouts
     from metrics.training_load import compute_pmc
 
     today = today or date.today()
     yesterday = today - timedelta(days=1)
-    pmc = compute_pmc(yesterday, yesterday, float(get_setting("ctl_start", 0) or 0),
-                      float(get_setting("atl_start", 0) or 0))
+    pmc = compute_pmc(yesterday, yesterday)
     ctl = float(pmc.iloc[0]["ctl"]) if not pmc.empty else 0.0
     atl = float(pmc.iloc[0]["atl"]) if not pmc.empty else 0.0
 

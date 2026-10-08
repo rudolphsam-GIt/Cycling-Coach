@@ -8,13 +8,11 @@ from components import page_header, theme, charts
 from components.units import climb_input, distance_input, distance_unit, weight_input, weight_unit
 from metrics.units import fmt_climb, fmt_distance, speed_from_kph, speed_unit
 
-from db.schema import run_migrations
 from db.queries import (get_races, add_race, delete_race, get_setting,
                          add_workout, get_workouts, log_race_result)
 from metrics.training_load import get_current_metrics, project_future
 from research.obra_schedule import get_upcoming_races, DISCIPLINES
 
-run_migrations()
 
 unit = distance_unit()
 

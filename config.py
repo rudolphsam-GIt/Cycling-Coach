@@ -14,16 +14,6 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 DB_PATH = os.getenv("CYCLING_COACH_DB") or os.path.join(
     os.path.dirname(__file__), "data", "cycling.db")
 
-def load_config():
-    return {
-        "strava_client_id": STRAVA_CLIENT_ID,
-        "strava_client_secret": STRAVA_CLIENT_SECRET,
-        "garmin_email": GARMIN_EMAIL,
-        "garmin_password": GARMIN_PASSWORD,
-        "anthropic_api_key": ANTHROPIC_API_KEY,
-        "db_path": DB_PATH,
-    }
-
 def is_setup_complete():
     """The app opens once the Claude key is set. Garmin and Strava are
     connected afterwards from Settings, so they are not required here."""

@@ -17,13 +17,12 @@ from components.cards import page_header, section_header
 from db.queries import (get_activities_between, get_ftp_history, get_hr_peaks_between,
                         get_peaks_between, get_races, get_recovery_range, get_setting,
                         get_workouts, set_setting)
-from db.schema import run_migrations
 from components.units import distance_unit, weight_unit
 from metrics import analysis as an
 from metrics.units import climb_from_m, climb_unit, dist_from_km, fmt_weight
 from metrics.training_load import compute_pmc
+from components.theme import rgba as _rgba
 
-run_migrations()
 
 page_header("Dashboard", "Training load, power and recovery for the dates and search you pick.")
 
@@ -39,14 +38,8 @@ tab_load, tab_power, tab_hist, tab_rec = st.tabs([TAB_LOAD, TAB_POWER, TAB_HISTO
                                                  key="dash_tab", on_change="rerun")
 
 
-def _rgba(hex_color: str, alpha: float) -> str:
-    h = hex_color.lstrip("#")
-    return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{alpha})"
-
-
 def _pmc() -> pd.DataFrame:
-    df = compute_pmc(f.start, f.end, float(get_setting("ctl_start", 0) or 0),
-                     float(get_setting("atl_start", 0) or 0))
+    df = compute_pmc(f.start, f.end)
     if not df.empty:
         df["date"] = pd.to_datetime(df["date"])
     return df

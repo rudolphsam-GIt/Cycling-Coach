@@ -46,3 +46,10 @@ STATUS_LABELS = {
 
 FONT_STACK = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
 GRID = "rgba(154,166,191,0.18)"
+
+
+def rgba(hex_color: str, alpha: float) -> str:
+    """Turn a theme hex color into an rgba() string with the given alpha."""
+    h = hex_color.lstrip("#")
+    r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    return f"rgba({r},{g},{b},{alpha})"

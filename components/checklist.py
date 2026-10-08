@@ -9,7 +9,7 @@ from datetime import date
 import streamlit as st
 
 from components.onboarding import NEW_RIDER, first_block_button
-from db.queries import get_activities, get_setting, get_workouts, set_setting
+from db.queries import checklist_counts, get_setting, set_setting
 from metrics import explain
 
 SHOWN_FOR = (NEW_RIDER, "Some structured training experience")
@@ -21,15 +21,12 @@ def current_state() -> dict:
     import auth.garmin as garmin_auth
     import auth.strava as strava_auth
 
-    rides = get_activities(days_back=3650)
-    workouts = get_workouts("0001-01-01", "9999-12-31")
-    first_plan = min((w["date"] for w in workouts), default=None)
-    since = [a for a in rides if first_plan and first_plan <= a["date"] <= date.today().isoformat()]
+    counts = checklist_counts(date.today().isoformat())
     return {
         "connected": garmin_auth.is_connected() or strava_auth.is_connected(),
         # Chosen on purpose: a known FTP, or "estimate it for me". Either way there is nothing left to do.
         "ftp_confirmed": get_setting("ftp_estimated", "") == "0" or get_setting("ftp_choice", "") == "estimate",
-        "rides": len(rides), "workouts": len(workouts), "rides_since_plan": len(since),
+        **counts,
     }
 
 

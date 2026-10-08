@@ -6,9 +6,7 @@ import streamlit as st
 from components import data_filters, ride_analysis, ride_detail
 from components.units import distance_unit
 from components.cards import page_header, section_header
-from db.schema import run_migrations
 
-run_migrations()
 
 page_header("Data", "Search your rides, filter them and download the list. "
                     "Charts for the same selection are on the Dashboard page.")

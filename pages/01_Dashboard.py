@@ -7,7 +7,6 @@ from plotly.subplots import make_subplots
 import pandas as pd
 from datetime import date, datetime, timedelta
 
-from db.schema import run_migrations
 from db.queries import (get_activities, get_setting, get_races, get_workouts,
                         get_weekly_tss_summary, log_wellness, get_wellness,
                         get_recovery_range, is_ride)
@@ -16,15 +15,8 @@ from metrics.zones import get_power_zones, get_hr_zones
 from components import charts, checklist, ftp_help, ride_detail, theme
 from components.explain import help_icon, tip
 from components.cards import metric_card, section_header, tsb_banner, page_header
+from components.theme import rgba as _rgba
 
-run_migrations()
-
-
-def _rgba(hex_color: str, alpha: float) -> str:
-    """Turn a theme hex color into an rgba() string with the given alpha."""
-    h = hex_color.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    return f"rgba({r},{g},{b},{alpha})"
 
 
 # ── Load settings and metrics ─────────────────────────────────────────────────

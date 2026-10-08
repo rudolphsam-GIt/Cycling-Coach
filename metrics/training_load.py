@@ -8,6 +8,7 @@ Fatigue (ATL) = ATL_yesterday + (TSS_today - ATL_yesterday) * (1 - exp(-1/7))
 Form (TSB)    = yesterday's CTL minus yesterday's ATL
 """
 
+from __future__ import annotations
 import math
 from datetime import date, timedelta
 import pandas as pd
@@ -19,60 +20,63 @@ CTL_ALPHA = 1 - math.exp(-1 / CTL_DAYS)
 ATL_ALPHA = 1 - math.exp(-1 / ATL_DAYS)
 
 
+def _seeds() -> tuple[float, float]:
+    return (float(get_setting("ctl_start", 0) or 0),
+            float(get_setting("atl_start", 0) or 0))
+
+
 def compute_pmc(
     start: date,
     end: date,
-    initial_ctl: float = 0.0,
-    initial_atl: float = 0.0,
+    initial_ctl: float | None = None,
+    initial_atl: float | None = None,
 ) -> pd.DataFrame:
     """
     Return a DataFrame [date, tss, ctl, atl, tsb] for every day in [start, end].
 
-    initial_ctl/initial_atl seed the EWMA as of the day before the lookback
-    window starts, then the exponential average is carried forward day by
-    day through to `end` — the same recursive update TrainingPeaks uses,
-    so a fitness/fatigue baseline set once continues to evolve correctly
-    rather than needing re-seeding.
+    The EWMA always starts the day before the first recorded ride, seeded with
+    the rider's starting fitness/fatigue (ctl_start / atl_start settings unless
+    passed in), and is carried forward day by day. Anchoring to the start of
+    history rather than to `start` means every page shows the same CTL for a
+    given day, whatever window it asks for.
     """
-    # Lookback lets the EWMA settle before `start` so the seed value isn't
-    # still dominating the displayed range.
-    lookback_start = start - timedelta(days=CTL_DAYS)
-    tss_map = get_daily_tss(lookback_start.isoformat(), end.isoformat())
+    if initial_ctl is None or initial_atl is None:
+        ctl_seed, atl_seed = _seeds()
+        initial_ctl = ctl_seed if initial_ctl is None else initial_ctl
+        initial_atl = atl_seed if initial_atl is None else initial_atl
 
-    all_days = []
-    current = lookback_start
-    while current <= end:
-        all_days.append((current, tss_map.get(current.isoformat(), 0.0)))
-        current += timedelta(days=1)
+    # One grouped query covers all of history; a rider has at most a few
+    # hundred ride days, so this is cheaper than a second lookup for the anchor.
+    tss_map = get_daily_tss("0000-01-01", end.isoformat())
+    anchor = date.fromisoformat(min(tss_map)) if tss_map else start
 
     rows = []
     ctl, atl = initial_ctl, initial_atl
-    for day, tss in all_days:
+    current = min(start, anchor)
+    while current <= end:
+        tss = tss_map.get(current.isoformat(), 0.0)
         prev_ctl, prev_atl = ctl, atl
-        ctl = round(prev_ctl + (tss - prev_ctl) * CTL_ALPHA, 2)
-        atl = round(prev_atl + (tss - prev_atl) * ATL_ALPHA, 2)
+        if current >= anchor:
+            ctl = round(prev_ctl + (tss - prev_ctl) * CTL_ALPHA, 2)
+            atl = round(prev_atl + (tss - prev_atl) * ATL_ALPHA, 2)
         # TSB uses yesterday's CTL/ATL, i.e. the values going into today's update.
         tsb = round(prev_ctl - prev_atl, 2)
-        if day >= start:
-            rows.append({"date": day, "tss": tss, "ctl": ctl, "atl": atl, "tsb": tsb})
+        if current >= start:
+            rows.append({"date": current, "tss": tss, "ctl": ctl, "atl": atl, "tsb": tsb})
+        current += timedelta(days=1)
 
     return pd.DataFrame(rows)
 
 
 def get_current_metrics() -> dict:
     """Return today's CTL/ATL/TSB and 7-day ramp rate."""
-    initial_ctl = float(get_setting("ctl_start", 0) or 0)
-    initial_atl = float(get_setting("atl_start", 0) or 0)
-
-    start = date.today() - timedelta(days=90)
     end = date.today()
-
-    df = compute_pmc(start, end, initial_ctl, initial_atl)
+    df = compute_pmc(end - timedelta(days=7), end)
     if df.empty:
         return {"ctl": 0, "atl": 0, "tsb": 0, "ramp_rate": 0}
 
     today = df.iloc[-1]
-    week_ago = df.iloc[-8] if len(df) >= 8 else df.iloc[0]
+    week_ago = df.iloc[0]
     ramp_rate = round(today["ctl"] - week_ago["ctl"], 2)
 
     return {

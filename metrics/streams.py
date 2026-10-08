@@ -17,19 +17,12 @@ import numpy as np
 
 from metrics.peaks import fit_from_download, mean_max
 from metrics.zones import HR_ZONE_PCT, POWER_ZONE_PCT
+from metrics.units import num as _num
 
 CHANNELS = ("power", "hr", "cad", "speed", "alt", "dist")
 FILL_GAP_S = 10            # a gap this short repeats the last value, longer stays empty
 MAX_SECONDS = 24 * 3600
 ROUND = {"power": 0, "hr": 0, "cad": 0, "speed": 2, "alt": 1, "dist": 1}
-
-
-def _num(v):
-    try:
-        x = float(v)
-        return x if math.isfinite(x) else None
-    except (TypeError, ValueError):
-        return None
 
 
 def from_records(records: Iterable[dict]) -> dict | None:

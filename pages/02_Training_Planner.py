@@ -10,10 +10,9 @@ from components import page_header
 from components import calendar as plan_cal
 from components import ftp_help, plan_export, plan_impact_ui, ride_analysis
 
-from db.schema import run_migrations
 from db.queries import (get_workouts, add_workout, update_workout, delete_workout,
                          get_setting, get_races, WORKOUT_TYPES,
-                         get_workout, get_strength_session, delete_strength_session, garmin_status, save_message, get_conversation_history,
+                         get_workout, get_strength_session, delete_strength_session, garmin_status, save_message, get_conversation_history, get_conversation_window,
                          get_memories, forget_memory, save_phase_notes, get_phase_notes)
 import auth.garmin as garmin_auth
 import exporters
@@ -25,7 +24,6 @@ from metrics import plan_impact
 from metrics import explain
 from config import ANTHROPIC_API_KEY
 
-run_migrations()
 
 page_header("Plan", "Review your calendar, talk to your coach and manage upcoming workouts.")
 
@@ -359,7 +357,7 @@ def day_strength_actions(info: dict) -> None:
 def day_panel(sel: str) -> None:
     """Everything about the selected calendar day, with add and edit."""
     d = date.fromisoformat(sel)
-    day = plan_cal.get_day(sel)
+    day = plan_cal.get_day(sel, st.session_state.get(plan_cal.MONTH_DAYS_KEY))
     planned = get_workouts(sel, sel)
 
     with st.container(border=True):
@@ -369,7 +367,7 @@ def day_panel(sel: str) -> None:
         for w in planned:
             planned_row(w)
 
-        plan_cal.render_day_readonly(sel, strength_actions=day_strength_actions)
+        plan_cal.render_day_readonly(sel, strength_actions=day_strength_actions, day=day)
 
         planned_tss = float(getattr(day, "planned_tss", 0) or 0)
         actual_tss = float(getattr(day, "actual_tss", 0) or 0)
@@ -589,11 +587,11 @@ def image_block(upload) -> dict:
                        "data": base64.b64encode(data).decode()}}
 
 
-def recent_history(limit: int = 18) -> list:
+def recent_history() -> list:
     """Recent messages for the API: consecutive same role turns are merged, and the
     list starts with a user turn (a failed send leaves two user messages in a row)."""
     merged: list[dict] = []
-    for m in get_conversation_history(limit=limit):
+    for m in get_conversation_window():
         if merged and merged[-1]["role"] == m["role"]:
             merged[-1]["content"] += "\n\n" + m["content"]
         else:

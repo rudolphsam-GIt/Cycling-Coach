@@ -6,14 +6,12 @@ from html import escape
 
 from components import section_header, page_header
 
-from db.schema import run_migrations
 from db.queries import get_races
 from research.obra import research_competitors, get_riders_for_event, get_event_categories
 from research.tactics import generate_tactics_brief
 from research.obra_schedule import get_upcoming_races, get_event_details, DISCIPLINES
 from research.public_power import search_public_power
 
-run_migrations()
 
 page_header("Competitors", "Scout the field from OBRA results and get a tactics brief")
 st.caption("Look up OBRA race results, estimate competitor power, and generate a race tactics brief.")

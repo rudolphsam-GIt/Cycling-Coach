@@ -22,11 +22,30 @@ def is_ride(activity: dict) -> bool:
 
 # ── Athlete Settings ──────────────────────────────────────────────────────────
 
-def get_setting(key: str, default=None):
+# Pages read a dozen or more settings per rerun. Keep them all in memory,
+# keyed by database file, and reload after a write or a short expiry so a
+# background sync in another process is still picked up.
+_SETTINGS_TTL = 30.0
+_settings_cache: dict = {}
+
+
+def get_all_settings() -> dict:
+    from db import schema
+    import time
+    hit = _settings_cache.get(schema.DB_PATH)
+    if hit and time.monotonic() - hit[0] < _SETTINGS_TTL:
+        return hit[1]
     conn = get_conn()
-    row = conn.execute("SELECT value FROM athlete_settings WHERE key=?", (key,)).fetchone()
+    rows = conn.execute("SELECT key, value FROM athlete_settings").fetchall()
     conn.close()
-    return row["value"] if row else default
+    values = {r["key"]: r["value"] for r in rows}
+    _settings_cache[schema.DB_PATH] = (time.monotonic(), values)
+    return values
+
+
+def get_setting(key: str, default=None):
+    value = get_all_settings().get(key)
+    return default if value is None else value
 
 
 def set_setting(key: str, value):
@@ -37,13 +56,7 @@ def set_setting(key: str, value):
     )
     conn.commit()
     conn.close()
-
-
-def get_all_settings() -> dict:
-    conn = get_conn()
-    rows = conn.execute("SELECT key, value FROM athlete_settings").fetchall()
-    conn.close()
-    return {r["key"]: r["value"] for r in rows}
+    _settings_cache.clear()
 
 
 # ── Activities ────────────────────────────────────────────────────────────────
@@ -433,6 +446,19 @@ def get_activities(days_back: int = 90) -> list:
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def checklist_counts(today: str) -> dict:
+    """Counts for the getting started checklist, in one round trip."""
+    conn = get_conn()
+    row = conn.execute(
+        """SELECT (SELECT COUNT(*) FROM activities) AS rides,
+                  (SELECT COUNT(*) FROM workouts) AS workouts,
+                  (SELECT COUNT(*) FROM activities
+                    WHERE date BETWEEN (SELECT MIN(date) FROM workouts) AND ?) AS rides_since_plan""",
+        (today,)).fetchone()
+    conn.close()
+    return dict(row)
 
 
 def get_daily_tss(start: str, end: str) -> dict:
@@ -1074,6 +1100,22 @@ def get_conversation_history(limit: int = 20) -> list:
     conn.close()
     return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
 
+
+
+def get_conversation_window(keep: int = 18, step: int = 10) -> list:
+    """The chat history to send to Claude. The oldest message kept only moves
+    forward `step` messages at a time, so for several turns in a row the
+    conversation prefix is identical and Claude's prompt cache keeps hitting.
+    Sends between `keep` and `keep + step - 1` messages once the chat is long."""
+    conn = get_conn()
+    total = conn.execute("SELECT COUNT(*) FROM ai_conversations").fetchone()[0]
+    start = 0 if total < keep + step else ((total - keep) // step) * step
+    rows = conn.execute(
+        "SELECT role, content FROM ai_conversations ORDER BY id LIMIT -1 OFFSET ?",
+        (start,),
+    ).fetchall()
+    conn.close()
+    return [{"role": r["role"], "content": r["content"]} for r in rows]
 
 # ── Recovery (Garmin sleep, HRV, resting HR, readiness) ───────────────────────
 

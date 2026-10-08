@@ -8,6 +8,7 @@ import json
 import math
 from dataclasses import dataclass
 from datetime import date, timedelta
+from metrics.units import num as _num
 
 # Durations shown on the peak power curve and in the key durations table, in seconds.
 PEAK_DURATIONS = (1, 2, 5, 10, 20, 30, 60, 120, 300, 600, 1200, 1800, 3600, 7200)
@@ -18,14 +19,6 @@ RIDE_KINDS = {
     "Gravel": ("gravelride", "gravel_cycling", "gravel cycling"),
     "Mountain": ("mountainbikeride", "mountain_biking", "mountain biking"),
 }
-
-
-def _num(v) -> float | None:
-    try:
-        x = float(v)
-        return x if math.isfinite(x) else None
-    except (TypeError, ValueError):
-        return None
 
 
 def ride_kind(row: dict) -> str:

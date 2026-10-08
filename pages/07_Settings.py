@@ -3,7 +3,6 @@ from __future__ import annotations
 import streamlit as st
 from datetime import date, datetime
 
-from db.schema import run_migrations
 from db.queries import (get_setting, set_setting, log_ftp_history,
                         recalculate_all_tss, deduplicate_activities)
 from config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, GARMIN_EMAIL, GARMIN_PASSWORD
@@ -19,7 +18,6 @@ from components.cards import page_header
 from components.explain import setting_help
 from components.onboarding import GOAL_EXAMPLES, goal_keys_to_labels, infer_goal_keys, parse_goal_keys
 
-run_migrations()
 
 page_header("Settings", "Your profile, connected accounts and data tools")
 

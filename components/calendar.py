@@ -28,7 +28,9 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 from components import theme
-from metrics.units import fmt_climb, fmt_distance
+from components.theme import rgba as _rgba
+from db.queries import is_ride
+from metrics.units import fmt_climb, fmt_distance, num as _num
 
 # A ride that reaches less than this share of its planned TSS counts as short.
 SHORT_RATIO = 0.70
@@ -53,24 +55,9 @@ class DayData:
 
 # ── Small helpers ─────────────────────────────────────────────────────────────
 
-def _num(v):
-    """A float, or None when the value is missing or not a number."""
-    try:
-        if v is None or v == "":
-            return None
-        return float(v)
-    except (TypeError, ValueError):
-        return None
-
-
 def _day_key(value) -> str:
     """ISO date part of a stored date or datetime string, '' when missing."""
     return str(value)[:10] if value else ""
-
-
-def _is_ride(activity: dict) -> bool:
-    from db.queries import is_ride
-    return is_ride(activity)
 
 
 def _strength_row(row: dict) -> dict:
@@ -134,7 +121,7 @@ def build_month_data(year: int, month: int, workouts: list, activities: list,
     for a in activities or []:
         dd = days.get(_day_key(a.get("date")))
         if dd:
-            (dd.rides if _is_ride(a) else dd.other).append(a)
+            (dd.rides if is_ride(a) else dd.other).append(a)
     for s in strength or []:
         dd = days.get(_day_key(s.get("date")))
         if dd:
@@ -299,12 +286,6 @@ def day_tooltip(day: DayData, unit: str = "km") -> str:
 MAX_CHIPS = 3
 
 
-def _rgba(hex_color: str, alpha: float) -> str:
-    h = hex_color.lstrip("#")
-    r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
-    return f"rgba({r},{g},{b},{alpha})"
-
-
 def _chips(day: DayData, today: date) -> list[dict]:
     """The items drawn inside one cell. Unfinished planned rides and planned strength can be
     dragged, including skipped ones from days that have passed. `kind` is what the page acts on."""
@@ -376,16 +357,19 @@ def load_month(year: int, month: int) -> dict:
     in_grid = lambda row: first.isoformat() <= _day_key(row.get("date")) <= last.isoformat()
 
     workouts = q.get_workouts(first.isoformat(), last.isoformat())
+    activities = q.get_activities_between(first.isoformat(), last.isoformat())
     back = max((today - first).days + 1, 1)
-    activities = [a for a in q.get_activities(days_back=back) if in_grid(a)]
     strength = [s for s in q.get_strength_sessions(days_back=back) if in_grid(s)]
     races = [r for r in q.get_races() if in_grid(r)]
     return build_month_data(year, month, workouts, activities, strength, races, today)
 
 
-def get_day(day_iso: str) -> DayData:
-    """DayData for any date (loads the month that contains it)."""
+def get_day(day_iso: str, month_days: dict | None = None) -> DayData:
+    """DayData for any date. Pass the grid already loaded this run to skip a
+    second read; otherwise the month that contains the day is loaded."""
     d = date.fromisoformat(day_iso)
+    if month_days and d.isoformat() in month_days:
+        return month_days[d.isoformat()]
     return load_month(d.year, d.month)[d.isoformat()]
 
 
@@ -574,6 +558,9 @@ def _cb_grid(key: str) -> None:
         st.session_state["cal_sel"] = iso
 
 
+MONTH_DAYS_KEY = "_cal_month_days"
+
+
 def render_month_calendar(key: str = "cal"):
     """Month navigation, totals, the interactive grid, legend and fallback picker.
     Returns the selected ISO date or None."""
@@ -607,6 +594,7 @@ def render_month_calendar(key: str = "cal"):
         unsafe_allow_html=True)
 
     days = load_month(year, month)
+    st.session_state[MONTH_DAYS_KEY] = days     # reused by the day panel this run
     st.caption(_totals_text(month_totals(days, today), label))
 
     grid_key = f"{key}_grid_{year}_{month}"
@@ -654,7 +642,7 @@ def _zone_line(ride: dict) -> str:
     return "Time in zones (h:mm) " + ", ".join(bits) + note
 
 
-def render_day_readonly(day_iso: str, strength_actions=None) -> None:
+def render_day_readonly(day_iso: str, strength_actions=None, day: DayData | None = None) -> None:
     """Rides done, strength and races for one day. Planned workouts are drawn by the page.
     `strength_actions(session_info)`, if given, draws buttons inside each strength session."""
     import streamlit as st
@@ -662,7 +650,7 @@ def render_day_readonly(day_iso: str, strength_actions=None) -> None:
     unit = distance_unit()
 
     try:
-        day = get_day(day_iso)
+        day = day or get_day(day_iso)
     except (ValueError, KeyError):
         st.caption("Nothing recorded for this day.")
         return

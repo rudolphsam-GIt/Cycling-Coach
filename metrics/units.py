@@ -2,6 +2,8 @@
 pounds for display and for what the rider types in."""
 from __future__ import annotations
 
+import math
+
 KG_PER_LB = 0.45359237
 UNITS = ("lb", "kg")
 
@@ -70,3 +72,12 @@ def fmt_climb(meters: float, unit: str) -> str:
     if not meters:
         return ""
     return f"{climb_from_m(meters, unit):,.0f} {climb_unit(unit)}"
+
+
+def num(v) -> float | None:
+    """A finite float, or None when the value is missing, blank, NaN or not a number."""
+    try:
+        x = float(v)
+        return x if math.isfinite(x) else None
+    except (TypeError, ValueError):
+        return None

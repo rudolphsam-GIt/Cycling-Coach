@@ -17,18 +17,9 @@ from components.units import distance_unit
 from metrics.analysis import ride_kind
 from metrics.explain import TIPS
 from metrics.units import climb_from_m, climb_unit, dist_from_km, fmt_climb, fmt_distance
+from metrics.units import num as _num
 
 ZONE_NAMES = ["Z1 Active Recovery", "Z2 Endurance", "Z3 Tempo", "Z4 Threshold", "Z5 VO2 Max"]
-
-
-def _num(val):
-    """A float, or None when the value is missing or NaN."""
-    try:
-        if val is None or val != val:
-            return None
-        return float(val)
-    except (TypeError, ValueError):
-        return None
 
 
 def _fmt(val, fn) -> str:

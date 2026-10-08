@@ -174,6 +174,17 @@ CREATE TABLE IF NOT EXISTS ai_conversations (
 );
 """
 
+# Date lookups drive nearly every page, so index them. Created after the
+# ALTER TABLE block so older databases have every column first.
+INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_activities_date ON activities(date);
+CREATE INDEX IF NOT EXISTS idx_workouts_date ON workouts(date);
+CREATE INDEX IF NOT EXISTS idx_workouts_activity ON workouts(activity_id);
+CREATE INDEX IF NOT EXISTS idx_strength_date ON strength_sessions(date);
+CREATE INDEX IF NOT EXISTS idx_races_date ON races(date);
+CREATE INDEX IF NOT EXISTS idx_programs_status ON programs(status);
+"""
+
 
 def get_conn():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -215,4 +226,6 @@ def run_migrations():
             conn.commit()
         except Exception:
             pass
+    conn.executescript(INDEXES)
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.close()
