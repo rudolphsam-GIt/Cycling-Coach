@@ -167,3 +167,32 @@ class DeviceNumbersTests(Base):
         q.update_activity_details(aid, {"normalized_power": 230})
         self.assertFalse(q.apply_device_numbers(aid, 250, 3600))
         self.assertEqual(q.get_activity(aid)["normalized_power"], 230)
+
+
+class TrainingPeaksTssTests(Base):
+    def _tp(self, day, hours, tss, kind=2):
+        return {"workoutDay": f"{day}T00:00:00", "totalTime": hours, "tssActual": tss, "workoutTypeValueId": kind}
+
+    def test_heart_rate_rides_take_trainingpeaks_tss_and_keep_it(self):
+        from auth import trainingpeaks as tp
+        day = (TODAY - timedelta(days=5)).isoformat()
+        hr_ride = q.upsert_activity(ride("hrr", date=day, normalized_power=None, avg_power_watts=None,
+                                         duration_seconds=3600, tss=40, tss_source="hr"))
+        pw_ride = q.upsert_activity(ride("pwr", date=day, duration_seconds=7200, tss=150, tss_source="power",
+                                         name="Other"))
+        client = mock.Mock()
+        client.workouts.return_value = [self._tp(day, 1.4, 88.0), self._tp(day, 2.0, 155.0)]
+        self.assertEqual(tp.import_hr_tss(days_back=10, client=client), 1)
+        self.assertEqual((q.get_activity(hr_ride)["tss"], q.get_activity(hr_ride)["tss_source"]), (88.0, "trainingpeaks"))
+        self.assertEqual(q.get_activity(pw_ride)["tss"], 150)            # power rides keep the app's number
+        q.recalculate_all_tss()
+        q.upsert_activity(ride("hrr", date=day, normalized_power=None, avg_power_watts=None,
+                               duration_seconds=3600, tss=40, tss_source="hr"))   # synced again
+        self.assertEqual(q.get_activity(hr_ride)["tss"], 88.0)
+        self.assertEqual(label("trainingpeaks"), "hrTSS (TP)")
+
+    def test_hand_set_tss_wins_over_trainingpeaks(self):
+        aid = q.upsert_activity(ride("x", normalized_power=None, tss=40, tss_source="hr"))
+        q.set_activity_tss(aid, 70)
+        self.assertFalse(q.set_tss_from_trainingpeaks(aid, 90))
+        self.assertEqual(q.get_activity(aid)["tss"], 70)

@@ -28,9 +28,9 @@ DEFAULT_K = (1.92 + 1.67) / 2          # non-binary or not given
 MIN_GAP_S = 60                         # a power dropout shorter than this isn't worth patching
 
 SOURCE_LABEL = {"power": "TSS", "hr": "hrTSS", "mixed": "TSS + hrTSS",
-                "estimate": "est. TSS", "manual": "TSS"}
+                "estimate": "est. TSS", "manual": "TSS", "trainingpeaks": "hrTSS (TP)"}
 SOURCE_FROM = {"power": "Power", "hr": "Heart rate", "mixed": "Power + HR",
-               "estimate": "Estimate", "manual": "You"}
+               "estimate": "Estimate", "manual": "You", "trainingpeaks": "TrainingPeaks"}
 
 
 def k_for(gender: str | None) -> float:

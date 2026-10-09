@@ -392,6 +392,47 @@ def sync_upcoming(today=None, client: Client | None = None, build_steps=None) ->
     return out
 
 
+BIKE_TYPES = (2, 8)          # TrainingPeaks' bike and mountain bike workout types
+
+
+def match_completed(tp_workouts: list[dict], rides: list[dict]) -> list[tuple[dict, dict]]:
+    """Pair TrainingPeaks' completed bike workouts with the app's rides: same day, closest
+    duration, within 45 minutes (TrainingPeaks often counts stops the app leaves out)."""
+    by_day: dict[str, list[dict]] = {}
+    for r in rides:
+        if r.get("duration_seconds"):
+            by_day.setdefault(r["date"], []).append(r)
+    pairs, used = [], set()
+    for w in sorted(tp_workouts, key=lambda w: w.get("workoutDay") or ""):
+        if w.get("workoutTypeValueId") not in BIKE_TYPES or not w.get("tssActual") or not w.get("totalTime"):
+            continue
+        cands = [r for r in by_day.get((w.get("workoutDay") or "")[:10], []) if r["id"] not in used
+                 and abs(r["duration_seconds"] / 3600 - w["totalTime"]) <= 0.75]
+        if cands:
+            r = min(cands, key=lambda r: abs(r["duration_seconds"] / 3600 - w["totalTime"]))
+            used.add(r["id"])
+            pairs.append((w, r))
+    return pairs
+
+
+def import_hr_tss(days_back: int = 60, client: Client | None = None) -> int:
+    """For rides the app scores from heart rate, use TrainingPeaks' TSS when it has the ride, so
+    fitness matches what TrainingPeaks shows. Returns how many rides changed."""
+    from datetime import date, timedelta
+    end = date.today()
+    start = end - timedelta(days=days_back)
+    c = client or Client()                 # the plan sync just refreshed the sign in if it needed to
+    tp_done = []
+    day = start
+    while day <= end:                      # TrainingPeaks answers at most about 6 months at a time
+        chunk_end = min(day + timedelta(days=180), end)
+        tp_done += c.workouts(day.isoformat(), chunk_end.isoformat())
+        day = chunk_end + timedelta(days=1)
+    rides = [r for r in q.get_activities(days_back=days_back + 1)
+             if (r.get("tss_source") or "") in q.TP_REPLACEABLE]
+    return sum(q.set_tss_from_trainingpeaks(r["id"], w["tssActual"]) for w, r in match_completed(tp_done, rides))
+
+
 def last_result() -> tuple[str, str, str] | None:
     """(kind, when, text) of the last automatic or manual sync, or None."""
     raw = q.get_setting(LAST_RESULT_SETTING, "")
@@ -424,7 +465,13 @@ def run_locked(**kwargs) -> dict | None:
     if not _sync_lock.acquire(blocking=False):
         return None
     try:
-        return sync_upcoming(**kwargs)
+        out = sync_upcoming(**kwargs)
+        if is_enabled() and not needs_signin():
+            try:
+                import_hr_tss()            # heart rate rides take TrainingPeaks' number
+            except Exception:
+                pass                       # best effort; the next sync tries again
+        return out
     finally:
         _sync_lock.release()
 

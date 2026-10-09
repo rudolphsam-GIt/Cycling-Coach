@@ -152,8 +152,10 @@ def upsert_activity(data: dict):
                 """UPDATE activities SET
                    avg_power_watts  = CASE WHEN edited = 1 THEN avg_power_watts ELSE COALESCE(?, avg_power_watts) END,
                    normalized_power = CASE WHEN edited = 1 THEN normalized_power ELSE COALESCE(?, normalized_power) END,
-                   tss              = CASE WHEN tss_locked = 1 OR edited = 1 THEN tss ELSE COALESCE(?, tss) END,
-                   tss_source       = CASE WHEN tss_locked = 1 OR edited = 1 OR ? IS NULL THEN tss_source ELSE ? END,
+                   tss              = CASE WHEN tss_locked = 1 OR edited = 1 OR tss_source = 'trainingpeaks'
+                                           THEN tss ELSE COALESCE(?, tss) END,
+                   tss_source       = CASE WHEN tss_locked = 1 OR edited = 1 OR tss_source = 'trainingpeaks'
+                                             OR ? IS NULL THEN tss_source ELSE ? END,
                    if_value         = CASE WHEN edited = 1 THEN if_value ELSE COALESCE(?, if_value) END,
                    avg_hr           = CASE WHEN edited = 1 THEN avg_hr ELSE COALESCE(?, avg_hr) END,
                    max_hr           = CASE WHEN edited = 1 THEN max_hr ELSE COALESCE(?, max_hr) END,
@@ -185,8 +187,10 @@ def upsert_activity(data: dict):
            ON CONFLICT(external_id) DO UPDATE SET
                timer_seconds=COALESCE(excluded.timer_seconds, activities.timer_seconds),
                tss=CASE WHEN activities.tss_locked = 1 OR activities.edited = 1
+                             OR activities.tss_source = 'trainingpeaks'
                         THEN activities.tss ELSE excluded.tss END,
                tss_source=CASE WHEN activities.tss_locked = 1 OR activities.edited = 1
+                                    OR activities.tss_source = 'trainingpeaks'
                                THEN activities.tss_source ELSE excluded.tss_source END,
                if_value=CASE WHEN activities.edited = 1 THEN activities.if_value ELSE excluded.if_value END,
                normalized_power=CASE WHEN activities.edited = 1 THEN activities.normalized_power
@@ -206,6 +210,28 @@ def upsert_activity(data: dict):
                        (data.get("external_id"),)).fetchone()
     conn.close()
     return row["id"] if row else None
+
+
+TP_SOURCE = "trainingpeaks"
+# Rides scored from heart rate (or estimated) take TrainingPeaks' TSS when it has the ride, so
+# fitness matches TrainingPeaks. Power rides keep the app's own number, which already matches.
+TP_REPLACEABLE = ("hr", "estimate", TP_SOURCE)
+
+
+def set_tss_from_trainingpeaks(activity_id: int, tss: float) -> bool:
+    """Use TrainingPeaks' TSS for a ride the app scores from heart rate. Hand set or hand corrected
+    rides are left alone. True if it changed."""
+    conn = get_conn()
+    cur = conn.execute(
+        f"""UPDATE activities SET tss=?, tss_source='{TP_SOURCE}'
+            WHERE id=? AND COALESCE(tss_locked, 0)=0 AND COALESCE(edited, 0)=0
+              AND COALESCE(tss_source, '') IN ({",".join("?" * len(TP_REPLACEABLE))})
+              AND (tss IS NULL OR ABS(tss - ?) >= 0.05 OR tss_source != '{TP_SOURCE}')""",
+        (round(float(tss), 1), activity_id, *TP_REPLACEABLE, float(tss)))
+    conn.commit()
+    changed = cur.rowcount > 0
+    conn.close()
+    return changed
 
 
 def apply_device_numbers(activity_id: int, normalized_power: float | None,
@@ -303,7 +329,7 @@ def rescore_from_streams(activity_id: int) -> bool:
     power dropout (see metrics.tss.stream_tss). True if the TSS was recalculated."""
     from metrics.tss import stream_tss
     act = get_activity(activity_id)
-    if not act or act.get("tss_locked"):
+    if not act or act.get("tss_locked") or act.get("tss_source") == TP_SOURCE:
         return False
     lthr = float(get_setting("lthr", 0) or 0)
     if not stream_tss(get_streams(activity_id), ftp_on(act["date"]), lthr, hr_profile()):
@@ -1024,7 +1050,8 @@ def recalculate_all_tss(only_id: int | None = None, since: str | None = None):
         """SELECT id, date, duration_seconds, elapsed_seconds, timer_seconds, normalized_power,
                   avg_power_watts, avg_hr, max_hr FROM activities
            WHERE COALESCE(tss_locked, 0) = 0 AND (? IS NULL OR id = ?)
-             AND (? IS NULL OR date >= ?)""",
+             AND (? IS NULL OR date >= ?)
+             AND COALESCE(tss_source, '') != 'trainingpeaks'""",
         (only_id, only_id, since, since),
     ).fetchall()
     updated = 0
