@@ -50,6 +50,7 @@ CSS = """
         background: var(--raised); border-left: 3px solid var(--c); outline: none; }
 .chip .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip .tss { color: var(--text2); font-size: 0.7rem; flex: none; }
+.chip .flag { color: var(--warn); font-weight: 800; font-size: 0.75rem; flex: none; margin-left: 2px; }
 .chip.drag { cursor: grab; }
 .chip.drag:hover, .chip.open:hover { filter: brightness(1.25); }
 .chip.drag:active { cursor: grabbing; }
@@ -126,6 +127,12 @@ export default function (component) {
       chip.style.setProperty('--c', c.color);
       chip.append(el('span', 'name', c.label));
       if (c.tss) chip.append(el('span', 'tss', String(c.tss)));
+      if (c.flag) {
+        const f = el('span', 'flag', '!');
+        f.title = c.flag;
+        f.setAttribute('aria-label', c.flag);
+        chip.append(f);
+      }
       chip.dataset.kind = c.kind;
       chip.dataset.id = c.id;
       chip.classList.add('open');

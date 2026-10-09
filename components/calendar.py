@@ -31,7 +31,7 @@ from components import theme
 from components.theme import rgba as _rgba
 from db.queries import is_ride
 from metrics.units import fmt_climb, fmt_distance, num as _num
-from metrics.tss import label as tss_label
+from metrics.tss import label as tss_label, mismatch as tss_mismatch
 
 # A ride that reaches less than this share of its planned TSS counts as short.
 SHORT_RATIO = 0.70
@@ -243,14 +243,20 @@ def day_tooltip(day: DayData, unit: str = "km") -> str:
         for r in day.rides[:3]:
             facts = ", ".join(_ride_facts(r, unit))
             parts.append(_esc(_short(r.get("name") or "Ride", 40) + (f", {facts}" if facts else "")))
+            if (gap := tss_mismatch(r)):
+                parts.append(_esc(f"! TrainingPeaks has {round(gap['tp'])} TSS for this ride"))
         if len(day.rides) > 3:
             parts.append(f"+{len(day.rides) - 3} more")
     if day.other:
         for o in day.other[:2]:
             kind = _short(o.get("sport_type") or "Activity", 16)
             dur = _hmm(o.get("duration_seconds"))
+            tss = _num(o.get("tss"))
+            gap = tss_mismatch(o)
             parts.append(_esc(f"Also logged, {_short(o.get('name') or kind, 30)}"
-                              + (f", {dur}" if dur else "")))
+                              + (f", {dur}" if dur else "")
+                              + (f", {round(tss)} {tss_label(o.get('tss_source'))}" if tss else "")
+                              + (f" (! TrainingPeaks has {round(gap['tp'])})" if gap else "")))
 
     for s in day.strength:
         label = "Strength planned" if s["planned"] else "Strength done"
@@ -310,9 +316,13 @@ def _chips(day: DayData, today: date) -> list[dict]:
         })
     for r in day.rides:
         tss = _num(r.get("tss"))
+        gap = tss_mismatch(r)
         chips.append({
             "kind": "done", "id": r.get("id"), "label": _short(r.get("name") or "Ride", 22),
             "tss": round(tss) if tss else None, "done": True, "locked": True, "color": theme.GOOD,
+            # A ! when TrainingPeaks scored this ride very differently; the ride popup explains.
+            "flag": (f"TrainingPeaks has {round(gap['tp'])} TSS for this ride. Open it to see why."
+                     if gap else None),
         })
     return chips
 
@@ -342,7 +352,7 @@ def build_payload(days: dict, selected: str | None, today: date, unit: str = "km
         "colors": {"text1": theme.TEXT1, "text2": theme.TEXT2, "text3": theme.TEXT3,
                    "surface": theme.SURFACE, "raised": theme.RAISED, "border": theme.BORDER,
                    "accent": theme.ACCENT, "race": theme.RACE, "strength": theme.STRENGTH,
-                   "good": theme.GOOD},
+                   "good": theme.GOOD, "warn": theme.WARN},
     }
 
 
@@ -668,11 +678,19 @@ def render_day_readonly(day_iso: str, strength_actions=None, day: DayData | None
             zones = _zone_line(r)
             if zones:
                 st.caption(zones)
+            if (gap := tss_mismatch(r)):
+                st.warning(f"TrainingPeaks has {round(gap['tp'])} TSS for this ride, the app "
+                           f"{round(gap['app'])}. " + " ".join(gap["reasons"]), icon=":material/error:")
     for o in day.other:
         drew = True
         dur = _hmm(o.get("duration_seconds"))
+        tss = _num(o.get("tss"))
         st.caption(f"Also logged, {_md(_short(o.get('name') or o.get('sport_type') or 'activity', 60))}"
-                   + (f", {dur}" if dur else ""))
+                   + (f", {dur}" if dur else "")
+                   + (f", {round(tss)} {tss_label(o.get('tss_source'))}" if tss else ""))
+        if (gap := tss_mismatch(o)):
+            st.warning(f"TrainingPeaks has {round(gap['tp'])} TSS for this session, the app "
+                       f"{round(gap['app'])}. " + " ".join(gap["reasons"]), icon=":material/error:")
     for s in day.strength:
         drew = True
         with st.container(border=True):

@@ -420,15 +420,36 @@ def match_completed(tp_workouts: list[dict], rides: list[dict],
         cands = [r for r in by_day.get((w.get("workoutDay") or "")[:10], []) if r["id"] not in used
                  and abs(r["duration_seconds"] / 3600 - w["totalTime"]) <= 0.75]
         if cands:
-            r = min(cands, key=lambda r: abs(r["duration_seconds"] / 3600 - w["totalTime"]))
+            r = min(cands, key=lambda r: _match_cost(w, r))
             used.add(r["id"])
             pairs.append((w, r))
     return pairs
 
 
-def import_hr_tss(days_back: int = 60, client: Client | None = None) -> int:
-    """For rides the app scores from heart rate, use TrainingPeaks' TSS when it has the ride, so
-    fitness matches what TrainingPeaks shows. Returns how many rides changed."""
+def _match_cost(w: dict, r: dict) -> float:
+    """How unlike a TrainingPeaks workout and an app ride are. Duration alone mixes up two rides of
+    similar length on one day (a crit and the ride home), so power and heart rate count too."""
+    cost = abs(r["duration_seconds"] / 3600 - w["totalTime"])
+    if w.get("normalizedPowerActual") and r.get("normalized_power"):
+        cost += abs(w["normalizedPowerActual"] - r["normalized_power"]) / 50
+    if w.get("heartRateAverage") and r.get("avg_hr"):
+        cost += abs(w["heartRateAverage"] - r["avg_hr"]) / 20
+    return cost
+
+
+SCORED_BY = {1: "power", 4: "hr", 0: "manual"}   # TrainingPeaks' tssSource codes seen so far
+
+
+def _tp_numbers(w: dict) -> dict:
+    return {"tss": round(float(w["tssActual"]), 1), "hours": w.get("totalTime"),
+            "np": w.get("normalizedPowerActual"), "avg_hr": w.get("heartRateAverage"),
+            "scored_by": SCORED_BY.get(w.get("tssSource"), "other"), "title": w.get("title")}
+
+
+def compare_with_trainingpeaks(days_back: int = 60, client: Client | None = None) -> int:
+    """Read TrainingPeaks' TSS for the app's rides and sessions and keep it next to the app's own
+    score, so big differences can be flagged. Never changes the app's score. Returns how many
+    activities were matched."""
     from datetime import date, timedelta
     end = date.today()
     start = end - timedelta(days=days_back)
@@ -439,37 +460,41 @@ def import_hr_tss(days_back: int = 60, client: Client | None = None) -> int:
         chunk_end = min(day + timedelta(days=180), end)
         tp_done += c.workouts(day.isoformat(), chunk_end.isoformat())
         day = chunk_end + timedelta(days=1)
-    acts = [r for r in q.get_activities(days_back=days_back + 1) if (r.get("tss_source") or "") in q.TP_REPLACEABLE]
+    acts = q.get_activities(days_back=days_back + 1)
     rides = [r for r in acts if q.is_ride(r)]
     others = [r for r in acts if not q.is_ride(r)]
     pairs = match_completed(tp_done, rides) + match_completed(
         [w for w in tp_done if w.get("workoutTypeValueId") not in BIKE_TYPES], others, types=None)
-    changed = sum(q.set_tss_from_trainingpeaks(r["id"], w["tssActual"]) for w, r in pairs)
+    for w, r in pairs:
+        q.set_tp_numbers(r["id"], _tp_numbers(w))
 
     # TrainingPeaks' fitness chart counts some sessions (often strength) that its workout list
-    # leaves out. What's left on a day after the listed workouts goes to the app's unmatched
-    # non-ride sessions that day, split by duration.
+    # leaves out. What's left on a day after the listed workouts is what it gave the app's
+    # unmatched sessions that day, split by duration.
     matched = {r["id"] for _, r in pairs}
     listed: dict[str, float] = {}
     for w in tp_done:
         if w.get("tssActual"):
-            day = (w.get("workoutDay") or "")[:10]
-            listed[day] = listed.get(day, 0.0) + float(w["tssActual"])
+            d = (w.get("workoutDay") or "")[:10]
+            listed[d] = listed.get(d, 0.0) + float(w["tssActual"])
     by_day: dict[str, list[dict]] = {}
     for r in others:
         if r["id"] not in matched:
             by_day.setdefault(r["date"], []).append(r)
+    count = len(pairs)
     if by_day:
         chart = c.daily_tss(min(by_day), max(by_day))
-        for day, items in by_day.items():
-            left = chart.get(day, 0.0) - listed.get(day, 0.0)
+        for d, items in by_day.items():
+            left = chart.get(d, 0.0) - listed.get(d, 0.0)
             if left < 1:
                 continue
-            total = sum(r.get("duration_seconds") or 0 for r in items) or len(items)
+            total = sum(r.get("duration_seconds") or 0 for r in items)
             for r in items:
-                share = (r.get("duration_seconds") or 0) / total if total > len(items) else 1 / len(items)
-                changed += q.set_tss_from_trainingpeaks(r["id"], round(left * share, 1))
-    return changed
+                share = (r.get("duration_seconds") or 0) / total if total else 1 / len(items)
+                q.set_tp_numbers(r["id"], {"tss": round(left * share, 1), "scored_by": "hr",
+                                           "title": "From TrainingPeaks' fitness chart"})
+                count += 1
+    return count
 
 
 def last_result() -> tuple[str, str, str] | None:
@@ -507,7 +532,7 @@ def run_locked(**kwargs) -> dict | None:
         out = sync_upcoming(**kwargs)
         if is_enabled() and not needs_signin():
             try:
-                import_hr_tss()            # heart rate rides take TrainingPeaks' number
+                compare_with_trainingpeaks()   # keep TrainingPeaks' scores to compare
             except Exception:
                 pass                       # best effort; the next sync tries again
         return out

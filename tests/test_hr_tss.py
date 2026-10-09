@@ -1,5 +1,6 @@
-"""hrTSS: TRIMP scaled so an hour at threshold heart rate is 100, used for rides without power
-and to fill power dropouts. Run with venv/bin/python -m unittest tests.test_hr_tss -v"""
+"""hrTSS, TrainingPeaks style by default or TRIMP, used for rides without power, to fill power
+dropouts and for strength and other sports; and the comparison with TrainingPeaks' numbers. Run with venv/bin/python -m unittest tests.test_hr_tss -v"""
+import json
 import math
 from datetime import date, timedelta
 from unittest import mock
@@ -7,11 +8,13 @@ from unittest import mock
 from auth import garmin as garmin_auth
 from db import queries as q
 from metrics import streams as sm
-from metrics.tss import hr_tss, hr_tss_seconds, k_for, label, ride_tss, robust_max_hr, stream_tss
+from metrics.tss import (hr_if, hr_tss, hr_tss_seconds, k_for, label, mismatch, ride_tss, robust_max_hr,
+                         stream_tss)
 from tests.test_manual_tss import Base, ride
 
 TODAY = date.today()
-SAM = {"rest": 45, "max": 197, "k": 1.92}
+SAM = {"rest": 45, "max": 197, "k": 1.92, "method": "trimp"}
+TP = {"method": "trainingpeaks"}
 
 
 def trimp(minutes, hr, p):
@@ -39,7 +42,8 @@ class FormulaTests(Base):
         self.assertAlmostEqual(k_for("unspecified"), 1.795)
 
     def test_without_resting_and_max_it_falls_back(self):
-        self.assertAlmostEqual(hr_tss(3600, 150, 170, {"rest": None, "max": None}), (150 / 170) ** 2 * 100)
+        self.assertAlmostEqual(hr_tss(3600, 150, 170, {"rest": None, "max": None, "method": "trimp"}),
+                               (150 / 170) ** 2 * 100)
 
     def test_a_one_off_spike_does_not_set_max_hr(self):
         self.assertEqual(robust_max_hr([208, 197, 193, 193, 190]), 197)
@@ -88,6 +92,7 @@ class StoredRideTests(Base):
         q.set_setting("resting_hr_manual", "45")
         q.set_setting("max_hr_manual", "197")
         q.set_setting("gender", "man")
+        q.set_setting("hr_tss_method", "trimp")
 
     def test_a_ride_without_power_is_stored_as_hrtss(self):
         aid = q.upsert_activity(ride("hr1", normalized_power=None, avg_power_watts=None, avg_hr=150, tss=1))
@@ -169,33 +174,57 @@ class DeviceNumbersTests(Base):
         self.assertEqual(q.get_activity(aid)["normalized_power"], 230)
 
 
-class TrainingPeaksTssTests(Base):
-    def _tp(self, day, hours, tss, kind=2):
-        return {"workoutDay": f"{day}T00:00:00", "totalTime": hours, "tssActual": tss, "workoutTypeValueId": kind}
+class TrainingPeaksStyleTests(Base):
+    def test_an_hour_at_threshold_is_100(self):
+        self.assertAlmostEqual(hr_tss(3600, 159, 159, TP), 100)
+        self.assertAlmostEqual(hr_tss_seconds([159] * 3600, 159, TP), 100)
 
-    def test_heart_rate_rides_take_trainingpeaks_tss_and_keep_it(self):
+    def test_easy_efforts_have_a_floor(self):
+        self.assertAlmostEqual(float(hr_if(60, 159)), 0.56)
+        self.assertAlmostEqual(float(hr_if(74, 159)), 0.56)     # a quiet strength hour still scores ~31
+        self.assertAlmostEqual(hr_tss_seconds([74] * 3600, 159, TP), 31.4, places=1)
+
+    def test_bends_at_the_top_of_zone_1_and_2(self):
+        self.assertAlmostEqual(float(hr_if(0.80 * 159, 159)), 0.65)
+        self.assertAlmostEqual(float(hr_if(0.89 * 159, 159)), 0.80)
+        self.assertAlmostEqual(float(hr_if(170, 159)), 170 / 159)   # above threshold IF is HR / LTHR
+
+    def test_recorded_seconds_are_spread_over_the_timer_time(self):
+        self.assertAlmostEqual(hr_tss_seconds([159] * 1800, 159, TP, duration_s=3600), 100)
+
+    def test_it_is_the_default(self):
+        self.assertAlmostEqual(hr_tss(3600, 159, 159, {"rest": 45, "max": 197}), 100)
+        self.assertEqual(q.hr_profile()["method"], "trainingpeaks")
+
+
+class CompareWithTrainingPeaksTests(Base):
+    def _tp(self, day, hours, tss, kind=2, source=1, np_w=None):
+        return {"workoutDay": f"{day}T00:00:00", "totalTime": hours, "tssActual": tss, "workoutTypeValueId": kind,
+                "tssSource": source, "normalizedPowerActual": np_w, "title": "Ride"}
+
+    def test_trainingpeaks_numbers_are_kept_next_to_the_apps_own(self):
         from auth import trainingpeaks as tp
         day = (TODAY - timedelta(days=5)).isoformat()
-        hr_ride = q.upsert_activity(ride("hrr", date=day, normalized_power=None, avg_power_watts=None,
-                                         duration_seconds=3600, tss=40, tss_source="hr"))
-        pw_ride = q.upsert_activity(ride("pwr", date=day, duration_seconds=7200, tss=150, tss_source="power",
-                                         name="Other"))
+        aid = q.upsert_activity(ride("r", date=day, duration_seconds=3600, tss=80, tss_source="power"))
         client = mock.Mock()
-        client.workouts.return_value = [self._tp(day, 1.4, 88.0), self._tp(day, 2.0, 155.0)]
-        self.assertEqual(tp.import_hr_tss(days_back=10, client=client), 1)
-        self.assertEqual((q.get_activity(hr_ride)["tss"], q.get_activity(hr_ride)["tss_source"]), (88.0, "trainingpeaks"))
-        self.assertEqual(q.get_activity(pw_ride)["tss"], 150)            # power rides keep the app's number
-        q.recalculate_all_tss()
-        q.upsert_activity(ride("hrr", date=day, normalized_power=None, avg_power_watts=None,
-                               duration_seconds=3600, tss=40, tss_source="hr"))   # synced again
-        self.assertEqual(q.get_activity(hr_ride)["tss"], 88.0)
-        self.assertEqual(label("trainingpeaks"), "hrTSS (TP)")
+        client.workouts.return_value = [self._tp(day, 1.0, 120.0, np_w=230)]
+        self.assertEqual(tp.compare_with_trainingpeaks(days_back=10, client=client), 1)
+        a = q.get_activity(aid)
+        self.assertEqual(a["tss"], 80)                              # the app's score is untouched
+        m = mismatch(a)
+        self.assertEqual((m["app"], m["tp"]), (80, 120))
+        self.assertTrue(any("normalized power" in r for r in m["reasons"]))
 
-    def test_hand_set_tss_wins_over_trainingpeaks(self):
-        aid = q.upsert_activity(ride("x", normalized_power=None, tss=40, tss_source="hr"))
-        q.set_activity_tss(aid, 70)
-        self.assertFalse(q.set_tss_from_trainingpeaks(aid, 90))
-        self.assertEqual(q.get_activity(aid)["tss"], 70)
+    def test_close_scores_are_not_flagged(self):
+        a = {"tss": 100, "tss_source": "power", "tp_json": '{"tss": 92, "scored_by": "power"}'}
+        self.assertIsNone(mismatch(a))                               # 8 apart
+        a["tp_json"] = '{"tss": 120, "scored_by": "power"}'
+        self.assertIsNone(mismatch({**a, "tss": 105}))              # 15 apart but under 15%
+        self.assertIsNotNone(mismatch({**a, "tss": 80}))
+
+    def test_reasons_name_the_scoring_source(self):
+        a = {"tss": 150, "tss_source": "power", "tp_json": '{"tss": 100, "scored_by": "hr"}'}
+        self.assertIn("heart rate", mismatch(a)["reasons"][0])
 
 
 class OtherSportsTests(Base):
@@ -226,18 +255,31 @@ class OtherSportsTests(Base):
         garmin_auth._sync_rides(api, 7)
         self.assertEqual(len(q.get_activities(days_back=7)), 2)
 
-    def test_sessions_missing_from_the_workout_list_take_tss_from_the_fitness_chart(self):
+    def test_sessions_missing_from_the_workout_list_compare_with_the_fitness_chart(self):
         from auth import trainingpeaks as tp
         day = (TODAY - timedelta(days=3)).isoformat()
         api = mock.Mock()
         api.get_activities_by_date.return_value = [self._strength(day, mins=66, hr=74)]
-        garmin_auth._sync_rides(api, 7)
+        with mock.patch.object(garmin_auth, "_ride_file", return_value=None):
+            garmin_auth._sync_rides(api, 7)
         client = mock.Mock()
         client.workouts.return_value = []
         client.daily_tss.return_value = {day: 34.0}
-        self.assertEqual(tp.import_hr_tss(days_back=10, client=client), 1)
+        self.assertEqual(tp.compare_with_trainingpeaks(days_back=10, client=client), 1)
         a = q.get_activities(days_back=7)[0]
-        self.assertEqual((a["tss"], a["tss_source"]), (34.0, "trainingpeaks"))
+        self.assertEqual(a["tss_source"], "hr")                     # still the app's own score
+        self.assertEqual(json.loads(a["tp_json"])["tss"], 34.0)
+
+    def test_strength_is_scored_second_by_second_from_its_file(self):
+        day = (TODAY - timedelta(days=2)).isoformat()
+        api = mock.Mock()
+        api.get_activities_by_date.return_value = [self._strength(day, mins=60, hr=80)]
+        with mock.patch.object(garmin_auth, "_ride_file", return_value=b"fit"), \
+             mock.patch("metrics.streams.from_fit", return_value={"hr": [74] * 3600}):
+            garmin_auth._sync_rides(api, 7)
+        a = q.get_activities(days_back=7)[0]
+        self.assertIsNotNone(q.get_streams(a["id"]))
+        self.assertAlmostEqual(a["tss"], hr_tss_seconds([74] * 3600, 155, TP), places=0)
 
 
 class ResyncKeepsStreamScoreTests(Base):
@@ -255,3 +297,16 @@ class ResyncKeepsStreamScoreTests(Base):
             garmin_auth._sync_rides(api, 7)
             garmin_auth._sync_rides(api, 7)          # synced again
         self.assertEqual(q.get_activities(days_back=7)[0]["tss_source"], "mixed")
+
+
+class MatchingTests(Base):
+    def test_two_rides_of_similar_length_on_one_day_are_not_swapped(self):
+        from auth import trainingpeaks as tp
+        crit = {"id": 1, "date": "2026-07-08", "duration_seconds": 3060, "normalized_power": 300, "avg_hr": 170}
+        spin = {"id": 2, "date": "2026-07-08", "duration_seconds": 3240, "normalized_power": 170, "avg_hr": 120}
+        w_spin = {"workoutDay": "2026-07-08T00:00:00", "totalTime": 0.9, "tssActual": 34, "workoutTypeValueId": 2,
+                  "normalizedPowerActual": 172, "heartRateAverage": 121}
+        w_crit = {"workoutDay": "2026-07-08T00:00:00", "totalTime": 0.85, "tssActual": 94, "workoutTypeValueId": 2,
+                  "normalizedPowerActual": 298, "heartRateAverage": 169}
+        pairs = {w["tssActual"]: r["id"] for w, r in tp.match_completed([w_spin, w_crit], [crit, spin])}
+        self.assertEqual(pairs, {34: 2, 94: 1})
