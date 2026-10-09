@@ -112,5 +112,9 @@ if is_setup_complete() and is_onboarding_complete():
         elif res and st.session_state["tp_result_seen"] != when:
             st.toast(res[2], icon=":material/event_upcoming:" if res[0] == "ok" else ":material/warning:")
             st.session_state["tp_result_seen"] = when
+    # Read intervals.icu's scores now and then, to check the app's against.
+    import auth.intervals as intervals_auth
+    if intervals_auth.compare_due():
+        intervals_auth.start_background_compare()
 
 pg.run()

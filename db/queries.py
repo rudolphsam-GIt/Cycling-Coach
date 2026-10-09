@@ -211,12 +211,20 @@ def upsert_activity(data: dict):
     return row["id"] if row else None
 
 
-def set_tp_numbers(activity_id: int, numbers: dict | None) -> None:
-    """Keep what TrainingPeaks has for this activity (tss, hours, np, avg_hr, scored_by), only to
-    compare with the app's own score. None clears it."""
+def set_ref_numbers(activity_id: int, service: str, numbers: dict | None) -> None:
+    """Keep what a service ("trainingpeaks" or "intervals") has for this activity (tss, hours,
+    np, avg_hr, scored_by), only to compare with the app's own score. None clears it."""
     conn = get_conn()
-    conn.execute("UPDATE activities SET tp_json=? WHERE id=?",
-                 (json.dumps(numbers) if numbers else None, activity_id))
+    row = conn.execute("SELECT ref_json FROM activities WHERE id=?", (activity_id,)).fetchone()
+    try:
+        ref = json.loads(row["ref_json"]) if row and row["ref_json"] else {}
+    except (TypeError, ValueError):
+        ref = {}
+    if numbers:
+        ref[service] = numbers
+    else:
+        ref.pop(service, None)
+    conn.execute("UPDATE activities SET ref_json=? WHERE id=?", (json.dumps(ref) if ref else None, activity_id))
     conn.commit()
     conn.close()
 
@@ -318,9 +326,12 @@ def rescore_from_streams(activity_id: int) -> bool:
     act = get_activity(activity_id)
     if not act or act.get("tss_locked"):
         return False
+    from metrics.tss import time_rule, tss_duration
     lthr = float(get_setting("lthr", 0) or 0)
-    timer = act.get("timer_seconds") or act.get("duration_seconds")
-    if not stream_tss(get_streams(activity_id), ftp_on(act["date"]), lthr, hr_profile(), timer):
+    profile = hr_profile()
+    seconds = tss_duration(act.get("duration_seconds"), act.get("elapsed_seconds"), act.get("timer_seconds"),
+                           time_rule(profile))
+    if not stream_tss(get_streams(activity_id), ftp_on(act["date"]), lthr, profile, seconds):
         return False
     recalculate_all_tss(only_id=activity_id)
     return True
@@ -948,15 +959,21 @@ def get_weekly_tss_summary(weeks: int = 5) -> list[dict]:
 
 
 def hr_profile() -> dict:
-    """Resting and max heart rate and the TRIMP curve constant, for hrTSS. Each heart rate is the
-    rider's own number from Settings when set, else worked out: resting from Garmin's last 30
-    days, max from the highest reading another ride comes close to in the last year. Missing
-    values are None, and hrTSS then falls back to (HR / LTHR) squared."""
-    from metrics.tss import k_for
+    """How rides are scored: resting and max heart rate and the TRIMP curve constant for hrTSS,
+    and from the "Score like" standard the heart rate method and time rule ("timer" or
+    "moving"). Each heart rate is the rider's own number from Settings when set, else worked
+    out: resting from Garmin's last 30 days, max from the highest reading another ride comes
+    close to in the last year. Missing values are None, and TRIMP then falls back to
+    (HR / LTHR) squared."""
+    from metrics.tss import STANDARDS, k_for
     rest = float(get_setting("resting_hr_manual", 0) or 0) or auto_resting_hr()
     mx = float(get_setting("max_hr_manual", 0) or 0) or auto_max_hr()
-    return {"rest": rest, "max": mx, "k": k_for(get_setting("gender", "")),
-            "method": get_setting("hr_tss_method", "") or "trainingpeaks"}
+    std = STANDARDS.get(get_setting("score_like", "") or "")
+    if std:
+        method, time = std["hr_method"], std["time"]
+    else:   # settings from before "Score like": the old heart rate choice, on timer time
+        method, time = get_setting("hr_tss_method", "") or "trainingpeaks", "timer"
+    return {"rest": rest, "max": mx, "k": k_for(get_setting("gender", "")), "method": method, "time": time}
 
 
 def auto_resting_hr() -> float | None:
@@ -1024,7 +1041,7 @@ def recalculate_all_tss(only_id: int | None = None, since: str | None = None):
     """Recompute TSS and zone estimates for every stored activity, or just one, or those on or
     after `since`. Each ride is scored on the FTP it was ridden at (FTP history), so a new FTP
     never rewrites past fitness. Rides whose TSS was set by hand are left alone."""
-    from metrics.tss import ride_tss, tss_duration
+    from metrics.tss import ride_tss, time_rule, tss_duration
     from metrics.zones import estimate_zone_seconds
 
     from metrics.tss import stream_tss
@@ -1044,7 +1061,8 @@ def recalculate_all_tss(only_id: int | None = None, since: str | None = None):
     ).fetchall()
     updated = 0
     for row in rows:
-        duration_s = tss_duration(row["duration_seconds"], row["elapsed_seconds"], row["timer_seconds"])
+        duration_s = tss_duration(row["duration_seconds"], row["elapsed_seconds"], row["timer_seconds"],
+                                  time_rule(profile))
         np = row["normalized_power"]
         avg_hr = row["avg_hr"]
         max_hr = row["max_hr"]

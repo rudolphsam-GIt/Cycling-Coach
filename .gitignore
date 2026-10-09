@@ -24,3 +24,7 @@ venv-py39/
 
 # Chrome profile the TrainingPeaks sign in window keeps between runs
 data/tp_browser/
+data/backups/
+
+# Machine-local Claude Code config
+.claude/launch.json

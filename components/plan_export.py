@@ -157,6 +157,7 @@ def render(today: date | None = None) -> None:
                     except intervals.IntervalsError as e:
                         st.session_state[MSG_KEY] = ("err", str(e))
                     else:
+                        intervals.start_background_compare()    # its scores, to check the app's against
                         gone = f" Took off {out['removed']} you removed." if out["removed"] else ""
                         st.session_state[MSG_KEY] = (
                             "ok", f"Synced {out['sent']} rides to intervals.icu.{gone} In Zwift they appear "

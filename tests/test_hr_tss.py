@@ -212,18 +212,18 @@ class CompareWithTrainingPeaksTests(Base):
         a = q.get_activity(aid)
         self.assertEqual(a["tss"], 80)                              # the app's score is untouched
         m = mismatch(a)
-        self.assertEqual((m["app"], m["tp"]), (80, 120))
+        self.assertEqual((m["app"], m["ref"], m["name"]), (80, 120, "TrainingPeaks"))
         self.assertTrue(any("normalized power" in r for r in m["reasons"]))
 
     def test_close_scores_are_not_flagged(self):
-        a = {"tss": 100, "tss_source": "power", "tp_json": '{"tss": 92, "scored_by": "power"}'}
+        a = {"tss": 100, "tss_source": "power", "ref_json": '{"trainingpeaks": {"tss": 92, "scored_by": "power"}}'}
         self.assertIsNone(mismatch(a))                               # 8 apart
-        a["tp_json"] = '{"tss": 120, "scored_by": "power"}'
+        a["ref_json"] = '{"trainingpeaks": {"tss": 120, "scored_by": "power"}}'
         self.assertIsNone(mismatch({**a, "tss": 105}))              # 15 apart but under 15%
         self.assertIsNotNone(mismatch({**a, "tss": 80}))
 
     def test_reasons_name_the_scoring_source(self):
-        a = {"tss": 150, "tss_source": "power", "tp_json": '{"tss": 100, "scored_by": "hr"}'}
+        a = {"tss": 150, "tss_source": "power", "ref_json": '{"trainingpeaks": {"tss": 100, "scored_by": "hr"}}'}
         self.assertIn("heart rate", mismatch(a)["reasons"][0])
 
 
@@ -268,7 +268,7 @@ class OtherSportsTests(Base):
         self.assertEqual(tp.compare_with_trainingpeaks(days_back=10, client=client), 1)
         a = q.get_activities(days_back=7)[0]
         self.assertEqual(a["tss_source"], "hr")                     # still the app's own score
-        self.assertEqual(json.loads(a["tp_json"])["tss"], 34.0)
+        self.assertEqual(json.loads(a["ref_json"])["trainingpeaks"]["tss"], 34.0)
 
     def test_strength_is_scored_second_by_second_from_its_file(self):
         day = (TODAY - timedelta(days=2)).isoformat()
@@ -301,6 +301,7 @@ class ResyncKeepsStreamScoreTests(Base):
 
 class MatchingTests(Base):
     def test_two_rides_of_similar_length_on_one_day_are_not_swapped(self):
+        import compare
         from auth import trainingpeaks as tp
         crit = {"id": 1, "date": "2026-07-08", "duration_seconds": 3060, "normalized_power": 300, "avg_hr": 170}
         spin = {"id": 2, "date": "2026-07-08", "duration_seconds": 3240, "normalized_power": 170, "avg_hr": 120}
@@ -308,5 +309,6 @@ class MatchingTests(Base):
                   "normalizedPowerActual": 172, "heartRateAverage": 121}
         w_crit = {"workoutDay": "2026-07-08T00:00:00", "totalTime": 0.85, "tssActual": 94, "workoutTypeValueId": 2,
                   "normalizedPowerActual": 298, "heartRateAverage": 169}
-        pairs = {w["tssActual"]: r["id"] for w, r in tp.match_completed([w_spin, w_crit], [crit, spin])}
+        pairs = {w["tss"]: r["id"] for w, r in compare.match_completed([tp.normalize(w_spin), tp.normalize(w_crit)],
+                                                                         [crit, spin])}
         self.assertEqual(pairs, {34: 2, 94: 1})

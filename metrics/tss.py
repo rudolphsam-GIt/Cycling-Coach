@@ -1,9 +1,16 @@
 """Training Stress Score for a ride, in one place so every source agrees.
 
-Duration is the device's timer time when the source gives it (Garmin, FIT files), the same time
-Garmin and TrainingPeaks score against, else moving time (Strava). Elapsed time is only a
-fallback, since it counts coffee stops. The timer time is stored, so recalculating a ride gives
-back the TSS it was synced with.
+The app scores rides like one of three standards (STANDARDS), chosen in Settings as "Score like":
+
+- TrainingPeaks: Coggan power TSS, the fitted TrainingPeaks heart rate curve, timer time.
+- intervals.icu: Coggan power TSS, HRSS for heart rate (normalized TRIMP, second by second, as
+  intervals.icu takes from Elevate) and moving time, since intervals.icu leaves out time stopped.
+- The published standard: Coggan power TSS, Banister's TRIMP for heart rate, timer time.
+
+Duration follows the standard's time rule. Timer time is the device's timer (Garmin, FIT files),
+the time Garmin and TrainingPeaks score against; moving time leaves out stops. Each falls back
+to the other, then to elapsed time, which counts coffee stops. Timer and moving time are both
+stored, so recalculating a ride gives back the TSS it was synced with.
 
 Power TSS is Coggan's: hours x IF squared x 100, where IF is NP / FTP.
 
@@ -25,6 +32,7 @@ Heart rate TSS (hrTSS) has two methods:
     TRIMP per minute = HRR x 0.64 x e^(k x HRR),  HRR = (HR - resting) / (max - resting)
 
   with k = 1.92 for men and 1.67 for women, scaled by the TRIMP of an hour at threshold heart rate.
+  Scored second by second, this is intervals.icu's HRSS.
 
 Both score an hour at LTHR as 100, the same as an hour at FTP.
 
@@ -39,6 +47,22 @@ import numpy as np
 HR_IF_CURVE = ((0.50, 0.56), (0.80, 0.65), (0.89, 0.80), (1.00, 1.00), (1.30, 1.30))
 HR_METHODS = {"trainingpeaks": "TrainingPeaks style", "trimp": "TRIMP (Banister)"}
 DEFAULT_HR_METHOD = "trainingpeaks"
+
+# What "Score like" can be set to. `compare` is the service whose numbers rides are checked
+# against; the published standard checks against whichever service is connected.
+STANDARDS = {
+    "trainingpeaks": {"label": "TrainingPeaks", "hr_method": "trainingpeaks", "time": "timer",
+                      "compare": "trainingpeaks",
+                      "about": "Heart rate on the curve fitted to TrainingPeaks' hrTSS, on timer time."},
+    "intervals": {"label": "intervals.icu", "hr_method": "trimp", "time": "moving",
+                  "compare": "intervals",
+                  "about": "Heart rate as HRSS (normalized TRIMP), on moving time, as intervals.icu does."},
+    "standard": {"label": "Published standard", "hr_method": "trimp", "time": "timer",
+                 "compare": None,
+                 "about": "Coggan's power TSS and Banister's TRIMP for heart rate, on timer time."},
+}
+DEFAULT_STANDARD = "trainingpeaks"
+SERVICE_NAMES = {"trainingpeaks": "TrainingPeaks", "intervals": "intervals.icu"}
 
 K_BY_GENDER = {"man": 1.92, "woman": 1.67}
 DEFAULT_K = (1.92 + 1.67) / 2          # non-binary or not given
@@ -102,8 +126,9 @@ def hr_tss_seconds(hr_values, lthr: float | None, profile: dict | None = None,
                    duration_s: float | None = None) -> float | None:
     """hrTSS from second by second heart rate (one value per second). Scoring each second rather
     than the average counts hard surges properly, since the curve is steep. With `duration_s`
-    (the timer time), the average over the recorded seconds is spread over that time, as
-    TrainingPeaks does when a strap drops a few seconds."""
+    (the standard's ride time), the average over the recorded seconds is spread over that time,
+    as TrainingPeaks does when a strap drops a few seconds, and as intervals.icu's HRSS does
+    on moving time."""
     hr = np.asarray([h for h in hr_values if h is not None and h > 0], dtype=float)
     if not len(hr) or not lthr or lthr <= 0:
         return None
@@ -114,7 +139,7 @@ def hr_tss_seconds(hr_values, lthr: float | None, profile: dict | None = None,
         per_sec = _weight(hr, profile) / _weight(lthr, profile)
     else:
         per_sec = (hr / lthr) ** 2
-    return float(per_sec.sum()) / 3600 * 100
+    return float(per_sec.mean()) * 100 * seconds / 3600
 
 
 def estimated_tss(duration_s: float, perceived_exertion: float | None,
@@ -132,10 +157,17 @@ def estimated_tss(duration_s: float, perceived_exertion: float | None,
 
 
 def tss_duration(moving_s: float | None, elapsed_s: float | None = None,
-                 timer_s: float | None = None) -> float:
-    """The seconds TSS is scored against: the device's timer time when known (what Garmin and
-    TrainingPeaks score on), else moving time, else elapsed."""
-    return float(timer_s or moving_s or elapsed_s or 0)
+                 timer_s: float | None = None, rule: str = "timer") -> float:
+    """The seconds TSS is scored against. "timer" (TrainingPeaks and the standard): the device's
+    timer time when known, else moving time. "moving" (intervals.icu): moving time, else timer.
+    Elapsed time last either way."""
+    first, second = (moving_s, timer_s) if rule == "moving" else (timer_s, moving_s)
+    return float(first or second or elapsed_s or 0)
+
+
+def time_rule(profile: dict | None) -> str:
+    """The time rule ("timer" or "moving") of an hr_profile()."""
+    return (profile or {}).get("time") or "timer"
 
 
 def ride_tss(duration_s: float, norm_power: float | None, avg_hr: float | None,
@@ -208,61 +240,74 @@ def robust_max_hr(maxes: list[float], within: float = 5) -> float | None:
     return vals[0] if len(vals) == 1 else vals[1]
 
 
-# ── Comparing with TrainingPeaks ──────────────────────────────────────────────
+# ── Comparing with TrainingPeaks or intervals.icu ─────────────────────────────
 
-MISMATCH_TSS = 10        # flag a ride when the app and TrainingPeaks differ by this much
-MISMATCH_SHARE = 0.15    # and by this share of TrainingPeaks' number
+MISMATCH_TSS = 10        # flag a ride when the app and the service differ by this much
+MISMATCH_SHARE = 0.15    # and by this share of the service's number
 
 
-def tp_numbers(act: dict) -> dict | None:
-    """What TrainingPeaks has for this activity (tss, hours, np, avg_hr, scored_by), or None."""
+def ref_numbers(act: dict, service: str | None) -> dict | None:
+    """What a service ("trainingpeaks" or "intervals") has for this activity (tss, hours, np,
+    avg_hr, scored_by), or None."""
     import json
-    raw = act.get("tp_json")
-    if not raw:
+    raw = act.get("ref_json")
+    if not raw or not service:
         return None
     try:
-        tp = json.loads(raw)
-    except (TypeError, ValueError):
+        ref = (json.loads(raw) or {}).get(service)
+    except (TypeError, ValueError, AttributeError):
         return None
-    return tp if tp.get("tss") is not None else None
+    return ref if ref and ref.get("tss") is not None else None
 
 
-def mismatch(act: dict) -> dict | None:
-    """When the app's TSS and TrainingPeaks' differ a lot: {app, tp, diff, share, reasons}.
+def mismatch(act: dict, service: str | None = None) -> dict | None:
+    """When the app's TSS and the service's differ a lot: {app, ref, diff, share, reasons,
+    service, name}. The service defaults to the one the current "Score like" compares against.
     Reasons are the differences in the inputs that explain it, in words."""
-    tp = tp_numbers(act)
-    app = act.get("tss")
-    if not tp or app is None:
+    if not act.get("ref_json"):
         return None
-    diff = float(app) - float(tp["tss"])
-    share = abs(diff) / max(float(tp["tss"]), 1.0)
+    if service is None:
+        import compare
+        service = compare.compare_service()
+    ref = ref_numbers(act, service)
+    app = act.get("tss")
+    if not ref or app is None:
+        return None
+    diff = float(app) - float(ref["tss"])
+    share = abs(diff) / max(float(ref["tss"]), 1.0)
     if abs(diff) < MISMATCH_TSS or share < MISMATCH_SHARE:
         return None
+    name = SERVICE_NAMES.get(service, service)
     reasons = []
     app_kind = act.get("tss_source") or ""
-    tp_kind = tp.get("scored_by") or ""
-    if app_kind in ("power", "mixed") and tp_kind == "hr":
-        reasons.append("TrainingPeaks scored it from heart rate; the app has power for it.")
-    elif app_kind in ("hr", "estimate") and tp_kind == "power":
-        reasons.append("TrainingPeaks has power for it; the app only has heart rate.")
-    elif tp_kind == "manual":
-        reasons.append("The number in TrainingPeaks was typed in by hand.")
+    ref_kind = ref.get("scored_by") or ""
+    if app_kind in ("power", "mixed") and ref_kind == "hr":
+        reasons.append(f"{name} scored it from heart rate; the app has power for it.")
+    elif app_kind in ("hr", "estimate") and ref_kind == "power":
+        reasons.append(f"{name} has power for it; the app only has heart rate.")
+    elif ref_kind == "manual":
+        reasons.append(f"The number in {name} was typed in by hand.")
     if act.get("tss_locked"):
         reasons.append("You set this ride's TSS by hand in the app.")
-    hours = (act.get("timer_seconds") or act.get("duration_seconds") or 0) / 3600
-    if tp.get("hours") and hours and abs(tp["hours"] / hours - 1) > 0.05:
-        reasons.append(f"Different ride time: {tp['hours'] * 60:.0f} min in TrainingPeaks, {hours * 60:.0f} min here.")
-    if tp.get("np") and act.get("normalized_power") and abs(tp["np"] / act["normalized_power"] - 1) > 0.03:
-        reasons.append(f"Different normalized power: {tp['np']:.0f} W in TrainingPeaks, "
+    # Compare like with like: intervals.icu reports moving time, TrainingPeaks timer time.
+    if service == "intervals":
+        hours = (act.get("duration_seconds") or act.get("timer_seconds") or 0) / 3600
+    else:
+        hours = (act.get("timer_seconds") or act.get("duration_seconds") or 0) / 3600
+    if ref.get("hours") and hours and abs(ref["hours"] / hours - 1) > 0.05:
+        reasons.append(f"Different ride time: {ref['hours'] * 60:.0f} min in {name}, {hours * 60:.0f} min here.")
+    if ref.get("np") and act.get("normalized_power") and abs(ref["np"] / act["normalized_power"] - 1) > 0.03:
+        reasons.append(f"Different normalized power: {ref['np']:.0f} W in {name}, "
                        f"{act['normalized_power']:.0f} W here.")
-    if tp.get("avg_hr") and act.get("avg_hr") and abs(tp["avg_hr"] - act["avg_hr"]) > 3:
-        reasons.append(f"Different average heart rate: {tp['avg_hr']:.0f} bpm in TrainingPeaks, "
+    if ref.get("avg_hr") and act.get("avg_hr") and abs(ref["avg_hr"] - act["avg_hr"]) > 3:
+        reasons.append(f"Different average heart rate: {ref['avg_hr']:.0f} bpm in {name}, "
                        f"{act['avg_hr']:.0f} here.")
-    if not reasons and tp.get("hours") is None:
-        reasons.append("TrainingPeaks' number comes from its fitness chart for that day (the session isn't in "
-                       "its workout list), so its time and heart rate can't be compared. Check the session "
-                       "in TrainingPeaks.")
+    if not reasons and ref.get("hours") is None:
+        reasons.append(f"{name}'s number comes from its fitness chart for that day (the session isn't in "
+                       f"its workout list), so its time and heart rate can't be compared. Check the session "
+                       f"in {name}.")
     elif not reasons:
         reasons.append("The inputs match, so the difference is in how the number was worked out, "
                        "for example FTP or threshold heart rate on that date.")
-    return {"app": float(app), "tp": float(tp["tss"]), "diff": diff, "share": share, "reasons": reasons}
+    return {"app": float(app), "ref": float(ref["tss"]), "diff": diff, "share": share,
+            "reasons": reasons, "service": service, "name": name}
