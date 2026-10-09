@@ -18,7 +18,7 @@ from db.queries import (get_setting, set_setting, upsert_activity, upsert_recove
                         match_activity_id, save_peaks, save_hr_peaks, has_hr_peaks,
                         ftp_history_rows, ftp_on, oldest_ride_missing_timer,
                         get_activity, hr_profile, rescore_from_streams, save_streams,
-                        apply_device_numbers, recalculate_all_tss)
+                        apply_device_numbers, recalculate_all_tss, get_streams)
 from metrics.tss import ride_tss, tss_duration
 from metrics.zones import estimate_zone_seconds
 
@@ -263,7 +263,8 @@ def _score_from_file(activity_id: int, raw: bytes | None) -> None:
     if not streams or not act:
         return
     lthr = float(get_setting("lthr", 0) or 0)
-    if stream_tss(streams, ftp_on(act["date"]), lthr, hr_profile()):
+    timer = act.get("timer_seconds") or act.get("duration_seconds")
+    if stream_tss(streams, ftp_on(act["date"]), lthr, hr_profile(), timer):
         save_streams(activity_id, streams, "garmin")
         rescore_from_streams(activity_id)
 
@@ -280,10 +281,15 @@ def _sync_rides(api, days_back: int) -> int:
         day = (act.get("startTimeLocal") or "")[:10]
         row = activity_row(act, ftp_on(day, history) if day else ftp, lthr, profile)
         if row is None:
-            # Strength, hikes and skiing count toward fitness too, but aren't rides.
+            # Strength, hikes and skiing count toward fitness too, but aren't rides. Their heart
+            # rate is scored second by second from the file, fetched once.
             other = other_activity_row(act, lthr, profile)
             if other and other["date"]:
-                upsert_activity(other)
+                other_id = upsert_activity(other)
+                if other_id and not get_streams(other_id):
+                    _score_from_file(other_id, _ride_file(api, act.get("activityId")))
+                elif other_id:
+                    rescore_from_streams(other_id)
             continue
         if row and row["date"]:
             activity_id = upsert_activity(row)
@@ -293,6 +299,10 @@ def _sync_rides(api, days_back: int) -> int:
                 raw = _ride_file(api, act.get("activityId"))
                 save_hr_peaks(activity_id, _hr_peaks(api, act.get("activityId"), raw))
                 _score_from_file(activity_id, raw)
+            elif activity_id and not get_streams(activity_id) and not act.get("normPower") \
+                    and act.get("averageHR"):
+                # A heart rate only ride from before rides were checked second by second.
+                _score_from_file(activity_id, _ride_file(api, act.get("activityId")))
             elif activity_id:
                 # A re-sync writes Garmin's summary TSS back; a ride already checked second by
                 # second (no power, or a dropout) keeps the score from that data.

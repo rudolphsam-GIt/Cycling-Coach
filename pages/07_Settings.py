@@ -4,6 +4,7 @@ import streamlit as st
 from datetime import date, datetime
 
 import ftp_change
+from metrics.tss import DEFAULT_HR_METHOD, HR_METHODS
 from db.queries import (get_setting, set_setting, auto_max_hr, auto_resting_hr,
                         recalculate_all_tss, deduplicate_activities)
 from config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, GARMIN_EMAIL, GARMIN_PASSWORD
@@ -71,6 +72,14 @@ with tab_profile:
             value=int(get_setting("lthr", 155) or 155), step=1,
             help=setting_help("lthr"),
         )
+        methods = list(HR_METHODS)
+        hr_method = st.selectbox(
+            "Heart rate TSS", methods, format_func=HR_METHODS.get,
+            index=methods.index(get_setting("hr_tss_method", "") or DEFAULT_HR_METHOD),
+            help="How rides without power, and strength and other sessions, are scored. TrainingPeaks "
+                 "style matches TrainingPeaks' hrTSS closely when LTHR is the same as in TrainingPeaks. "
+                 "TRIMP is Banister's published formula (as intervals.icu uses) and needs max and "
+                 "resting heart rate.")
         auto_max, auto_rest = auto_max_hr(), auto_resting_hr()
         h1, h2 = st.columns(2)
         max_hr_in = h1.number_input(
@@ -95,7 +104,8 @@ with tab_profile:
         old_ftp = int(get_setting("ftp_watts", 0) or 0)
         old_lthr = int(get_setting("lthr", 0) or 0)
         old_hr = (get_setting("max_hr_manual", "") or "", get_setting("resting_hr_manual", "") or "",
-                  get_setting("gender", "") or "")
+                  get_setting("gender", "") or "", get_setting("hr_tss_method", "") or DEFAULT_HR_METHOD)
+        set_setting("hr_tss_method", hr_method)
         set_setting("max_hr_manual", int(max_hr_in) if max_hr_in else "")
         set_setting("resting_hr_manual", int(rest_hr_in) if rest_hr_in else "")
         set_setting("weight_kg", weight)
@@ -119,7 +129,7 @@ with tab_profile:
         if lthr != old_lthr:
             set_setting("lthr_estimated", "0")
         new_hr = (get_setting("max_hr_manual", "") or "", get_setting("resting_hr_manual", "") or "",
-                  get_setting("gender", "") or "")
+                  get_setting("gender", "") or "", get_setting("hr_tss_method", "") or DEFAULT_HR_METHOD)
         if (lthr != old_lthr and lthr > 0) or new_hr != old_hr:
             # LTHR, max and resting heart rate have no history, so hrTSS follows them everywhere.
             with st.spinner("Updating TSS and zones for your rides…"):

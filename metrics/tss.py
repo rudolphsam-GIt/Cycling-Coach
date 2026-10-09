@@ -7,14 +7,26 @@ back the TSS it was synced with.
 
 Power TSS is Coggan's: hours x IF squared x 100, where IF is NP / FTP.
 
-Heart rate TSS (hrTSS) is Banister's TRIMP, which weights each minute by heart rate reserve on
-an exponential curve so hard minutes count for much more than easy ones:
+Heart rate TSS (hrTSS) has two methods:
+
+- "trainingpeaks" (the default) works like TrainingPeaks: each second's heart rate becomes an
+  intensity factor from its share of threshold heart rate, then TSS = hours x IF squared x 100,
+  as for power. TrainingPeaks doesn't publish its curve, so HR_IF_CURVE was fitted to 64 of the
+  rider's workouts that TrainingPeaks scored from heart rate (strength, road, mountain bike, ski)
+  using Garmin's second by second heart rate: a typical workout lands within 1.3% of
+  TrainingPeaks' number and 90% within 7%, and fitting on half the workouts gave the same curve
+  for the other half. Its bends sit on the top of zone 1 (80% of LTHR) and zone 2 (89%), and
+  easy efforts never score under IF 0.56, which is why a quiet strength hour still scores about 30.
+  The time is the device's timer time, as TrainingPeaks uses.
+
+- "trimp" is Banister's TRIMP, the published method intervals.icu and Elevate use, which weights
+  each minute by heart rate reserve on an exponential curve:
 
     TRIMP per minute = HRR x 0.64 x e^(k x HRR),  HRR = (HR - resting) / (max - resting)
 
-with k = 1.92 for men and 1.67 for women. As TrainingPeaks does, it is scaled by the TRIMP of an
-hour at threshold heart rate, so an hour at LTHR scores 100, the same as an hour at FTP. The 0.64
-cancels out in that ratio.
+  with k = 1.92 for men and 1.67 for women, scaled by the TRIMP of an hour at threshold heart rate.
+
+Both score an hour at LTHR as 100, the same as an hour at FTP.
 
 The source of each ride's number is kept (power, hr, mixed, estimate, manual) so the app can say
 when a ride was scored from heart rate.
@@ -23,14 +35,19 @@ from __future__ import annotations
 
 import numpy as np
 
+# (heart rate / LTHR, intensity factor). Fitted against TrainingPeaks, see the module notes.
+HR_IF_CURVE = ((0.50, 0.56), (0.80, 0.65), (0.89, 0.80), (1.00, 1.00), (1.30, 1.30))
+HR_METHODS = {"trainingpeaks": "TrainingPeaks style", "trimp": "TRIMP (Banister)"}
+DEFAULT_HR_METHOD = "trainingpeaks"
+
 K_BY_GENDER = {"man": 1.92, "woman": 1.67}
 DEFAULT_K = (1.92 + 1.67) / 2          # non-binary or not given
 MIN_GAP_S = 60                         # a power dropout shorter than this isn't worth patching
 
 SOURCE_LABEL = {"power": "TSS", "hr": "hrTSS", "mixed": "TSS + hrTSS",
-                "estimate": "est. TSS", "manual": "TSS", "trainingpeaks": "hrTSS (TP)"}
+                "estimate": "est. TSS", "manual": "TSS"}
 SOURCE_FROM = {"power": "Power", "hr": "Heart rate", "mixed": "Power + HR",
-               "estimate": "Estimate", "manual": "You", "trainingpeaks": "TrainingPeaks"}
+               "estimate": "Estimate", "manual": "You"}
 
 
 def k_for(gender: str | None) -> float:
@@ -43,6 +60,17 @@ def profile_ok(profile: dict | None, lthr: float | None) -> bool:
         return False
     rest, mx = profile.get("rest"), profile.get("max")
     return bool(rest and mx and 25 <= rest < lthr < mx <= 230)
+
+
+def hr_if(hr, lthr: float):
+    """Intensity factor for a heart rate (scalar or numpy array), TrainingPeaks style."""
+    xs = np.array([x for x, _ in HR_IF_CURVE]); ys = np.array([y for _, y in HR_IF_CURVE])
+    ratio = np.asarray(hr, dtype=float) / lthr
+    return np.where(ratio > xs[-1], ratio, np.interp(ratio, xs, ys))
+
+
+def _method(profile: dict | None) -> str:
+    return (profile or {}).get("method") or DEFAULT_HR_METHOD
 
 
 def _weight(hr, profile: dict):
@@ -59,21 +87,29 @@ def power_tss(duration_s: float, norm_power: float | None, ftp: float | None) ->
 
 def hr_tss(duration_s: float, avg_hr: float | None, lthr: float | None,
            profile: dict | None = None) -> float | None:
-    """hrTSS from average heart rate. Uses TRIMP when resting and max heart rate are known,
-    else the simpler (HR / LTHR) squared."""
+    """hrTSS from average heart rate, when there's no second by second data. TrainingPeaks style by
+    default; TRIMP when chosen and resting and max heart rate are known, else (HR / LTHR) squared."""
     if not lthr or lthr <= 0 or not avg_hr or avg_hr <= 0:
         return None
+    if _method(profile) == "trainingpeaks":
+        return (duration_s / 3600) * float(hr_if(avg_hr, lthr)) ** 2 * 100
     if profile_ok(profile, lthr):
         return (duration_s / 3600) * float(_weight(avg_hr, profile) / _weight(lthr, profile)) * 100
     return (duration_s / 3600) * ((avg_hr / lthr) ** 2) * 100
 
 
-def hr_tss_seconds(hr_values, lthr: float | None, profile: dict | None = None) -> float | None:
-    """hrTSS from second by second heart rate (one value per second, no gaps). Scoring each
-    second rather than the average counts hard surges properly, since the curve is steep."""
+def hr_tss_seconds(hr_values, lthr: float | None, profile: dict | None = None,
+                   duration_s: float | None = None) -> float | None:
+    """hrTSS from second by second heart rate (one value per second). Scoring each second rather
+    than the average counts hard surges properly, since the curve is steep. With `duration_s`
+    (the timer time), the average over the recorded seconds is spread over that time, as
+    TrainingPeaks does when a strap drops a few seconds."""
     hr = np.asarray([h for h in hr_values if h is not None and h > 0], dtype=float)
     if not len(hr) or not lthr or lthr <= 0:
         return None
+    seconds = duration_s if duration_s and duration_s > 0 else len(hr)
+    if _method(profile) == "trainingpeaks":
+        return float((hr_if(hr, lthr) ** 2).mean()) * 100 * seconds / 3600
     if profile_ok(profile, lthr):
         per_sec = _weight(hr, profile) / _weight(lthr, profile)
     else:
@@ -121,7 +157,7 @@ def ride_tss(duration_s: float, norm_power: float | None, avg_hr: float | None,
 
 
 def stream_tss(streams: dict | None, ftp: float | None, lthr: float | None,
-               profile: dict | None = None) -> tuple[float, str] | None:
+               profile: dict | None = None, duration_s: float | None = None) -> tuple[float, str] | None:
     """(tss, source) from second by second data, when it says more than the ride summary:
     - no power at all but heart rate: hrTSS scored second by second ("hr");
     - power that drops out for MIN_GAP_S or more while heart rate keeps recording: power TSS for
@@ -137,7 +173,7 @@ def stream_tss(streams: dict | None, ftp: float | None, lthr: float | None,
     has_power = any(p is not None for p in power)
 
     if not has_power:
-        tss = hr_tss_seconds(hr, lthr, profile)
+        tss = hr_tss_seconds(hr, lthr, profile, duration_s)
         return (tss, "hr") if tss and len([h for h in hr if h]) >= MIN_GAP_S else None
 
     gap_hr = [hr[i] for i in range(min(n, len(hr)))
@@ -170,3 +206,63 @@ def robust_max_hr(maxes: list[float], within: float = 5) -> float | None:
         if v - vals[i + 1] <= within:
             return v
     return vals[0] if len(vals) == 1 else vals[1]
+
+
+# ── Comparing with TrainingPeaks ──────────────────────────────────────────────
+
+MISMATCH_TSS = 10        # flag a ride when the app and TrainingPeaks differ by this much
+MISMATCH_SHARE = 0.15    # and by this share of TrainingPeaks' number
+
+
+def tp_numbers(act: dict) -> dict | None:
+    """What TrainingPeaks has for this activity (tss, hours, np, avg_hr, scored_by), or None."""
+    import json
+    raw = act.get("tp_json")
+    if not raw:
+        return None
+    try:
+        tp = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    return tp if tp.get("tss") is not None else None
+
+
+def mismatch(act: dict) -> dict | None:
+    """When the app's TSS and TrainingPeaks' differ a lot: {app, tp, diff, share, reasons}.
+    Reasons are the differences in the inputs that explain it, in words."""
+    tp = tp_numbers(act)
+    app = act.get("tss")
+    if not tp or app is None:
+        return None
+    diff = float(app) - float(tp["tss"])
+    share = abs(diff) / max(float(tp["tss"]), 1.0)
+    if abs(diff) < MISMATCH_TSS or share < MISMATCH_SHARE:
+        return None
+    reasons = []
+    app_kind = act.get("tss_source") or ""
+    tp_kind = tp.get("scored_by") or ""
+    if app_kind in ("power", "mixed") and tp_kind == "hr":
+        reasons.append("TrainingPeaks scored it from heart rate; the app has power for it.")
+    elif app_kind in ("hr", "estimate") and tp_kind == "power":
+        reasons.append("TrainingPeaks has power for it; the app only has heart rate.")
+    elif tp_kind == "manual":
+        reasons.append("The number in TrainingPeaks was typed in by hand.")
+    if act.get("tss_locked"):
+        reasons.append("You set this ride's TSS by hand in the app.")
+    hours = (act.get("timer_seconds") or act.get("duration_seconds") or 0) / 3600
+    if tp.get("hours") and hours and abs(tp["hours"] / hours - 1) > 0.05:
+        reasons.append(f"Different ride time: {tp['hours'] * 60:.0f} min in TrainingPeaks, {hours * 60:.0f} min here.")
+    if tp.get("np") and act.get("normalized_power") and abs(tp["np"] / act["normalized_power"] - 1) > 0.03:
+        reasons.append(f"Different normalized power: {tp['np']:.0f} W in TrainingPeaks, "
+                       f"{act['normalized_power']:.0f} W here.")
+    if tp.get("avg_hr") and act.get("avg_hr") and abs(tp["avg_hr"] - act["avg_hr"]) > 3:
+        reasons.append(f"Different average heart rate: {tp['avg_hr']:.0f} bpm in TrainingPeaks, "
+                       f"{act['avg_hr']:.0f} here.")
+    if not reasons and tp.get("hours") is None:
+        reasons.append("TrainingPeaks' number comes from its fitness chart for that day (the session isn't in "
+                       "its workout list), so its time and heart rate can't be compared. Check the session "
+                       "in TrainingPeaks.")
+    elif not reasons:
+        reasons.append("The inputs match, so the difference is in how the number was worked out, "
+                       "for example FTP or threshold heart rate on that date.")
+    return {"app": float(app), "tp": float(tp["tss"]), "diff": diff, "share": share, "reasons": reasons}

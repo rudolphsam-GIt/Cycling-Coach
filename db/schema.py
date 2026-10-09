@@ -222,12 +222,17 @@ def run_migrations():
         "ALTER TABLE activities ADD COLUMN original_json TEXT",
         "ALTER TABLE activities ADD COLUMN timer_seconds INTEGER",
         "ALTER TABLE activities ADD COLUMN tss_source TEXT",
+        "ALTER TABLE activities ADD COLUMN tp_json TEXT",
     ]:
         try:
             conn.execute(col_sql)
             conn.commit()
         except Exception:
             pass
+    # Scores once copied from TrainingPeaks are worked out by the app again (it now scores heart
+    # rate the TrainingPeaks way itself); TrainingPeaks' numbers are kept only to compare.
+    conn.execute("UPDATE activities SET tss_source=NULL, tss=NULL WHERE tss_source='trainingpeaks'")
+    conn.commit()
     conn.executescript(INDEXES)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.close()
