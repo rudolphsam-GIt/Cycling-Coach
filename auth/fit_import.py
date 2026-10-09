@@ -5,7 +5,9 @@ import io
 import json
 from datetime import datetime, timezone
 
-from db.queries import get_setting, upsert_activity, save_peaks, save_hr_peaks, save_streams
+from db.queries import (get_setting, upsert_activity, save_peaks, save_hr_peaks, save_streams,
+                        ftp_history_rows, ftp_on)
+from metrics.tss import ride_tss, tss_duration
 from metrics.zones import estimate_zone_seconds
 
 CYCLING_SPORT = {
@@ -48,7 +50,7 @@ def import_fit_files(uploaded_files) -> tuple[int, str]:
     except ImportError:
         return 0, "fitparse not installed. Run: venv/bin/pip install fitparse"
 
-    ftp = float(get_setting("ftp_watts", 0) or 0)
+    history = ftp_history_rows()
     lthr = float(get_setting("lthr", 0) or 0)
 
     count = 0
@@ -110,13 +112,12 @@ def import_fit_files(uploaded_files) -> tuple[int, str]:
             moving_s = float(total_timer or elapsed_s)
 
             # TSS
-            if_val = (norm_power / ftp) if (norm_power and ftp) else None
-            tss = ((elapsed_s / 3600) * (if_val ** 2) * 100) if if_val else None
-            if tss is None and avg_hr and lthr:
-                tss = (elapsed_s / 3600) * ((avg_hr / lthr) ** 2) * 100
+            tss_s = tss_duration(moving_s, elapsed_s, total_timer)
+            ride_ftp = ftp_on(date_str, history)
+            tss, if_val = ride_tss(tss_s, norm_power, avg_hr, max_hr, ride_ftp, lthr)
 
             zones = estimate_zone_seconds(
-                elapsed_s, avg_hr, max_hr, avg_power, norm_power, ftp, lthr
+                tss_s, avg_hr, max_hr, avg_power, norm_power, ride_ftp, lthr
             )
 
             external_id = f"fit_{start_time.strftime('%Y%m%dT%H%M%S')}"
@@ -128,6 +129,7 @@ def import_fit_files(uploaded_files) -> tuple[int, str]:
                 "name": name,
                 "sport_type": sport_type,
                 "duration_seconds": int(moving_s),
+                "timer_seconds": int(total_timer) if total_timer else None,
                 "elapsed_seconds": int(elapsed_s),
                 "distance_meters": distance_m,
                 "elevation_gain_meters": elevation_m,
@@ -208,7 +210,7 @@ def _parse_float(s) -> float | None:
 
 def import_csv_files(uploaded_files, imperial: bool = False) -> tuple[int, str]:
     """Import a Garmin Connect CSV export. Set imperial=True if it's in miles and feet."""
-    ftp = float(get_setting("ftp_watts", 0) or 0)
+    history = ftp_history_rows()
     lthr = float(get_setting("lthr", 0) or 0)
 
     count = 0
@@ -252,15 +254,12 @@ def import_csv_files(uploaded_files, imperial: bool = False) -> tuple[int, str]:
                 title = _csv_val(row, "title") or activity_type.title()
 
                 # Compute TSS if not in CSV
-                if_val = (norm_power / ftp) if (norm_power and ftp) else None
-                tss = tss_csv
-                if not tss and if_val:
-                    tss = (elapsed_s / 3600) * (if_val ** 2) * 100
-                if not tss and avg_hr and lthr:
-                    tss = (elapsed_s / 3600) * ((avg_hr / lthr) ** 2) * 100
+                ride_ftp = ftp_on(date_str, history)
+                tss, if_val = ride_tss(elapsed_s, norm_power, avg_hr, max_hr, ride_ftp, lthr)
+                tss = tss_csv or tss
 
                 zones = estimate_zone_seconds(
-                    elapsed_s, avg_hr, max_hr, avg_power, norm_power, ftp, lthr
+                    elapsed_s, avg_hr, max_hr, avg_power, norm_power, ride_ftp, lthr
                 )
 
                 external_id = f"csv_{date_str}_{title[:20].replace(' ', '_')}"

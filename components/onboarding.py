@@ -4,7 +4,8 @@ import streamlit as st
 from datetime import date
 
 from components.units import distance_switch, unit_switch, weight_input
-from db.queries import set_setting, log_ftp_history, add_race
+import ftp_change
+from db.queries import set_setting, add_race
 from metrics.explain import (ACTIVITY_DETAILS, ACTIVITY_LEVEL, DEFAULT_ACTIVITY, RIDER_TYPES,
                              GENDER_LABELS, GENDER_PROFILE_TABLE, DEFAULT_GENDER, experience_for, ftp_reassurance,
                              lthr_from_age, starting_ftp_range)
@@ -196,7 +197,6 @@ def render_onboarding():
             set_setting("weight_kg", weight)
             set_setting("weight_unit", unit)
             set_setting("distance_unit", dist_unit)
-            set_setting("ftp_watts", final_ftp)
             set_setting("lthr", final_lthr)
             set_setting("ctl_start", exp["ctl_start"])
             set_setting("ftp_choice", ftp_choice)
@@ -211,7 +211,7 @@ def render_onboarding():
             set_setting("ftp_range_low", start["low"])
             set_setting("ftp_range_high", start["high"])
             set_setting("lthr_estimated", "0" if lthr_input else "1")
-            log_ftp_history(final_ftp, notes="Initial estimate from onboarding" if not ftp_input else "")
+            ftp_change.apply_new_ftp(final_ftp, "Initial estimate from onboarding" if not ftp_input else "")
 
             if race_name.strip() and race_date:
                 add_race({

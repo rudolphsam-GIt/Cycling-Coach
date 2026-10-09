@@ -136,6 +136,7 @@ def _find_cross_source_duplicate(conn, data: dict):
 def upsert_activity(data: dict):
     conn = get_conn()
     data.setdefault("elapsed_seconds", None)
+    data.setdefault("timer_seconds", None)
     data.setdefault("zone_time_json", None)
 
     dup = _find_cross_source_duplicate(conn, data)
@@ -154,13 +155,14 @@ def upsert_activity(data: dict):
                    if_value         = CASE WHEN edited = 1 THEN if_value ELSE COALESCE(?, if_value) END,
                    avg_hr           = CASE WHEN edited = 1 THEN avg_hr ELSE COALESCE(?, avg_hr) END,
                    max_hr           = CASE WHEN edited = 1 THEN max_hr ELSE COALESCE(?, max_hr) END,
-                   zone_time_json   = CASE WHEN edited = 1 THEN zone_time_json ELSE COALESCE(?, zone_time_json) END
+                   zone_time_json   = CASE WHEN edited = 1 THEN zone_time_json ELSE COALESCE(?, zone_time_json) END,
+                   timer_seconds    = COALESCE(timer_seconds, ?)
                    WHERE id = ?""",
                 (
                     data.get("avg_power_watts"), data.get("normalized_power"),
                     data.get("tss"), data.get("if_value"),
                     data.get("avg_hr"), data.get("max_hr"),
-                    data.get("zone_time_json"), dup["id"],
+                    data.get("zone_time_json"), data.get("timer_seconds"), dup["id"],
                 ),
             )
             conn.commit()
@@ -172,11 +174,12 @@ def upsert_activity(data: dict):
         """INSERT INTO activities
            (source, external_id, date, name, sport_type, duration_seconds,
             elapsed_seconds, distance_meters, elevation_gain_meters, avg_power_watts, avg_hr,
-            max_hr, normalized_power, tss, if_value, raw_json, zone_time_json)
+            max_hr, normalized_power, tss, if_value, raw_json, zone_time_json, timer_seconds)
            VALUES (:source,:external_id,:date,:name,:sport_type,:duration_seconds,
                    :elapsed_seconds,:distance_meters,:elevation_gain_meters,:avg_power_watts,:avg_hr,
-                   :max_hr,:normalized_power,:tss,:if_value,:raw_json,:zone_time_json)
+                   :max_hr,:normalized_power,:tss,:if_value,:raw_json,:zone_time_json,:timer_seconds)
            ON CONFLICT(external_id) DO UPDATE SET
+               timer_seconds=COALESCE(excluded.timer_seconds, activities.timer_seconds),
                tss=CASE WHEN activities.tss_locked = 1 OR activities.edited = 1
                         THEN activities.tss ELSE excluded.tss END,
                if_value=CASE WHEN activities.edited = 1 THEN activities.if_value ELSE excluded.if_value END,
@@ -700,6 +703,42 @@ def set_workout_garmin(wid: int, garmin_workout_id: str, garmin_schedule_id: str
     conn.close()
 
 
+def add_race_notes(race_id: int, text: str) -> None:
+    """Append to a race's notes, keeping what's there (such as the OBRA link)."""
+    conn = get_conn()
+    row = conn.execute("SELECT notes FROM races WHERE id=?", (race_id,)).fetchone()
+    if row is not None:
+        existing = (row["notes"] or "").strip()
+        notes = f"{existing}\n\n{text.strip()}" if existing else text.strip()
+        conn.execute("UPDATE races SET notes=? WHERE id=?", (notes, race_id))
+        conn.commit()
+    conn.close()
+
+
+def get_upcoming_workouts(since: str) -> list:
+    """Planned workouts on or after `since` that aren't done yet."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM workouts WHERE date >= ? AND COALESCE(completed, 0) = 0 ORDER BY date",
+        (since,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def set_workout_descriptions(updates: list[tuple[int, str]]) -> None:
+    """Rewrite descriptions without touching saved steps (used when only the watt numbers
+    follow a new FTP, since steps are stored as % of FTP)."""
+    if not updates:
+        return
+    conn = get_conn()
+    conn.executemany("UPDATE workouts SET description=? WHERE id=?",
+                     [(text, wid) for wid, text in updates])
+    _plan_changed(conn)
+    conn.commit()
+    conn.close()
+
+
 def save_workout_steps(wid: int, steps_json: str) -> None:
     """Keep the structured steps built for a workout, so exports don't build them again.
     The Garmin ids are left alone, so a workout that was never sent still reads not sent."""
@@ -851,36 +890,76 @@ def get_weekly_tss_summary(weeks: int = 5) -> list[dict]:
     return results
 
 
-def recalculate_all_tss(only_id: int | None = None):
-    """Recompute TSS and zone estimates for every stored activity, or just one. Rides whose
-    TSS was set by hand are left alone."""
-    from auth.strava import _compute_tss, _compute_hr_tss, _estimate_tss
+def ftp_on(day: str, history: list[dict] | None = None) -> float:
+    """The FTP in effect on a date: the latest FTP history entry on or before it, else the
+    earliest entry, else the current setting."""
+    if history is None:
+        history = _ftp_history_rows()
+    on_or_before = [h for h in history if h["date"] <= day]
+    if on_or_before:
+        return float(on_or_before[-1]["ftp_watts"])
+    if history:
+        return float(history[0]["ftp_watts"])
+    return float(get_setting("ftp_watts", 0) or 0)
+
+
+def first_activity_date() -> str | None:
+    conn = get_conn()
+    row = conn.execute("SELECT MIN(date) AS d FROM activities").fetchone()
+    conn.close()
+    return row["d"] if row else None
+
+
+def oldest_ride_missing_timer(source: str) -> str | None:
+    """Date of the oldest ride from `source` saved before timer time was stored, or None."""
+    conn = get_conn()
+    row = conn.execute("SELECT MIN(date) AS d FROM activities WHERE source=? AND timer_seconds IS NULL",
+                       (source,)).fetchone()
+    conn.close()
+    return row["d"] if row else None
+
+
+def ftp_history_rows() -> list[dict]:
+    return _ftp_history_rows()
+
+
+def _ftp_history_rows() -> list[dict]:
+    """Every FTP history entry, oldest first (later entries on the same day win)."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT date, ftp_watts FROM ftp_history WHERE ftp_watts > 0 ORDER BY date, id"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def recalculate_all_tss(only_id: int | None = None, since: str | None = None):
+    """Recompute TSS and zone estimates for every stored activity, or just one, or those on or
+    after `since`. Each ride is scored on the FTP it was ridden at (FTP history), so a new FTP
+    never rewrites past fitness. Rides whose TSS was set by hand are left alone."""
+    from metrics.tss import ride_tss, tss_duration
     from metrics.zones import estimate_zone_seconds
 
-    ftp = float(get_setting("ftp_watts", 0) or 0)
+    history = _ftp_history_rows()
     lthr = float(get_setting("lthr", 0) or 0)
 
     conn = get_conn()
     rows = conn.execute(
-        """SELECT id, duration_seconds, elapsed_seconds, normalized_power,
+        """SELECT id, date, duration_seconds, elapsed_seconds, timer_seconds, normalized_power,
                   avg_power_watts, avg_hr, max_hr FROM activities
-           WHERE COALESCE(tss_locked, 0) = 0 AND (? IS NULL OR id = ?)""",
-        (only_id, only_id),
+           WHERE COALESCE(tss_locked, 0) = 0 AND (? IS NULL OR id = ?)
+             AND (? IS NULL OR date >= ?)""",
+        (only_id, only_id, since, since),
     ).fetchall()
     updated = 0
     for row in rows:
-        duration_s = row["elapsed_seconds"] or row["duration_seconds"] or 0
+        duration_s = tss_duration(row["duration_seconds"], row["elapsed_seconds"], row["timer_seconds"])
         np = row["normalized_power"]
         avg_hr = row["avg_hr"]
         max_hr = row["max_hr"]
+        ftp = ftp_on(row["date"], history)
 
-        tss = _compute_tss(duration_s, np, ftp) if np else None
-        if tss is None:
-            tss = _compute_hr_tss(duration_s, avg_hr, lthr)
-        if tss is None:
-            tss = _estimate_tss(duration_s, None, avg_hr, max_hr)
-
-        if_value = (np / ftp) if (np and ftp) else None
+        tss, if_value = ride_tss(duration_s, np, avg_hr, max_hr, ftp, lthr)
 
         zones = estimate_zone_seconds(
             duration_s, avg_hr, max_hr,
@@ -1052,11 +1131,11 @@ def get_wellness_range(start: str, end: str) -> list:
 
 # ── FTP History ───────────────────────────────────────────────────────────────
 
-def log_ftp_history(ftp_watts: int, notes: str = "") -> None:
+def log_ftp_history(ftp_watts: int, notes: str = "", day: str | None = None) -> None:
     conn = get_conn()
     conn.execute(
         "INSERT INTO ftp_history (date, ftp_watts, notes, created_at) VALUES (?,?,?,?)",
-        (date.today().isoformat(), ftp_watts, notes, datetime.utcnow().isoformat()),
+        (day or date.today().isoformat(), ftp_watts, notes, datetime.utcnow().isoformat()),
     )
     conn.commit()
     conn.close()
@@ -1065,7 +1144,7 @@ def log_ftp_history(ftp_watts: int, notes: str = "") -> None:
 def get_ftp_history(limit: int = 30) -> list:
     conn = get_conn()
     rows = conn.execute(
-        "SELECT * FROM ftp_history ORDER BY date DESC LIMIT ?", (limit,)
+        "SELECT * FROM ftp_history ORDER BY date DESC, id DESC LIMIT ?", (limit,)
     ).fetchall()
     conn.close()
     return [dict(r) for r in reversed(rows)]

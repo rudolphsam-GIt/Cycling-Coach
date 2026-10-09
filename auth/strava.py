@@ -14,7 +14,9 @@ import requests
 import time
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta
-from db.queries import get_setting, set_setting, upsert_activity, get_daily_tss
+from db.queries import (get_setting, set_setting, upsert_activity, get_daily_tss,
+                        ftp_history_rows, ftp_on)
+from metrics.tss import ride_tss, tss_duration
 from metrics.zones import estimate_zone_seconds
 import json
 
@@ -22,6 +24,25 @@ STRAVA_AUTH_URL = "https://www.strava.com/oauth/authorize"
 STRAVA_TOKEN_URL = "https://www.strava.com/oauth/token"
 STRAVA_API_BASE = "https://www.strava.com/api/v3"
 REDIRECT_URI = "http://localhost"
+
+
+class StravaError(Exception):
+    """A readable problem talking to Strava."""
+
+
+def _error_for(e: Exception) -> StravaError:
+    if isinstance(e, requests.HTTPError) and e.response is not None:
+        code = e.response.status_code
+        if code == 401:
+            return StravaError("Strava turned down the saved sign in. Disconnect and connect Strava again.")
+        if code == 429:
+            return StravaError("Strava's rate limit was hit. Wait about 15 minutes and sync again.")
+        if code >= 500:
+            return StravaError(f"Strava is having trouble right now (error {code}). Try again shortly.")
+        return StravaError(f"Strava returned an error ({code}).")
+    if isinstance(e, requests.RequestException):
+        return StravaError("Couldn't reach Strava. Check your internet connection and try again.")
+    return StravaError(f"Strava sync failed: {e}")
 
 
 def get_auth_url(client_id: str) -> str:
@@ -104,52 +125,17 @@ def is_connected() -> bool:
     return bool(get_setting("strava_access_token"))
 
 
-def _compute_tss(duration_s: float, normalized_power: float, ftp: float) -> float | None:
-    if not ftp or ftp <= 0 or not normalized_power or normalized_power <= 0:
-        return None
-    intensity_factor = normalized_power / ftp
-    return (duration_s * normalized_power * intensity_factor) / (ftp * 3600) * 100
-
-
-def _compute_hr_tss(duration_s: float, avg_hr: float, lthr: float) -> float | None:
-    if not lthr or lthr <= 0 or not avg_hr or avg_hr <= 0:
-        return None
-    duration_h = duration_s / 3600
-    return duration_h * ((avg_hr / lthr) ** 2) * 100
-
-
-def _estimate_tss(duration_s: float, perceived_exertion: float | None,
-                  avg_hr: float | None, max_hr: float | None) -> float:
-    """
-    Fallback TSS estimate when no power meter and no LTHR is set.
-    Uses Strava's perceived_exertion (1-10 scale) if available,
-    otherwise estimates from HR ratio or defaults to a moderate effort assumption.
-    TSS ≈ duration_hours × IF² × 100
-    """
-    duration_h = duration_s / 3600
-
-    # Strava perceived_exertion is 1-10; map to intensity factor 0.4-1.05
-    if perceived_exertion and 1 <= perceived_exertion <= 10:
-        intensity_factor = 0.4 + (perceived_exertion - 1) * 0.072
-        return round(duration_h * intensity_factor ** 2 * 100, 1)
-
-    # HR ratio fallback: if we have avg and max HR, estimate relative intensity
-    if avg_hr and max_hr and max_hr > 0:
-        hr_ratio = avg_hr / max_hr
-        intensity_factor = max(0.4, min(1.05, hr_ratio * 1.05))
-        return round(duration_h * intensity_factor ** 2 * 100, 1)
-
-    # Last resort: assume moderate Z2 effort (IF ~0.65, ~42 TSS/hour)
-    return round(duration_h * 0.65 ** 2 * 100, 1)
-
-
 def sync_activities(client_id: str, client_secret: str, days_back: int = 60) -> tuple[int, str]:
-    """Fetch recent activities from Strava and store them. Returns (count, message)."""
+    """Fetch recent activities from Strava and store them. Returns (count, message), or raises
+    StravaError with a message the rider can act on."""
+    if not is_connected():
+        raise StravaError("Not connected to Strava. Connect it first.")
     token = get_valid_token(client_id, client_secret)
     if not token:
-        return 0, "Not connected to Strava. Please authorize first."
+        raise StravaError("Strava's sign in has expired and couldn't be renewed. "
+                          "Disconnect and connect Strava again.")
 
-    ftp = float(get_setting("ftp_watts", 0) or 0)
+    history = ftp_history_rows()
     lthr = float(get_setting("lthr", 0) or 0)
     since_ts = int((datetime.utcnow() - timedelta(days=days_back)).timestamp())
 
@@ -157,36 +143,35 @@ def sync_activities(client_id: str, client_secret: str, days_back: int = 60) -> 
     page, count = 1, 0
 
     while True:
-        resp = requests.get(
-            f"{STRAVA_API_BASE}/athlete/activities",
-            headers=headers,
-            params={"after": since_ts, "per_page": 50, "page": page},
-            timeout=20,
-        )
-        resp.raise_for_status()
-        activities = resp.json()
+        try:
+            resp = requests.get(
+                f"{STRAVA_API_BASE}/athlete/activities",
+                headers=headers,
+                params={"after": since_ts, "per_page": 50, "page": page},
+                timeout=20,
+            )
+            resp.raise_for_status()
+            activities = resp.json()
+        except requests.RequestException as e:
+            raise _error_for(e) from e
         if not activities:
             break
 
         for act in activities:
             np = act.get("weighted_average_watts")
             moving_s = act.get("moving_time", 0)
-            elapsed_s = act.get("elapsed_time", moving_s)  # use elapsed for TSS
+            elapsed_s = act.get("elapsed_time", moving_s)
             avg_power = act.get("average_watts")
             avg_hr = act.get("average_heartrate")
             max_hr = act.get("max_heartrate")
 
-            tss = _compute_tss(elapsed_s, np, ftp) if np else None
-            if tss is None:
-                tss = _compute_hr_tss(elapsed_s, avg_hr, lthr)
-            if tss is None:
-                tss = _estimate_tss(elapsed_s, act.get("perceived_exertion"),
-                                    avg_hr, max_hr)
-
-            if_value = (np / ftp) if (np and ftp) else None
+            duration_s = tss_duration(moving_s, elapsed_s)
+            ride_ftp = ftp_on(act["start_date_local"][:10], history)
+            tss, if_value = ride_tss(duration_s, np, avg_hr, max_hr, ride_ftp, lthr,
+                                     act.get("perceived_exertion"))
 
             zones = estimate_zone_seconds(
-                elapsed_s, avg_hr, max_hr, avg_power, np, ftp, lthr,
+                duration_s, avg_hr, max_hr, avg_power, np, ride_ftp, lthr,
             )
 
             upsert_activity({

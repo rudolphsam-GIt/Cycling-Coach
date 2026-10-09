@@ -220,6 +220,7 @@ def run_migrations():
         "ALTER TABLE activities ADD COLUMN tss_locked INTEGER DEFAULT 0",
         "ALTER TABLE activities ADD COLUMN edited INTEGER DEFAULT 0",
         "ALTER TABLE activities ADD COLUMN original_json TEXT",
+        "ALTER TABLE activities ADD COLUMN timer_seconds INTEGER",
     ]:
         try:
             conn.execute(col_sql)

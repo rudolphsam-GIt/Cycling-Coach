@@ -15,7 +15,9 @@ import os
 from datetime import datetime, timedelta, date
 
 from db.queries import (get_setting, set_setting, upsert_activity, upsert_recovery,
-                        match_activity_id, save_peaks, save_hr_peaks, has_hr_peaks)
+                        match_activity_id, save_peaks, save_hr_peaks, has_hr_peaks,
+                        ftp_history_rows, ftp_on, oldest_ride_missing_timer)
+from metrics.tss import ride_tss, tss_duration
 from metrics.zones import estimate_zone_seconds
 
 TOKEN_DIR = os.path.join(os.path.expanduser("~"), ".cycling_coach_garmin")
@@ -102,21 +104,6 @@ def friendly_error(e: Exception) -> str:
     return f"Garmin sync failed: {e}"
 
 
-# ── TSS calculation ───────────────────────────────────────────────────────────
-
-def _power_tss(duration_s: float, norm_power: float, ftp: float) -> float | None:
-    if not ftp or ftp <= 0 or not norm_power or norm_power <= 0:
-        return None
-    if_val = norm_power / ftp
-    return (duration_s / 3600) * (if_val ** 2) * 100
-
-
-def _hr_tss(duration_s: float, avg_hr: float, lthr: float) -> float | None:
-    if not lthr or lthr <= 0 or not avg_hr or avg_hr <= 0:
-        return None
-    return (duration_s / 3600) * ((avg_hr / lthr) ** 2) * 100
-
-
 # ── Rides ─────────────────────────────────────────────────────────────────────
 
 def activity_row(act: dict, ftp: float, lthr: float) -> dict | None:
@@ -128,7 +115,7 @@ def activity_row(act: dict, ftp: float, lthr: float) -> dict | None:
     if activity_type not in CYCLING_TYPES:
         return None
 
-    duration_s = float(act.get("duration") or 0)          # timer time, used for TSS
+    duration_s = float(act.get("duration") or 0)          # timer time
     elapsed_s = float(act.get("elapsedDuration") or duration_s)  # includes stops, like Strava
     moving_s = float(act.get("movingDuration") or duration_s)
     avg_hr = act.get("averageHR")
@@ -136,11 +123,10 @@ def activity_row(act: dict, ftp: float, lthr: float) -> dict | None:
     avg_power = act.get("avgPower")
     norm_power = act.get("normPower") or avg_power
 
-    tss = _power_tss(duration_s, norm_power, ftp)
-    if tss is None:
-        tss = _hr_tss(duration_s, avg_hr, lthr)
-    if_value = (norm_power / ftp) if norm_power and ftp else None
-    zones = estimate_zone_seconds(duration_s, avg_hr, max_hr, avg_power, norm_power, ftp, lthr)
+    # Score on timer time, which is stored so a later recalculation reads back the same duration.
+    tss_s = tss_duration(moving_s, elapsed_s, duration_s)
+    tss, if_value = ride_tss(tss_s, norm_power, avg_hr, max_hr, ftp, lthr)
+    zones = estimate_zone_seconds(tss_s, avg_hr, max_hr, avg_power, norm_power, ftp, lthr)
 
     return {
         "source": "garmin",
@@ -150,6 +136,7 @@ def activity_row(act: dict, ftp: float, lthr: float) -> dict | None:
         "sport_type": activity_type,
         "duration_seconds": int(moving_s),
         "elapsed_seconds": int(elapsed_s),
+        "timer_seconds": int(duration_s) if duration_s else None,
         "distance_meters": act.get("distance") or 0,
         "elevation_gain_meters": act.get("elevationGain") or 0,
         "avg_power_watts": avg_power,
@@ -215,9 +202,12 @@ def _sync_rides(api, days_back: int) -> int:
     ftp = float(get_setting("ftp_watts", 0) or 0)
     lthr = float(get_setting("lthr", 0) or 0)
     start = (date.today() - timedelta(days=days_back)).isoformat()
+    history = ftp_history_rows()
     count = 0
     for act in api.get_activities_by_date(start, date.today().isoformat()):
-        row = activity_row(act, ftp, lthr)
+        # Score each ride on the FTP it was ridden at, so a re-sync never rewrites history.
+        day = (act.get("startTimeLocal") or "")[:10]
+        row = activity_row(act, ftp_on(day, history) if day else ftp, lthr)
         if row and row["date"]:
             activity_id = upsert_activity(row)
             save_peaks(activity_id, peak_powers(act))
@@ -364,6 +354,9 @@ def sync_recent() -> tuple[int, str]:
             days = max(3, (datetime.utcnow() - datetime.fromisoformat(last)).days + 2)
         except ValueError:
             pass
+    # Rides saved before timer time was stored are fetched once more to pick it up.
+    if (oldest := oldest_ride_missing_timer("garmin")):
+        days = max(days, (date.today() - date.fromisoformat(oldest)).days + 1)
     return sync(days_back=min(days, 90))
 
 

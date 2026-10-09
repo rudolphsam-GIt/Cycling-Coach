@@ -3,7 +3,8 @@ from __future__ import annotations
 import streamlit as st
 from datetime import date, datetime
 
-from db.queries import (get_setting, set_setting, log_ftp_history,
+import ftp_change
+from db.queries import (get_setting, set_setting,
                         recalculate_all_tss, deduplicate_activities)
 from config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, GARMIN_EMAIL, GARMIN_PASSWORD
 import auth.strava as strava_auth
@@ -79,7 +80,6 @@ with tab_profile:
     if st.button("Save profile", type="primary", icon=":material/save:"):
         old_ftp = int(get_setting("ftp_watts", 0) or 0)
         old_lthr = int(get_setting("lthr", 0) or 0)
-        set_setting("ftp_watts", ftp)
         set_setting("weight_kg", weight)
         set_setting("weight_unit", unit)
         set_setting("lthr", lthr)
@@ -93,18 +93,29 @@ with tab_profile:
         set_setting("primary_goal", ",".join(infer_goal_keys(goal_text)))
         set_setting("weekly_hours_target", weekly_hours)
         set_setting("days_per_week", days_per_week)
+        ftp_note = ""
         if ftp != old_ftp and ftp > 0:
-            log_ftp_history(ftp)
+            # Past rides keep the FTP they were ridden at; upcoming workouts follow the new one.
+            ftp_note = ftp_change.summary(ftp_change.apply_new_ftp(ftp))
             set_setting("ftp_estimated", "0")   # the rider set it themselves
         if lthr != old_lthr:
             set_setting("lthr_estimated", "0")
-        if (ftp != old_ftp and ftp > 0) or (lthr != old_lthr and lthr > 0):
-            # TSS and zones depend on FTP and LTHR, so bring every ride up to date now.
+        if lthr != old_lthr and lthr > 0:
+            # LTHR has no history, so heart rate based TSS follows the new value everywhere.
             with st.spinner("Updating TSS and zones for your rides…"):
                 n = recalculate_all_tss()
             st.success(f"Profile saved. TSS and zones updated for {n} rides.")
         else:
-            st.success("Profile saved.")
+            st.success("Profile saved." + (" Past rides keep the TSS they earned on your old FTP."
+                                           if ftp != old_ftp and ftp > 0 else ""))
+        if ftp_note:
+            st.info(ftp_note)
+
+    resend = ftp_change.last_garmin_result()
+    if ftp_change.is_resending():
+        st.caption("Updating your upcoming workouts on Garmin for the new FTP…")
+    elif resend:
+        (st.caption if resend.get("ok") else st.warning)(resend["text"])
 
 # ── Tab 2: Connections ────────────────────────────────────────────────────────
 with tab_connections:
@@ -125,11 +136,15 @@ with tab_connections:
                         get_setting("strava_last_sync", "") or "2000-01-01T00:00:00")).days > 14:
                 st.caption("Garmin is connected too and has been bringing in your rides, so Strava "
                            "only needs a sync if you ride something that goes to Strava alone.")
+            if err := st.session_state.pop("strava_first_sync_error", None):
+                st.warning(f"Strava connected, but the first sync didn't finish. {err}")
             if st.button("Sync Strava (60 days)", icon=":material/sync:", width="stretch"):
-                with st.spinner("Syncing from Strava..."):
-                    count, msg = strava_auth.sync_activities(STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET)
-                st.success(msg) if "synced" in msg.lower() else st.error(msg)
-                st.rerun()
+                try:
+                    with st.spinner("Syncing from Strava..."):
+                        count, msg = strava_auth.sync_activities(STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET)
+                    st.success(msg)
+                except strava_auth.StravaError as e:
+                    st.error(str(e))
             if st.button("Disconnect Strava", width="stretch"):
                 strava_auth.clear_tokens()
                 st.rerun()
@@ -149,13 +164,17 @@ with tab_connections:
                     with st.spinner("Connecting..."):
                         try:
                             strava_auth.exchange_code(STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, code)
-                            st.session_state["strava_connecting"] = False
-                            st.success("Strava connected!")
-                            strava_auth.sync_activities(STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET)
-                            st.rerun()
                         except Exception as e:
                             st.error("Couldn't connect to Strava. Copy the whole address from your browser after you approve, "
                                      f"then paste it again. Details: {e}")
+                        else:
+                            st.session_state["strava_connecting"] = False
+                            try:
+                                strava_auth.sync_activities(STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET)
+                            except strava_auth.StravaError as e:
+                                # Connected fine; only the first sync failed, so the button can retry it.
+                                st.session_state["strava_first_sync_error"] = str(e)
+                            st.rerun()
                 else:
                     st.error("Couldn't find the auth code in that URL. Make sure you copied the full address bar.")
 
@@ -395,8 +414,8 @@ with tab_data:
     col_a, col_b = st.columns(2)
     with col_a:
         st.markdown("**Recalculate TSS**")
-        st.caption("Recomputes TSS and zone estimates for every ride using your current FTP and LTHR. "
-                   "This runs on its own when you change FTP or LTHR.")
+        st.caption("Recomputes TSS and zone estimates for every ride, each on the FTP you had that day "
+                   "(from your FTP history) and your current LTHR.")
         if st.button("Recalculate TSS", width="stretch"):
             with st.spinner("Recalculating TSS for every ride…"):
                 n = recalculate_all_tss()

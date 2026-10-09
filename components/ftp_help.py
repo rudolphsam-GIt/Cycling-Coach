@@ -9,9 +9,10 @@ from datetime import date, timedelta
 
 import streamlit as st
 
+import ftp_change
 from components import coach_ui
 from db.queries import (add_workout, get_activities, get_peaks_between, get_setting,
-                        get_workouts, log_ftp_history, set_setting)
+                        get_workouts, set_setting)
 from metrics import explain
 
 SUGGEST_DIFF_W = 3   # don't suggest a change smaller than this
@@ -44,12 +45,15 @@ def plan_test_in_block(block_dates: list[str]) -> int | None:
     return None
 
 
-def _use_ftp(ftp: int) -> None:
-    set_setting("ftp_watts", ftp)
+def _set_ftp(ftp: int, note: str) -> None:
+    out = ftp_change.apply_new_ftp(ftp, note)
     set_setting("ftp_estimated", "0")
-    log_ftp_history(ftp, "From my best 20 minutes")
     st.session_state.pop("ftp_test_day", None)
-    st.toast(f"FTP set to {ftp} W")
+    st.toast(f"FTP set to {ftp} W. {ftp_change.summary(out)}".strip())
+
+
+def _use_ftp(ftp: int) -> None:
+    _set_ftp(ftp, "From my best 20 minutes")
 
 
 def _is_new_rider() -> bool:
@@ -82,12 +86,8 @@ def _save_manual(key: str) -> None:
     ftp = st.session_state.get(f"{key}_manual")
     if not ftp:
         return
-    set_setting("ftp_watts", int(ftp))
-    set_setting("ftp_estimated", "0")
     set_setting(SNOOZE_KEY, "")
-    log_ftp_history(int(ftp), "Entered manually")
-    st.session_state.pop("ftp_test_day", None)
-    st.toast(f"FTP set to {int(ftp)} W")
+    _set_ftp(int(ftp), "Entered manually")
 
 
 def render(key: str = "ftp_help", *, snoozable: bool = True, show_lower: bool = False) -> None:

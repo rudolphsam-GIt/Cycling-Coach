@@ -10,6 +10,8 @@ from metrics.units import fmt_climb, fmt_distance, speed_from_kph, speed_unit
 
 from db.queries import (get_races, add_race, delete_race, get_setting,
                          add_workout, get_workouts, log_race_result)
+from metrics import explain
+from metrics.taper import taper_schedule, taper_workout
 from metrics.training_load import get_current_metrics, project_future
 from research.obra_schedule import get_upcoming_races, DISCIPLINES
 
@@ -259,26 +261,7 @@ with tab2:
             st.info("More than 60 days out. Use the Plan page to build fitness first.")
 
         # Build taper TSS schedule
-        taper_tss: dict[str, float] = {}
-        today = date.today()
-
-        for i in range(days_out):
-            d = today + timedelta(days=i + 1)
-            days_to_race = (race_date - d).days
-
-            if days_to_race > 21:
-                daily_tss = current_ctl * 1.0
-            elif days_to_race > 14:
-                daily_tss = current_ctl * 0.8
-            elif days_to_race > 7:
-                daily_tss = current_ctl * 0.6
-            elif days_to_race > 2:
-                daily_tss = current_ctl * 0.4
-            elif days_to_race == 1:
-                daily_tss = 30  # opener
-            else:
-                daily_tss = 0
-            taper_tss[d.isoformat()] = max(0, daily_tss / 7)  # daily from weekly average
+        taper_tss = taper_schedule(date.today(), race_date, current_ctl)
 
         projected = project_future(current_ctl, current_atl, taper_tss, days_ahead=min(days_out + 5, 60))
         projected["date"] = pd.to_datetime(projected["date"])
@@ -316,27 +299,30 @@ with tab2:
         charts.show(fig, key="taper_chart")
 
         if st.button("Add taper workouts to my plan"):
-            count = 0
+            # Never double book: days that already have a workout keep it.
+            busy = {w["date"] for w in get_workouts(min(taper_tss, default=race_date.isoformat()),
+                                                    race_date.isoformat())}
+            count, skipped = 0, 0
             for d_str, tss in taper_tss.items():
-                d = date.fromisoformat(d_str)
-                days_to_race = (race_date - d).days
-                if tss < 5:
+                kind = taper_workout(d_str, race_date, tss)
+                if kind is None:
                     continue
-                if days_to_race > 14:
-                    w_type, name = "Endurance", "Taper Endurance"
-                elif days_to_race > 7:
-                    w_type, name = "Tempo", "Taper Tempo"
-                elif days_to_race > 2:
-                    w_type, name = "Recovery", "Taper Recovery"
-                else:
-                    w_type, name = "Recovery", "Race Eve Opener"
+                if d_str in busy:
+                    skipped += 1
+                    continue
+                w_type, name = kind
+                days_to_race = (race_date - date.fromisoformat(d_str)).days
                 add_workout({
                     "date": d_str, "name": name, "workout_type": w_type,
-                    "description": f"Taper workout — {days_to_race} days to {chosen['name']}",
+                    "description": f"Taper workout, {days_to_race} days to {chosen['name']}",
                     "structured_json": None, "tss_planned": round(tss), "notes": "",
+                    "purpose": explain.PURPOSE.get(w_type), "feel": explain.feel_for(w_type),
                 })
                 count += 1
-            st.success(f"Added {count} taper workouts to your plan.")
+            msg = f"Added {count} taper workouts to your plan."
+            if skipped:
+                msg += f" Skipped {skipped} day{'s' if skipped != 1 else ''} that already had a workout."
+            st.success(msg)
 
 # ── Tab 3: Pacing Strategy ────────────────────────────────────────────────────
 with tab3:
