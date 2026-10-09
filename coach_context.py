@@ -11,6 +11,7 @@ from components.onboarding import parse_goal_keys
 from db.queries import (get_setting, get_activities, get_races, get_memories,
                         get_recovery_range)
 from metrics.training_load import get_current_metrics
+from metrics.tss import label as tss_label
 
 SYSTEM_PROMPT = """You are an expert road cycling coach with deep knowledge of:
 - Periodization and training load management (CTL/ATL/TSB/PMC)
@@ -225,7 +226,8 @@ def build_context() -> str:
     recent_rides = []
     for a in activities[:7]:
         dur = f"{int(a['duration_seconds']//3600)}h{int((a['duration_seconds']%3600)//60)}m" if a.get("duration_seconds") else "?"
-        tss_str = f"TSS:{a['tss']:.0f}" if a.get("tss") else "no TSS"
+        tss_str = (f"{tss_label(a.get('tss_source')).replace(' ', '')}:{a['tss']:.0f}"
+                   if a.get("tss") else "no TSS")
         pwr_str = f"{a['avg_power_watts']:.0f}W" if a.get("avg_power_watts") else ""
         recent_rides.append(f"  - {a['date']} | {a.get('name','?')} | {dur} | {tss_str} {pwr_str}")
 

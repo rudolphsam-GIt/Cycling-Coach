@@ -16,7 +16,8 @@ from datetime import datetime, timedelta, date
 
 from db.queries import (get_setting, set_setting, upsert_activity, upsert_recovery,
                         match_activity_id, save_peaks, save_hr_peaks, has_hr_peaks,
-                        ftp_history_rows, ftp_on, oldest_ride_missing_timer)
+                        ftp_history_rows, ftp_on, oldest_ride_missing_timer,
+                        get_activity, hr_profile, rescore_from_streams, save_streams)
 from metrics.tss import ride_tss, tss_duration
 from metrics.zones import estimate_zone_seconds
 
@@ -106,7 +107,7 @@ def friendly_error(e: Exception) -> str:
 
 # ── Rides ─────────────────────────────────────────────────────────────────────
 
-def activity_row(act: dict, ftp: float, lthr: float) -> dict | None:
+def activity_row(act: dict, ftp: float, lthr: float, profile: dict | None = None) -> dict | None:
     """Map one Garmin activity to an activities row, or None if it isn't a ride."""
     activity_type = (
         (act.get("activityType") or {}).get("typeKey", "")
@@ -125,7 +126,7 @@ def activity_row(act: dict, ftp: float, lthr: float) -> dict | None:
 
     # Score on timer time, which is stored so a later recalculation reads back the same duration.
     tss_s = tss_duration(moving_s, elapsed_s, duration_s)
-    tss, if_value = ride_tss(tss_s, norm_power, avg_hr, max_hr, ftp, lthr)
+    tss, if_value, tss_source = ride_tss(tss_s, norm_power, avg_hr, max_hr, ftp, lthr, profile=profile)
     zones = estimate_zone_seconds(tss_s, avg_hr, max_hr, avg_power, norm_power, ftp, lthr)
 
     return {
@@ -144,6 +145,7 @@ def activity_row(act: dict, ftp: float, lthr: float) -> dict | None:
         "avg_hr": avg_hr,
         "max_hr": max_hr,
         "tss": round(tss, 1) if tss else None,
+        "tss_source": tss_source if tss else None,
         "if_value": round(if_value, 3) if if_value else None,
         "zone_time_json": json.dumps(zones) if zones else None,
         "raw_json": json.dumps({
@@ -187,15 +189,46 @@ def find_garmin_activity_id(api, activity: dict) -> str | None:
     return None
 
 
-def _hr_peaks(api, activity_id) -> dict:
+def _ride_file(api, activity_id) -> bytes | None:
+    """The ride's original FIT file as Garmin sends it, or None if the download fails."""
+    try:
+        return api.download_activity(str(activity_id), dl_fmt=api.ActivityDownloadFormat.ORIGINAL)
+    except Exception:
+        return None
+
+
+def _hr_peaks(api, activity_id, raw: bytes | None = None) -> dict:
     """Best average heart rate by duration, from the ride's original FIT file.
     Empty when the download or parsing fails (sync carries on regardless)."""
     from metrics.peaks import fit_from_download, hr_peaks_from_fit
+    raw = raw if raw is not None else _ride_file(api, activity_id)
+    if not raw:
+        return {}
     try:
-        raw = api.download_activity(str(activity_id), dl_fmt=api.ActivityDownloadFormat.ORIGINAL)
         return hr_peaks_from_fit(fit_from_download(raw))
     except Exception:
         return {}
+
+
+def _score_from_file(activity_id: int, raw: bytes | None) -> None:
+    """Check the ride second by second. If power is missing for the whole ride or drops out
+    while heart rate keeps recording, keep the data and rescore with hrTSS for those seconds.
+    Rides with full power keep Garmin's summary numbers and their data isn't stored."""
+    from metrics.streams import from_fit
+    from metrics.tss import stream_tss
+    if not raw:
+        return
+    try:
+        streams = from_fit(raw)
+    except Exception:
+        return
+    act = get_activity(activity_id)
+    if not streams or not act:
+        return
+    lthr = float(get_setting("lthr", 0) or 0)
+    if stream_tss(streams, ftp_on(act["date"]), lthr, hr_profile()):
+        save_streams(activity_id, streams, "garmin")
+        rescore_from_streams(activity_id)
 
 
 def _sync_rides(api, days_back: int) -> int:
@@ -203,16 +236,20 @@ def _sync_rides(api, days_back: int) -> int:
     lthr = float(get_setting("lthr", 0) or 0)
     start = (date.today() - timedelta(days=days_back)).isoformat()
     history = ftp_history_rows()
+    profile = hr_profile()
     count = 0
     for act in api.get_activities_by_date(start, date.today().isoformat()):
         # Score each ride on the FTP it was ridden at, so a re-sync never rewrites history.
         day = (act.get("startTimeLocal") or "")[:10]
-        row = activity_row(act, ftp_on(day, history) if day else ftp, lthr)
+        row = activity_row(act, ftp_on(day, history) if day else ftp, lthr, profile)
         if row and row["date"]:
             activity_id = upsert_activity(row)
             save_peaks(activity_id, peak_powers(act))
             if activity_id and act.get("averageHR") and not has_hr_peaks(activity_id):
-                save_hr_peaks(activity_id, _hr_peaks(api, act.get("activityId")))
+                # One download serves both: heart rate peaks, and a check for power dropouts.
+                raw = _ride_file(api, act.get("activityId"))
+                save_hr_peaks(activity_id, _hr_peaks(api, act.get("activityId"), raw))
+                _score_from_file(activity_id, raw)
             count += 1
     return count
 

@@ -452,6 +452,8 @@ def _ride_row(a: dict) -> dict:
         "np_w": a.get("normalized_power"),
         "avg_hr": a.get("avg_hr"),
         "tss": round(a["tss"]) if a.get("tss") else None,
+        # hr = hrTSS (no power), mixed = power with a dropout patched from heart rate
+        "tss_from": a.get("tss_source") if a.get("tss_source") not in (None, "power") else None,
         "if": a.get("if_value"),
     }
     return {k: v for k, v in row.items() if v is not None}

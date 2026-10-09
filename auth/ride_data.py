@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import requests
 
-from db.queries import get_activity, get_streams, save_streams
+from db.queries import get_activity, get_streams, rescore_from_streams, save_streams
 from metrics import streams as st
 
 STRAVA_API = "https://www.strava.com/api/v3"
@@ -89,6 +89,7 @@ def load_streams(activity_id: int) -> tuple[dict | None, str]:
             continue
         if data:
             save_streams(activity_id, data, fetch.__name__.removeprefix("_from_"))
+            rescore_from_streams(activity_id)     # no power, or a dropout: score with heart rate
             return data, ""
     if errors:
         return None, "Couldn't load the detailed data right now. " + errors[0]

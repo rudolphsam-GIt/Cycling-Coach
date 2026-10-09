@@ -19,12 +19,14 @@ from plotly.subplots import make_subplots
 from auth import ride_data
 from components import charts, ride_detail, theme
 from components.units import climb_input, distance_input, distance_unit
-from db.queries import (clear_activity_tss, get_activity, get_peaks_between, get_report, get_setting,
+from db.queries import (clear_activity_tss, ftp_on, get_activity, get_peaks_between, get_report, get_setting,
+                        hr_profile,
                         get_workouts, recalculate_all_tss, save_report, set_activity_tss,
                         update_activity_details)
 from metrics import analysis as an
 from metrics import streams as sm
 from metrics.explain import TIPS
+from metrics.tss import label as tss_label
 from metrics.units import (climb_from_m, climb_unit, dist_from_km, fmt_climb, fmt_distance, speed_from_kph,
                            speed_unit)
 from metrics.zones import HR_ZONE_NAMES, POWER_ZONE_NAMES, ZONE_COLORS, get_hr_zones, get_power_zones
@@ -59,6 +61,7 @@ def summary_numbers(act: dict, streams: dict | None) -> dict:
     return {
         "secs": secs or live.get("secs"), "meters": meters,
         "climb": _n(act.get("elevation_gain_meters")) or live.get("climb"), "tss": _n(act.get("tss")),
+        "tss_source": act.get("tss_source"),
         "avg_w": avg_w, "np": np_w, "if": _n(act.get("if_value")),
         "vi": np_w / avg_w if np_w and avg_w else None,
         "avg_hr": avg_hr, "max_hr": _n(act.get("max_hr")) or live.get("max_hr"),
@@ -86,7 +89,8 @@ def _tiles(n: dict) -> None:
         [("Time", f"{h}h {m:02d}m" if h else (f"{m} min {int(n['secs']) % 60:02d}s" if m is not None else "–"), None),
          ("Distance", fmt_distance(n["meters"], unit) or "–", None),
          ("Climbing", fmt_climb(n["climb"], unit) or (f"0 {climb_unit(unit)}" if n["climb"] == 0 else "–"), None),
-         ("TSS", _fmt(n["tss"], ".0f"), TIPS["tss"])],
+         (tss_label(n.get("tss_source")), _fmt(n["tss"], ".0f"),
+          TIPS["hrtss"] if n.get("tss_source") in ("hr", "mixed") else TIPS["tss"])],
         [("Avg power", _fmt(n["avg_w"], ".0f", " W"), TIPS["avg_w"]),
          ("Normalized", _fmt(n["np"], ".0f", " W"), TIPS["np"]),
          ("Intensity", _fmt(n["if"], ".2f"), TIPS["if"]),
@@ -519,13 +523,15 @@ def _selection_banner(act_id: int, sel: tuple[int, int], whole: dict, now: dict)
 
 def render(act: dict) -> None:
     """The analysis for one ride, as drawn inside the popup."""
-    ftp = float(get_setting("ftp_watts", 0) or 0)
+    ftp = ftp_on(act["date"])           # the FTP the ride was ridden at
     lthr = float(get_setting("lthr", 0) or 0)
+    profile = hr_profile()
     st.markdown(f"### {act.get('name') or 'Ride'}")
     st.caption(f"{act['date']} · {an.ride_kind(act)} ride")
 
     with st.spinner("Loading the ride data…"):
         streams, note = ride_data.load_streams(act["id"])
+    act = get_activity(act["id"]) or act    # loading the data can rescore a ride with heart rate
     whole = summary_numbers(act, streams)
     length = length_of(streams) if streams else 0
     if streams and take_drag(act["id"], length):
@@ -535,7 +541,7 @@ def render(act: dict) -> None:
     view, offset, n = streams, 0, whole
     if sel:
         view, offset = sm.slice_streams(streams, lo, hi), lo
-        n = sm.numbers_from_streams(view, ftp)
+        n = sm.numbers_from_streams(view, ftp, lthr, profile)
         _selection_banner(act["id"], sel, whole, n)
     _tiles(n)
     _edit_ride(act)

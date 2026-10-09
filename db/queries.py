@@ -137,6 +137,7 @@ def upsert_activity(data: dict):
     conn = get_conn()
     data.setdefault("elapsed_seconds", None)
     data.setdefault("timer_seconds", None)
+    data.setdefault("tss_source", None)
     data.setdefault("zone_time_json", None)
 
     dup = _find_cross_source_duplicate(conn, data)
@@ -152,6 +153,7 @@ def upsert_activity(data: dict):
                    avg_power_watts  = CASE WHEN edited = 1 THEN avg_power_watts ELSE COALESCE(?, avg_power_watts) END,
                    normalized_power = CASE WHEN edited = 1 THEN normalized_power ELSE COALESCE(?, normalized_power) END,
                    tss              = CASE WHEN tss_locked = 1 OR edited = 1 THEN tss ELSE COALESCE(?, tss) END,
+                   tss_source       = CASE WHEN tss_locked = 1 OR edited = 1 OR ? IS NULL THEN tss_source ELSE ? END,
                    if_value         = CASE WHEN edited = 1 THEN if_value ELSE COALESCE(?, if_value) END,
                    avg_hr           = CASE WHEN edited = 1 THEN avg_hr ELSE COALESCE(?, avg_hr) END,
                    max_hr           = CASE WHEN edited = 1 THEN max_hr ELSE COALESCE(?, max_hr) END,
@@ -160,7 +162,7 @@ def upsert_activity(data: dict):
                    WHERE id = ?""",
                 (
                     data.get("avg_power_watts"), data.get("normalized_power"),
-                    data.get("tss"), data.get("if_value"),
+                    data.get("tss"), data.get("tss"), data.get("tss_source"), data.get("if_value"),
                     data.get("avg_hr"), data.get("max_hr"),
                     data.get("zone_time_json"), data.get("timer_seconds"), dup["id"],
                 ),
@@ -174,14 +176,18 @@ def upsert_activity(data: dict):
         """INSERT INTO activities
            (source, external_id, date, name, sport_type, duration_seconds,
             elapsed_seconds, distance_meters, elevation_gain_meters, avg_power_watts, avg_hr,
-            max_hr, normalized_power, tss, if_value, raw_json, zone_time_json, timer_seconds)
+            max_hr, normalized_power, tss, if_value, raw_json, zone_time_json, timer_seconds,
+            tss_source)
            VALUES (:source,:external_id,:date,:name,:sport_type,:duration_seconds,
                    :elapsed_seconds,:distance_meters,:elevation_gain_meters,:avg_power_watts,:avg_hr,
-                   :max_hr,:normalized_power,:tss,:if_value,:raw_json,:zone_time_json,:timer_seconds)
+                   :max_hr,:normalized_power,:tss,:if_value,:raw_json,:zone_time_json,:timer_seconds,
+                   :tss_source)
            ON CONFLICT(external_id) DO UPDATE SET
                timer_seconds=COALESCE(excluded.timer_seconds, activities.timer_seconds),
                tss=CASE WHEN activities.tss_locked = 1 OR activities.edited = 1
                         THEN activities.tss ELSE excluded.tss END,
+               tss_source=CASE WHEN activities.tss_locked = 1 OR activities.edited = 1
+                               THEN activities.tss_source ELSE excluded.tss_source END,
                if_value=CASE WHEN activities.edited = 1 THEN activities.if_value ELSE excluded.if_value END,
                normalized_power=CASE WHEN activities.edited = 1 THEN activities.normalized_power
                                      ELSE excluded.normalized_power END,
@@ -270,6 +276,20 @@ def save_streams(activity_id: int, streams: dict, source: str = "") -> None:
     conn.close()
 
 
+def rescore_from_streams(activity_id: int) -> bool:
+    """Rescore a ride once its second by second data is saved, when that data has no power or a
+    power dropout (see metrics.tss.stream_tss). True if the TSS was recalculated."""
+    from metrics.tss import stream_tss
+    act = get_activity(activity_id)
+    if not act or act.get("tss_locked"):
+        return False
+    lthr = float(get_setting("lthr", 0) or 0)
+    if not stream_tss(get_streams(activity_id), ftp_on(act["date"]), lthr, hr_profile()):
+        return False
+    recalculate_all_tss(only_id=activity_id)
+    return True
+
+
 def get_streams(activity_id: int) -> dict | None:
     conn = get_conn()
     row = conn.execute("SELECT data FROM activity_streams WHERE activity_id = ?", (activity_id,)).fetchone()
@@ -286,7 +306,8 @@ def set_activity_tss(activity_id: int, tss: float) -> None:
     """Set a ride's TSS by hand. The value is locked, so a later sync or a recalculation
     leaves it alone until clear_activity_tss is called."""
     conn = get_conn()
-    conn.execute("UPDATE activities SET tss=?, tss_locked=1 WHERE id=?", (round(float(tss), 1), activity_id))
+    conn.execute("UPDATE activities SET tss=?, tss_locked=1, tss_source='manual' WHERE id=?",
+                 (round(float(tss), 1), activity_id))
     conn.commit()
     conn.close()
 
@@ -890,6 +911,35 @@ def get_weekly_tss_summary(weeks: int = 5) -> list[dict]:
     return results
 
 
+def hr_profile() -> dict:
+    """Resting and max heart rate and the TRIMP curve constant, for hrTSS. Each heart rate is the
+    rider's own number from Settings when set, else worked out: resting from Garmin's last 30
+    days, max from the highest reading another ride comes close to in the last year. Missing
+    values are None, and hrTSS then falls back to (HR / LTHR) squared."""
+    from metrics.tss import k_for
+    rest = float(get_setting("resting_hr_manual", 0) or 0) or auto_resting_hr()
+    mx = float(get_setting("max_hr_manual", 0) or 0) or auto_max_hr()
+    return {"rest": rest, "max": mx, "k": k_for(get_setting("gender", ""))}
+
+
+def auto_resting_hr() -> float | None:
+    since = (date.today() - timedelta(days=30)).isoformat()
+    conn = get_conn()
+    row = conn.execute("SELECT AVG(resting_hr) AS r FROM recovery_daily WHERE date >= ? AND resting_hr > 0",
+                       (since,)).fetchone()
+    conn.close()
+    return round(row["r"]) if row and row["r"] else None
+
+
+def auto_max_hr() -> float | None:
+    from metrics.tss import robust_max_hr
+    since = (date.today() - timedelta(days=365)).isoformat()
+    conn = get_conn()
+    rows = conn.execute("SELECT max_hr FROM activities WHERE date >= ? AND max_hr > 0", (since,)).fetchall()
+    conn.close()
+    return robust_max_hr([r["max_hr"] for r in rows])
+
+
 def ftp_on(day: str, history: list[dict] | None = None) -> float:
     """The FTP in effect on a date: the latest FTP history entry on or before it, else the
     earliest entry, else the current setting."""
@@ -940,10 +990,14 @@ def recalculate_all_tss(only_id: int | None = None, since: str | None = None):
     from metrics.tss import ride_tss, tss_duration
     from metrics.zones import estimate_zone_seconds
 
+    from metrics.tss import stream_tss
+
     history = _ftp_history_rows()
     lthr = float(get_setting("lthr", 0) or 0)
+    profile = hr_profile()
 
     conn = get_conn()
+    with_streams = {r["activity_id"] for r in conn.execute("SELECT activity_id FROM activity_streams")}
     rows = conn.execute(
         """SELECT id, date, duration_seconds, elapsed_seconds, timer_seconds, normalized_power,
                   avg_power_watts, avg_hr, max_hr FROM activities
@@ -959,7 +1013,12 @@ def recalculate_all_tss(only_id: int | None = None, since: str | None = None):
         max_hr = row["max_hr"]
         ftp = ftp_on(row["date"], history)
 
-        tss, if_value = ride_tss(duration_s, np, avg_hr, max_hr, ftp, lthr)
+        tss, if_value, source = ride_tss(duration_s, np, avg_hr, max_hr, ftp, lthr, profile=profile)
+        if row["id"] in with_streams:
+            # Second by second data can score a ride with no power, or patch a power dropout.
+            better = stream_tss(get_streams(row["id"]), ftp, lthr, profile)
+            if better:
+                tss, source = better
 
         zones = estimate_zone_seconds(
             duration_s, avg_hr, max_hr,
@@ -968,11 +1027,12 @@ def recalculate_all_tss(only_id: int | None = None, since: str | None = None):
         zone_json = json.dumps(zones) if zones else None
 
         conn.execute(
-            "UPDATE activities SET tss=?, if_value=?, zone_time_json=? WHERE id=?",
+            "UPDATE activities SET tss=?, if_value=?, zone_time_json=?, tss_source=? WHERE id=?",
             (
                 round(tss, 1) if tss else None,
                 round(if_value, 3) if if_value else None,
                 zone_json,
+                source if tss else None,
                 row["id"],
             ),
         )

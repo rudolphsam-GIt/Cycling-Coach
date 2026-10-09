@@ -6,7 +6,7 @@ import json
 from datetime import datetime, timezone
 
 from db.queries import (get_setting, upsert_activity, save_peaks, save_hr_peaks, save_streams,
-                        ftp_history_rows, ftp_on)
+                        ftp_history_rows, ftp_on, hr_profile, rescore_from_streams)
 from metrics.tss import ride_tss, tss_duration
 from metrics.zones import estimate_zone_seconds
 
@@ -39,6 +39,7 @@ def _save_file_peaks(activity_id, raw: bytes) -> None:
     try:
         from metrics.streams import from_fit
         save_streams(activity_id, from_fit(raw), "fit_import")
+        rescore_from_streams(activity_id)
     except Exception:
         pass
     save_hr_peaks(activity_id, mean_max(hr, HR_DURATIONS, zero_is_missing=True))
@@ -51,6 +52,7 @@ def import_fit_files(uploaded_files) -> tuple[int, str]:
         return 0, "fitparse not installed. Run: venv/bin/pip install fitparse"
 
     history = ftp_history_rows()
+    profile = hr_profile()
     lthr = float(get_setting("lthr", 0) or 0)
 
     count = 0
@@ -114,7 +116,8 @@ def import_fit_files(uploaded_files) -> tuple[int, str]:
             # TSS
             tss_s = tss_duration(moving_s, elapsed_s, total_timer)
             ride_ftp = ftp_on(date_str, history)
-            tss, if_val = ride_tss(tss_s, norm_power, avg_hr, max_hr, ride_ftp, lthr)
+            tss, if_val, tss_source = ride_tss(tss_s, norm_power, avg_hr, max_hr, ride_ftp, lthr,
+                                               profile=profile)
 
             zones = estimate_zone_seconds(
                 tss_s, avg_hr, max_hr, avg_power, norm_power, ride_ftp, lthr
@@ -138,6 +141,7 @@ def import_fit_files(uploaded_files) -> tuple[int, str]:
                 "avg_hr": avg_hr,
                 "max_hr": max_hr,
                 "tss": round(tss, 1) if tss else None,
+                "tss_source": tss_source if tss else None,
                 "if_value": round(if_val, 3) if if_val else None,
                 "zone_time_json": json.dumps(zones) if zones else None,
                 "raw_json": json.dumps({"source_file": uf.name}),
@@ -211,6 +215,7 @@ def _parse_float(s) -> float | None:
 def import_csv_files(uploaded_files, imperial: bool = False) -> tuple[int, str]:
     """Import a Garmin Connect CSV export. Set imperial=True if it's in miles and feet."""
     history = ftp_history_rows()
+    profile = hr_profile()
     lthr = float(get_setting("lthr", 0) or 0)
 
     count = 0
@@ -255,8 +260,10 @@ def import_csv_files(uploaded_files, imperial: bool = False) -> tuple[int, str]:
 
                 # Compute TSS if not in CSV
                 ride_ftp = ftp_on(date_str, history)
-                tss, if_val = ride_tss(elapsed_s, norm_power, avg_hr, max_hr, ride_ftp, lthr)
-                tss = tss_csv or tss
+                tss, if_val, tss_source = ride_tss(elapsed_s, norm_power, avg_hr, max_hr, ride_ftp, lthr,
+                                                   profile=profile)
+                if tss_csv:
+                    tss, tss_source = tss_csv, None
 
                 zones = estimate_zone_seconds(
                     elapsed_s, avg_hr, max_hr, avg_power, norm_power, ride_ftp, lthr
@@ -279,6 +286,7 @@ def import_csv_files(uploaded_files, imperial: bool = False) -> tuple[int, str]:
                     "avg_hr": int(avg_hr) if avg_hr else None,
                     "max_hr": int(max_hr) if max_hr else None,
                     "tss": round(tss, 1) if tss else None,
+                    "tss_source": tss_source if tss else None,
                     "if_value": round(if_val, 3) if if_val else None,
                     "zone_time_json": json.dumps(zones) if zones else None,
                     "raw_json": json.dumps({"source_file": uf.name}),

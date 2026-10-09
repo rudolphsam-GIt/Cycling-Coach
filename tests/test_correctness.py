@@ -57,14 +57,17 @@ class TaperTests(Base):
 
 class TssRuleTests(Base):
     def test_one_rule_for_every_source(self):
-        tss, if_value = ride_tss(3600, 250, 150, 180, 250, 165)
+        tss, if_value, source = ride_tss(3600, 250, 150, 180, 250, 165)
         self.assertAlmostEqual(tss, 100)
         self.assertAlmostEqual(if_value, 1.0)
-        tss, if_value = ride_tss(3600, None, 165, 180, 250, 165)
+        self.assertEqual(source, "power")
+        tss, if_value, source = ride_tss(3600, None, 165, 180, 250, 165)
         self.assertAlmostEqual(tss, 100)          # heart rate when there's no power
         self.assertIsNone(if_value)
-        tss, _ = ride_tss(3600, None, None, None, 250, 0)
+        self.assertEqual(source, "hr")
+        tss, _, source = ride_tss(3600, None, None, None, 250, 0)
         self.assertGreater(tss, 0)                # estimate when there's neither
+        self.assertEqual(source, "estimate")
 
     def test_a_garmin_ride_keeps_its_tss_through_a_recalculation(self):
         act = {"activityType": {"typeKey": "road_biking"}, "activityId": 1,
