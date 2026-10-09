@@ -67,19 +67,20 @@ def _error_message(e: anthropic.APIError) -> str:
 
 
 def ask(system: list[dict], messages: list[dict], effort: str = "medium", model: str = MODEL) -> str:
-    """Send a request and return the reply text, or a readable error message."""
+    """Send a request and return the reply text. Raises ClaudeError with a readable message
+    when there's no usable reply, so an error is never mistaken for an answer."""
     try:
         response = _client().beta.messages.create(**_request(system, messages, effort, MAX_TOKENS, model))
     except anthropic.APIError as e:
-        return _error_message(e)
+        raise ClaudeError(_error_message(e)) from e
 
     if response.stop_reason == "refusal":
-        return REFUSAL_MESSAGE
+        raise ClaudeError(REFUSAL_MESSAGE)
 
     # The reply starts with thinking blocks, so pick out the text blocks by type.
     text = "".join(block.text for block in response.content if block.type == "text").strip()
     if not text:
-        return "Claude returned an empty reply. Try asking again."
+        raise ClaudeError("Claude returned an empty reply. Try asking again.")
     if response.stop_reason == "max_tokens":
         text += CUT_OFF_NOTE
     return text

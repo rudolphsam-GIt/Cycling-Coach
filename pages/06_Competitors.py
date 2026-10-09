@@ -1,5 +1,7 @@
 from __future__ import annotations
 import streamlit as st
+
+import claude_client
 import pandas as pd
 from datetime import date
 from html import escape
@@ -459,15 +461,19 @@ if profiles:
         if not race_name:
             st.error("Please enter a race name above first.")
         else:
-            with st.spinner("Claude is analysing the field and writing your tactics brief..."):
-                brief = generate_tactics_brief(
-                    race_name=race_name,
-                    race_distance_km=race_dist,
-                    race_elevation_m=race_elev,
-                    race_notes=race_notes,
-                    competitor_profiles=profiles,
-                )
-            st.session_state.tactics_brief = brief
+            try:
+                with st.spinner("Claude is analysing the field and writing your tactics brief..."):
+                    brief = generate_tactics_brief(
+                        race_name=race_name,
+                        race_distance_km=race_dist,
+                        race_elevation_m=race_elev,
+                        race_notes=race_notes,
+                        competitor_profiles=profiles,
+                    )
+            except claude_client.ClaudeError as e:
+                st.error(f"Couldn't write the tactics brief. {e}")
+            else:
+                st.session_state.tactics_brief = brief
 
 if st.session_state.get("tactics_brief"):
     section_header(f"Race Tactics Brief for {escape(race_name)}")
@@ -480,13 +486,9 @@ if st.session_state.get("tactics_brief"):
         mime="text/plain",
     )
     if chosen_race and st.button("Save to Race Calendar Notes", icon=":material/save:"):
-        from db.queries import get_conn
-        conn = get_conn()
-        conn.execute("UPDATE races SET notes = ? WHERE id = ?",
-                     (st.session_state.tactics_brief[:500], chosen_race["id"]))
-        conn.commit()
-        conn.close()
-        st.success("Saved to race notes!")
+        from db.queries import add_race_notes
+        add_race_notes(chosen_race["id"], st.session_state.tactics_brief)
+        st.success("Added to race notes.")
 
 # ── Tips ─────────────────────────────────────────────────────────────────────
 with st.expander("Tips"):
