@@ -28,3 +28,4 @@ data/backups/
 
 # Machine-local Claude Code config
 .claude/launch.json
+data/app.log
