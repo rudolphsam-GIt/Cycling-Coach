@@ -205,6 +205,8 @@ TERMS: dict[str, dict] = {
 # Short text for tooltips on numbers, tiles and table columns.
 TIPS = {
     "tss": "Training stress. One hour at your FTP scores 100.",
+    "hrtss": "Heart rate training stress, used where a ride has no power or the power dropped out. "
+             "One hour at your threshold heart rate scores 100, the same as an hour at FTP.",
     "if": "Intensity factor. How hard the ride was compared with your FTP. 0.70 is easy, 1.00 is threshold.",
     "np": "Normalized power. Average power adjusted for surges, so hard efforts count for more.",
     "avg_w": "Average power over the whole ride.",

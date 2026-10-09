@@ -16,6 +16,7 @@ from components.explain import help_icon
 from components.units import distance_unit
 from metrics.analysis import ride_kind
 from metrics.explain import TIPS
+from metrics.tss import SOURCE_FROM, label as tss_label
 from metrics.units import climb_from_m, climb_unit, dist_from_km, fmt_climb, fmt_distance
 from metrics.units import num as _num
 
@@ -57,11 +58,13 @@ def rides_frame(activities: list, unit: str = "km") -> pd.DataFrame:
             "NP": _num(a.get("normalized_power")),
             "Avg HR": _num(a.get("avg_hr")),
             "TSS": _num(a.get("tss")),
+            "TSS from": (SOURCE_FROM.get("manual" if a.get("tss_locked") else a.get("tss_source") or "", "")
+                         if _num(a.get("tss")) else ""),
             "IF": _num(a.get("if_value")),
         }
         for a in activities
     ], columns=["Date", "Name", "Type", "Duration", dist, climb, "Avg W", "NP",
-                "Avg HR", "TSS", "IF"])
+                "Avg HR", "TSS", "TSS from", "IF"])
 
 
 def ride_table(activities: list, key: str, *, max_height: int = 420) -> dict | None:
@@ -89,6 +92,10 @@ def ride_table(activities: list, key: str, *, max_height: int = 420) -> dict | N
             "NP": st.column_config.NumberColumn("NP", format="%d", width="small", help=TIPS["np"]),
             "Avg HR": st.column_config.NumberColumn("Avg HR", format="%d", width="small"),
             "TSS": st.column_config.NumberColumn("TSS", format="%d", width="small", help=TIPS["tss"]),
+            "TSS from": st.column_config.TextColumn(
+                "TSS from", width="small",
+                help="Power, or Heart rate (hrTSS) when the ride had no power. Power + HR means the "
+                     "power dropped out and heart rate filled the gap."),
             "IF": st.column_config.NumberColumn("IF", format="%.2f", width="small", help=TIPS["if"]),
         },
     )
@@ -112,7 +119,7 @@ def ride_detail(act: dict, key: str) -> None:
         ("Norm Power", _fmt(act.get("normalized_power"), lambda v: f"{int(v)} W")),
         ("Int Factor", _fmt(act.get("if_value"), lambda v: f"{v:.2f}")),
         ("Avg HR", _fmt(act.get("avg_hr"), lambda v: f"{int(v)} bpm")),
-        ("TSS", _fmt(act.get("tss"), lambda v: f"{v:.0f}")),
+        (tss_label(act.get("tss_source")), _fmt(act.get("tss"), lambda v: f"{v:.0f}")),
     ]
 
     zone_secs = None

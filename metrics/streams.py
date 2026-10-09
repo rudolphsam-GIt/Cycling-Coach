@@ -281,9 +281,12 @@ def distance_meters(streams: dict) -> float | None:
     return float(sum(speed)) if speed else None
 
 
-def numbers_from_streams(streams: dict, ftp: float = 0.0) -> dict:
+def numbers_from_streams(streams: dict, ftp: float = 0.0, lthr: float = 0.0,
+                         profile: dict | None = None) -> dict:
     """The ride numbers worked out from second by second data alone, for the whole ride
-    or any part of it. Anything the data can't give is None."""
+    or any part of it. Anything the data can't give is None. TSS comes from power, or from
+    heart rate (hrTSS) where power is missing when `lthr` is given."""
+    from metrics.tss import stream_tss
     power = streams.get("power") or []
     hr = streams.get("hr") or []
     speed = [v for v in streams.get("speed") or [] if v is not None]
@@ -293,12 +296,15 @@ def numbers_from_streams(streams: dict, ftp: float = 0.0) -> dict:
     np_w = normalized_power(power)
     avg_hr = average(hr)
     iff = np_w / ftp if np_w and ftp else None
+    tss, tss_source = (n * iff * iff / 36, "power") if iff else (None, None)   # seconds x IF² / 3600 x 100
+    if lthr and (by_hr := stream_tss(streams, ftp, lthr, profile)):
+        tss, tss_source = by_hr
     return {
         "secs": n or None,
         "meters": distance_meters(streams),
         "climb": elevation_gain(streams["alt"]) if streams.get("alt") else None,
         "avg_w": avg_w, "np": np_w, "if": iff,
-        "tss": n * iff * iff / 36 if iff else None,        # seconds x IF squared / 3600 x 100
+        "tss": tss, "tss_source": tss_source,
         "vi": np_w / avg_w if np_w and avg_w else None,
         "avg_hr": avg_hr, "max_hr": max([h for h in hr if h is not None], default=None),
         "kj": avg_w * n / 1000 if avg_w and n else None,

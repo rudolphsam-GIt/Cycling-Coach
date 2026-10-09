@@ -4,7 +4,7 @@ import streamlit as st
 from datetime import date, datetime
 
 import ftp_change
-from db.queries import (get_setting, set_setting,
+from db.queries import (get_setting, set_setting, auto_max_hr, auto_resting_hr,
                         recalculate_all_tss, deduplicate_activities)
 from config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, GARMIN_EMAIL, GARMIN_PASSWORD
 import auth.strava as strava_auth
@@ -71,6 +71,20 @@ with tab_profile:
             value=int(get_setting("lthr", 155) or 155), step=1,
             help=setting_help("lthr"),
         )
+        auto_max, auto_rest = auto_max_hr(), auto_resting_hr()
+        h1, h2 = st.columns(2)
+        max_hr_in = h1.number_input(
+            "Max HR (bpm)", min_value=0, max_value=230, step=1,
+            value=int(float(get_setting("max_hr_manual", 0) or 0)) or None, placeholder=(
+                f"Auto: {auto_max:.0f}" if auto_max else "Auto"),
+            help="Used for hrTSS on rides without power. Leave empty to use the highest heart rate "
+                 "that more than one of your rides reached in the last year, which skips strap glitches.")
+        rest_hr_in = h2.number_input(
+            "Resting HR (bpm)", min_value=0, max_value=120, step=1,
+            value=int(float(get_setting("resting_hr_manual", 0) or 0)) or None, placeholder=(
+                f"Auto: {auto_rest:.0f}" if auto_rest else "Auto"),
+            help="Used for hrTSS on rides without power. Leave empty to use your Garmin resting "
+                 "heart rate averaged over the last 30 days.")
         init_ctl = st.number_input(
             "Starting CTL", min_value=0.0, max_value=200.0,
             value=float(get_setting("ctl_start", 0) or 0), step=1.0,
@@ -80,6 +94,10 @@ with tab_profile:
     if st.button("Save profile", type="primary", icon=":material/save:"):
         old_ftp = int(get_setting("ftp_watts", 0) or 0)
         old_lthr = int(get_setting("lthr", 0) or 0)
+        old_hr = (get_setting("max_hr_manual", "") or "", get_setting("resting_hr_manual", "") or "",
+                  get_setting("gender", "") or "")
+        set_setting("max_hr_manual", int(max_hr_in) if max_hr_in else "")
+        set_setting("resting_hr_manual", int(rest_hr_in) if rest_hr_in else "")
         set_setting("weight_kg", weight)
         set_setting("weight_unit", unit)
         set_setting("lthr", lthr)
@@ -100,8 +118,10 @@ with tab_profile:
             set_setting("ftp_estimated", "0")   # the rider set it themselves
         if lthr != old_lthr:
             set_setting("lthr_estimated", "0")
-        if lthr != old_lthr and lthr > 0:
-            # LTHR has no history, so heart rate based TSS follows the new value everywhere.
+        new_hr = (get_setting("max_hr_manual", "") or "", get_setting("resting_hr_manual", "") or "",
+                  get_setting("gender", "") or "")
+        if (lthr != old_lthr and lthr > 0) or new_hr != old_hr:
+            # LTHR, max and resting heart rate have no history, so hrTSS follows them everywhere.
             with st.spinner("Updating TSS and zones for your rides…"):
                 n = recalculate_all_tss()
             st.success(f"Profile saved. TSS and zones updated for {n} rides.")

@@ -31,6 +31,7 @@ from components import theme
 from components.theme import rgba as _rgba
 from db.queries import is_ride
 from metrics.units import fmt_climb, fmt_distance, num as _num
+from metrics.tss import label as tss_label
 
 # A ride that reaches less than this share of its planned TSS counts as short.
 SHORT_RATIO = 0.70
@@ -194,7 +195,7 @@ def _ride_facts(r: dict, unit: str = "km") -> list[str]:
     if _num(r.get("avg_hr")):
         facts.append(f"{round(_num(r['avg_hr']))} bpm")
     if _num(r.get("tss")) is not None:
-        facts.append(f"{round(_num(r['tss']))} TSS")
+        facts.append(f"{round(_num(r['tss']))} {tss_label(r.get('tss_source'))}")
     if _num(r.get("if_value")):
         facts.append(f"IF {_num(r['if_value']):.2f}")
     return facts

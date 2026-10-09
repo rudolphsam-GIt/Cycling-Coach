@@ -15,7 +15,7 @@ import time
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta
 from db.queries import (get_setting, set_setting, upsert_activity, get_daily_tss,
-                        ftp_history_rows, ftp_on)
+                        ftp_history_rows, ftp_on, hr_profile)
 from metrics.tss import ride_tss, tss_duration
 from metrics.zones import estimate_zone_seconds
 import json
@@ -136,6 +136,7 @@ def sync_activities(client_id: str, client_secret: str, days_back: int = 60) -> 
                           "Disconnect and connect Strava again.")
 
     history = ftp_history_rows()
+    profile = hr_profile()
     lthr = float(get_setting("lthr", 0) or 0)
     since_ts = int((datetime.utcnow() - timedelta(days=days_back)).timestamp())
 
@@ -167,8 +168,8 @@ def sync_activities(client_id: str, client_secret: str, days_back: int = 60) -> 
 
             duration_s = tss_duration(moving_s, elapsed_s)
             ride_ftp = ftp_on(act["start_date_local"][:10], history)
-            tss, if_value = ride_tss(duration_s, np, avg_hr, max_hr, ride_ftp, lthr,
-                                     act.get("perceived_exertion"))
+            tss, if_value, tss_source = ride_tss(duration_s, np, avg_hr, max_hr, ride_ftp, lthr,
+                                                 act.get("perceived_exertion"), profile)
 
             zones = estimate_zone_seconds(
                 duration_s, avg_hr, max_hr, avg_power, np, ride_ftp, lthr,
@@ -189,6 +190,7 @@ def sync_activities(client_id: str, client_secret: str, days_back: int = 60) -> 
                 "max_hr": max_hr,
                 "normalized_power": np,
                 "tss": round(tss, 1) if tss else None,
+                "tss_source": tss_source if tss else None,
                 "if_value": round(if_value, 3) if if_value else None,
                 "zone_time_json": json.dumps(zones) if zones else None,
                 "raw_json": json.dumps({k: act[k] for k in
