@@ -17,7 +17,8 @@ from datetime import datetime, timedelta, date
 from db.queries import (get_setting, set_setting, upsert_activity, upsert_recovery,
                         match_activity_id, save_peaks, save_hr_peaks, has_hr_peaks,
                         ftp_history_rows, ftp_on, oldest_ride_missing_timer,
-                        get_activity, hr_profile, rescore_from_streams, save_streams)
+                        get_activity, hr_profile, rescore_from_streams, save_streams,
+                        apply_device_numbers, recalculate_all_tss)
 from metrics.tss import ride_tss, tss_duration
 from metrics.zones import estimate_zone_seconds
 
@@ -257,7 +258,8 @@ def _sync_rides(api, days_back: int) -> int:
 def backfill_peaks(days_back: int = 365, progress=None) -> tuple[int, int]:
     """Read Garmin ride history and store peak power (from the ride summary) and
     peak heart rate (from the ride's FIT file, only when not stored yet) for rides
-    already in the app, matched by Garmin id or as the same ride from Strava.
+    already in the app, matched by Garmin id or as the same ride from Strava. Rides that came
+    from Strava also take Garmin's normalized power and timer time, and are rescored.
     Never adds rides. `progress(done, total)` is called as it goes.
     Returns (rides updated, Garmin rides seen)."""
     api = _client()
@@ -272,6 +274,9 @@ def backfill_peaks(days_back: int = 365, progress=None) -> tuple[int, int]:
         activity_id = match_activity_id(row) if row and row["date"] else None
         if activity_id:
             changed = False
+            if apply_device_numbers(activity_id, act.get("normPower"), act.get("duration")):
+                recalculate_all_tss(only_id=activity_id)
+                changed = True
             if (peaks := peak_powers(act)):
                 save_peaks(activity_id, peaks)
                 changed = True

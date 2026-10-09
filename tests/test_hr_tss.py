@@ -139,3 +139,31 @@ class StoredRideTests(Base):
         a = q.get_activities(days_back=7)[0]
         self.assertEqual(a["tss_source"], "power")
         self.assertIsNone(q.get_streams(a["id"]))
+
+
+class DeviceNumbersTests(Base):
+    def test_strava_rides_take_garmins_normalized_power(self):
+        aid = q.upsert_activity(ride("strava_1", source="strava", normalized_power=240, tss=1,
+                                     date=(TODAY - timedelta(days=40)).isoformat()))
+        q.recalculate_all_tss()
+        before = q.get_activity(aid)["tss"]
+        act = {"activityType": {"typeKey": "road_biking"}, "activityId": 77,
+               "startTimeLocal": f"{TODAY - timedelta(days=40)} 08:00:00", "duration": 3600,
+               "movingDuration": 3600, "elapsedDuration": 3700, "distance": 30000,
+               "normPower": 250, "averageHR": 140}
+        api = mock.Mock()
+        api.get_activities_by_date.return_value = [act]
+        with mock.patch.object(garmin_auth, "_client", return_value=api), \
+             mock.patch.object(garmin_auth, "_hr_peaks", return_value={}):
+            updated, seen = garmin_auth.backfill_peaks(days_back=60)
+        a = q.get_activity(aid)
+        self.assertEqual((a["normalized_power"], a["timer_seconds"]), (250, 3600))
+        self.assertAlmostEqual(a["tss"], 100, places=0)
+        self.assertGreater(a["tss"], before)
+        self.assertEqual(len(q.get_activities(days_back=60)), 1)        # no ride added
+
+    def test_a_hand_corrected_ride_keeps_its_numbers(self):
+        aid = q.upsert_activity(ride("strava_2", source="strava", normalized_power=240))
+        q.update_activity_details(aid, {"normalized_power": 230})
+        self.assertFalse(q.apply_device_numbers(aid, 250, 3600))
+        self.assertEqual(q.get_activity(aid)["normalized_power"], 230)

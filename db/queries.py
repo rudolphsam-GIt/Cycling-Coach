@@ -208,6 +208,28 @@ def upsert_activity(data: dict):
     return row["id"] if row else None
 
 
+def apply_device_numbers(activity_id: int, normalized_power: float | None,
+                         timer_seconds: float | None) -> bool:
+    """Take normalized power and timer time from the device's own record of a ride (Garmin) over
+    what another source sent. Strava's "weighted average power" runs a few percent under true
+    normalized power, which costs about twice that in TSS. Rides corrected by hand keep their
+    numbers. True if anything changed."""
+    row = get_activity(activity_id)
+    if not row or row.get("edited"):
+        return False
+    np_w = round(float(normalized_power)) if normalized_power else None
+    timer = int(timer_seconds) if timer_seconds else None
+    if (np_w is None or np_w == row.get("normalized_power")) and \
+            (timer is None or timer == row.get("timer_seconds")):
+        return False
+    conn = get_conn()
+    conn.execute("""UPDATE activities SET normalized_power=COALESCE(?, normalized_power),
+                    timer_seconds=COALESCE(?, timer_seconds) WHERE id=?""", (np_w, timer, activity_id))
+    conn.commit()
+    conn.close()
+    return True
+
+
 def match_activity_id(data: dict) -> int | None:
     """The id of the stored ride this record describes (same external id, or the
     same ride from another source), without writing anything."""
