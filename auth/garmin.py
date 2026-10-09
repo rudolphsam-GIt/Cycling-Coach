@@ -19,7 +19,7 @@ from db.queries import (get_setting, set_setting, upsert_activity, upsert_recove
                         ftp_history_rows, ftp_on, oldest_ride_missing_timer,
                         get_activity, hr_profile, rescore_from_streams, save_streams,
                         apply_device_numbers, recalculate_all_tss, get_streams)
-from metrics.tss import ride_tss, tss_duration
+from metrics.tss import ride_tss, time_rule, tss_duration
 from metrics.zones import estimate_zone_seconds
 
 TOKEN_DIR = os.path.join(os.path.expanduser("~"), ".cycling_coach_garmin")
@@ -125,8 +125,9 @@ def activity_row(act: dict, ftp: float, lthr: float, profile: dict | None = None
     avg_power = act.get("avgPower")
     norm_power = act.get("normPower") or avg_power
 
-    # Score on timer time, which is stored so a later recalculation reads back the same duration.
-    tss_s = tss_duration(moving_s, elapsed_s, duration_s)
+    # Score on timer or moving time, as the "Score like" standard says. Both are stored, so a later
+    # recalculation reads back the same duration.
+    tss_s = tss_duration(moving_s, elapsed_s, duration_s, time_rule(profile))
     tss, if_value, tss_source = ride_tss(tss_s, norm_power, avg_hr, max_hr, ftp, lthr, profile=profile)
     zones = estimate_zone_seconds(tss_s, avg_hr, max_hr, avg_power, norm_power, ftp, lthr)
 
@@ -170,8 +171,8 @@ def other_activity_row(act: dict, lthr: float, profile: dict | None = None) -> d
     avg_hr, max_hr = act.get("averageHR"), act.get("maxHR")
     if duration_s <= 0 or not avg_hr:
         return None
-    tss, _, tss_source = ride_tss(tss_duration(moving_s, elapsed_s, duration_s), None, avg_hr, max_hr,
-                                  None, lthr, profile=profile)
+    tss, _, tss_source = ride_tss(tss_duration(moving_s, elapsed_s, duration_s, time_rule(profile)), None,
+                                  avg_hr, max_hr, None, lthr, profile=profile)
     return {
         "source": "garmin",
         "external_id": f"garmin_{act.get('activityId', '')}",
@@ -263,8 +264,10 @@ def _score_from_file(activity_id: int, raw: bytes | None) -> None:
     if not streams or not act:
         return
     lthr = float(get_setting("lthr", 0) or 0)
-    timer = act.get("timer_seconds") or act.get("duration_seconds")
-    if stream_tss(streams, ftp_on(act["date"]), lthr, hr_profile(), timer):
+    profile = hr_profile()
+    seconds = tss_duration(act.get("duration_seconds"), act.get("elapsed_seconds"), act.get("timer_seconds"),
+                           time_rule(profile))
+    if stream_tss(streams, ftp_on(act["date"]), lthr, profile, seconds):
         save_streams(activity_id, streams, "garmin")
         rescore_from_streams(activity_id)
 

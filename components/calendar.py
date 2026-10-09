@@ -244,7 +244,7 @@ def day_tooltip(day: DayData, unit: str = "km") -> str:
             facts = ", ".join(_ride_facts(r, unit))
             parts.append(_esc(_short(r.get("name") or "Ride", 40) + (f", {facts}" if facts else "")))
             if (gap := tss_mismatch(r)):
-                parts.append(_esc(f"! TrainingPeaks has {round(gap['tp'])} TSS for this ride"))
+                parts.append(_esc(f"! {gap['name']} has {round(gap['ref'])} TSS for this ride"))
         if len(day.rides) > 3:
             parts.append(f"+{len(day.rides) - 3} more")
     if day.other:
@@ -256,7 +256,7 @@ def day_tooltip(day: DayData, unit: str = "km") -> str:
             parts.append(_esc(f"Also logged, {_short(o.get('name') or kind, 30)}"
                               + (f", {dur}" if dur else "")
                               + (f", {round(tss)} {tss_label(o.get('tss_source'))}" if tss else "")
-                              + (f" (! TrainingPeaks has {round(gap['tp'])})" if gap else "")))
+                              + (f" (! {gap['name']} has {round(gap['ref'])})" if gap else "")))
 
     for s in day.strength:
         label = "Strength planned" if s["planned"] else "Strength done"
@@ -320,8 +320,8 @@ def _chips(day: DayData, today: date) -> list[dict]:
         chips.append({
             "kind": "done", "id": r.get("id"), "label": _short(r.get("name") or "Ride", 22),
             "tss": round(tss) if tss else None, "done": True, "locked": True, "color": theme.GOOD,
-            # A ! when TrainingPeaks scored this ride very differently; the ride popup explains.
-            "flag": (f"TrainingPeaks has {round(gap['tp'])} TSS for this ride. Open it to see why."
+            # A ! when the compared service scored this ride very differently; the ride popup explains.
+            "flag": (f"{gap['name']} has {round(gap['ref'])} TSS for this ride. Open it to see why."
                      if gap else None),
         })
     return chips
@@ -679,7 +679,7 @@ def render_day_readonly(day_iso: str, strength_actions=None, day: DayData | None
             if zones:
                 st.caption(zones)
             if (gap := tss_mismatch(r)):
-                st.warning(f"TrainingPeaks has {round(gap['tp'])} TSS for this ride, the app "
+                st.warning(f"{gap['name']} has {round(gap['ref'])} TSS for this ride, the app "
                            f"{round(gap['app'])}. " + " ".join(gap["reasons"]), icon=":material/error:")
     for o in day.other:
         drew = True
@@ -689,7 +689,7 @@ def render_day_readonly(day_iso: str, strength_actions=None, day: DayData | None
                    + (f", {dur}" if dur else "")
                    + (f", {round(tss)} {tss_label(o.get('tss_source'))}" if tss else ""))
         if (gap := tss_mismatch(o)):
-            st.warning(f"TrainingPeaks has {round(gap['tp'])} TSS for this session, the app "
+            st.warning(f"{gap['name']} has {round(gap['ref'])} TSS for this session, the app "
                        f"{round(gap['app'])}. " + " ".join(gap["reasons"]), icon=":material/error:")
     for s in day.strength:
         drew = True

@@ -112,6 +112,27 @@ class Client:
             timeout=TIMEOUT)) or []
         return {(r.get("workoutDay") or "")[:10]: float(r.get("tssActual") or 0) for r in rows}
 
+    def daily_fitness(self, start: str, end: str) -> dict[str, dict]:
+        """{day: {"ctl", "atl"}} from TrainingPeaks' fitness chart."""
+        rows = self._json(self.s.post(
+            f"{API}/fitness/v1/athletes/{self.user_id}/reporting/performancedata/{start}/{end}",
+            json={"atlConstant": 7, "atlStart": 0, "ctlConstant": 42, "ctlStart": 0, "workoutTypes": []},
+            timeout=TIMEOUT)) or []
+        return {(r.get("workoutDay") or "")[:10]: {"ctl": r.get("ctl"), "atl": r.get("atl")} for r in rows}
+
+    def thresholds(self) -> dict:
+        """{"ftp", "lthr", "max_hr", "rest_hr"} from the athlete's TrainingPeaks zones: the bike
+        zones when set, else the ones for all sports. Missing values are None."""
+        data = self._json(self.s.get(f"{API}/fitness/v1/athletes/{self.user_id}/settings", timeout=TIMEOUT)) or {}
+
+        def pick(rows):
+            rows = [r for r in rows or [] if isinstance(r, dict) and r.get("threshold")]
+            return (next((r for r in rows if r.get("workoutTypeId") == BIKE), None)
+                    or next((r for r in rows if r.get("workoutTypeId") == 0), None) or {})
+        hr, power = pick(data.get("heartRateZones")), pick(data.get("powerZones"))
+        return {"ftp": power.get("threshold"), "lthr": hr.get("threshold"),
+                "max_hr": hr.get("maximumHeartRate"), "rest_hr": hr.get("restingHeartRate")}
+
     def create(self, payload: dict) -> str | None:
         data = self._json(self.s.post(f"{API}/fitness/v6/athletes/{self.user_id}/workouts",
                                       json=payload, timeout=TIMEOUT))
@@ -404,45 +425,14 @@ def sync_upcoming(today=None, client: Client | None = None, build_steps=None) ->
 BIKE_TYPES = (2, 8)          # TrainingPeaks' bike and mountain bike workout types
 
 
-def match_completed(tp_workouts: list[dict], rides: list[dict],
-                    types: tuple | None = BIKE_TYPES) -> list[tuple[dict, dict]]:
-    """Pair TrainingPeaks' completed workouts (bike ones, or any type with types=None) with the
-    app's activities: same day, closest duration, within 45 minutes (TrainingPeaks often counts
-    stops the app leaves out)."""
-    by_day: dict[str, list[dict]] = {}
-    for r in rides:
-        if r.get("duration_seconds"):
-            by_day.setdefault(r["date"], []).append(r)
-    pairs, used = [], set()
-    for w in sorted(tp_workouts, key=lambda w: w.get("workoutDay") or ""):
-        if (types and w.get("workoutTypeValueId") not in types) or not w.get("tssActual") or not w.get("totalTime"):
-            continue
-        cands = [r for r in by_day.get((w.get("workoutDay") or "")[:10], []) if r["id"] not in used
-                 and abs(r["duration_seconds"] / 3600 - w["totalTime"]) <= 0.75]
-        if cands:
-            r = min(cands, key=lambda r: _match_cost(w, r))
-            used.add(r["id"])
-            pairs.append((w, r))
-    return pairs
-
-
-def _match_cost(w: dict, r: dict) -> float:
-    """How unlike a TrainingPeaks workout and an app ride are. Duration alone mixes up two rides of
-    similar length on one day (a crit and the ride home), so power and heart rate count too."""
-    cost = abs(r["duration_seconds"] / 3600 - w["totalTime"])
-    if w.get("normalizedPowerActual") and r.get("normalized_power"):
-        cost += abs(w["normalizedPowerActual"] - r["normalized_power"]) / 50
-    if w.get("heartRateAverage") and r.get("avg_hr"):
-        cost += abs(w["heartRateAverage"] - r["avg_hr"]) / 20
-    return cost
-
-
 SCORED_BY = {1: "power", 4: "hr", 0: "manual"}   # TrainingPeaks' tssSource codes seen so far
 
 
-def _tp_numbers(w: dict) -> dict:
-    return {"tss": round(float(w["tssActual"]), 1), "hours": w.get("totalTime"),
+def normalize(w: dict) -> dict:
+    """A TrainingPeaks workout in the shape compare.py matches on."""
+    return {"day": (w.get("workoutDay") or "")[:10], "hours": w.get("totalTime"), "tss": w.get("tssActual"),
             "np": w.get("normalizedPowerActual"), "avg_hr": w.get("heartRateAverage"),
+            "kind": "bike" if w.get("workoutTypeValueId") in BIKE_TYPES else "other",
             "scored_by": SCORED_BY.get(w.get("tssSource"), "other"), "title": w.get("title")}
 
 
@@ -460,13 +450,10 @@ def compare_with_trainingpeaks(days_back: int = 60, client: Client | None = None
         chunk_end = min(day + timedelta(days=180), end)
         tp_done += c.workouts(day.isoformat(), chunk_end.isoformat())
         day = chunk_end + timedelta(days=1)
+    import compare
     acts = q.get_activities(days_back=days_back + 1)
-    rides = [r for r in acts if q.is_ride(r)]
     others = [r for r in acts if not q.is_ride(r)]
-    pairs = match_completed(tp_done, rides) + match_completed(
-        [w for w in tp_done if w.get("workoutTypeValueId") not in BIKE_TYPES], others, types=None)
-    for w, r in pairs:
-        q.set_tp_numbers(r["id"], _tp_numbers(w))
+    pairs = compare.match_and_store(SERVICE, [normalize(w) for w in tp_done], acts)
 
     # TrainingPeaks' fitness chart counts some sessions (often strength) that its workout list
     # leaves out. What's left on a day after the listed workouts is what it gave the app's
@@ -491,8 +478,8 @@ def compare_with_trainingpeaks(days_back: int = 60, client: Client | None = None
             total = sum(r.get("duration_seconds") or 0 for r in items)
             for r in items:
                 share = (r.get("duration_seconds") or 0) / total if total else 1 / len(items)
-                q.set_tp_numbers(r["id"], {"tss": round(left * share, 1), "scored_by": "hr",
-                                           "title": "From TrainingPeaks' fitness chart"})
+                q.set_ref_numbers(r["id"], SERVICE, {"tss": round(left * share, 1), "scored_by": "hr",
+                                                     "title": "From TrainingPeaks' fitness chart"})
                 count += 1
     return count
 

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from db.queries import (get_setting, upsert_activity, save_peaks, save_hr_peaks, save_streams,
                         ftp_history_rows, ftp_on, hr_profile, rescore_from_streams)
-from metrics.tss import ride_tss, tss_duration
+from metrics.tss import ride_tss, time_rule, tss_duration
 from metrics.zones import estimate_zone_seconds
 
 CYCLING_SPORT = {
@@ -67,6 +67,7 @@ def import_fit_files(uploaded_files) -> tuple[int, str]:
             start_time = None
             total_elapsed = None
             total_timer = None
+            total_moving = None
             distance_m = None
             elevation_m = None
             avg_power = None
@@ -94,6 +95,7 @@ def import_fit_files(uploaded_files) -> tuple[int, str]:
                         start_time = ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts
                     total_elapsed = _field(msg, "total_elapsed_time")
                     total_timer = _field(msg, "total_timer_time")
+                    total_moving = _field(msg, "total_moving_time")
                     distance_m = _field(msg, "total_distance")
                     elevation_m = _field(msg, "total_ascent")
                     avg_power = _field(msg, "avg_power")
@@ -111,10 +113,10 @@ def import_fit_files(uploaded_files) -> tuple[int, str]:
 
             date_str = start_time.strftime("%Y-%m-%d")
             elapsed_s = float(total_elapsed or total_timer or 0)
-            moving_s = float(total_timer or elapsed_s)
+            moving_s = float(total_moving or total_timer or elapsed_s)
 
             # TSS
-            tss_s = tss_duration(moving_s, elapsed_s, total_timer)
+            tss_s = tss_duration(moving_s, elapsed_s, total_timer, time_rule(profile))
             ride_ftp = ftp_on(date_str, history)
             tss, if_val, tss_source = ride_tss(tss_s, norm_power, avg_hr, max_hr, ride_ftp, lthr,
                                                profile=profile)
@@ -167,6 +169,7 @@ _COL = {
     "title":         ["Title", "Activity Name", "title"],
     "distance":      ["Distance", "distance"],
     "time":          ["Time", "Duration", "Elapsed Time", "time"],
+    "moving_time":   ["Moving Time", "moving_time"],
     "avg_hr":        ["Avg HR", "Average HR", "avg_hr"],
     "max_hr":        ["Max HR", "max_hr"],
     "avg_power":     ["Avg Power", "avg_power", "Average Power"],
@@ -246,6 +249,7 @@ def import_csv_files(uploaded_files, imperial: bool = False) -> tuple[int, str]:
                     continue
 
                 elapsed_s = _parse_duration(_csv_val(row, "time")) or 0
+                moving_s = _parse_duration(_csv_val(row, "moving_time")) or elapsed_s
                 dist_raw = _parse_float(_csv_val(row, "distance"))
                 # Garmin CSV distance is in miles or km, depending on the account's units
                 distance_m = dist_raw * (1609.344 if imperial else 1000) if dist_raw else None
@@ -260,8 +264,8 @@ def import_csv_files(uploaded_files, imperial: bool = False) -> tuple[int, str]:
 
                 # Compute TSS if not in CSV
                 ride_ftp = ftp_on(date_str, history)
-                tss, if_val, tss_source = ride_tss(elapsed_s, norm_power, avg_hr, max_hr, ride_ftp, lthr,
-                                                   profile=profile)
+                tss, if_val, tss_source = ride_tss(tss_duration(moving_s, elapsed_s, elapsed_s, time_rule(profile)),
+                                                   norm_power, avg_hr, max_hr, ride_ftp, lthr, profile=profile)
                 if tss_csv:
                     tss, tss_source = tss_csv, None
 
@@ -277,7 +281,8 @@ def import_csv_files(uploaded_files, imperial: bool = False) -> tuple[int, str]:
                     "date": date_str,
                     "name": title,
                     "sport_type": activity_type,
-                    "duration_seconds": int(elapsed_s),
+                    "duration_seconds": int(moving_s),
+                    "timer_seconds": int(elapsed_s) or None,    # Garmin's "Time" is timer time
                     "elapsed_seconds": int(elapsed_s),
                     "distance_meters": distance_m,
                     "elevation_gain_meters": elevation_m,

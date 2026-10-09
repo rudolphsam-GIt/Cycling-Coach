@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import os
 from config import DB_PATH
@@ -223,6 +224,7 @@ def run_migrations():
         "ALTER TABLE activities ADD COLUMN timer_seconds INTEGER",
         "ALTER TABLE activities ADD COLUMN tss_source TEXT",
         "ALTER TABLE activities ADD COLUMN tp_json TEXT",
+        "ALTER TABLE activities ADD COLUMN ref_json TEXT",
     ]:
         try:
             conn.execute(col_sql)
@@ -232,6 +234,14 @@ def run_migrations():
     # Scores once copied from TrainingPeaks are worked out by the app again (it now scores heart
     # rate the TrainingPeaks way itself); TrainingPeaks' numbers are kept only to compare.
     conn.execute("UPDATE activities SET tss_source=NULL, tss=NULL WHERE tss_source='trainingpeaks'")
+    # Numbers from other services now live together in ref_json, keyed by service.
+    for row in conn.execute("SELECT id, tp_json, ref_json FROM activities WHERE tp_json IS NOT NULL").fetchall():
+        try:
+            ref = json.loads(row[2]) if row[2] else {}
+            ref.setdefault("trainingpeaks", json.loads(row[1]))
+        except (TypeError, ValueError, AttributeError):
+            continue
+        conn.execute("UPDATE activities SET ref_json=?, tp_json=NULL WHERE id=?", (json.dumps(ref), row[0]))
     conn.commit()
     conn.executescript(INDEXES)
     conn.execute("PRAGMA journal_mode=WAL")

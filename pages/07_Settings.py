@@ -4,7 +4,8 @@ import streamlit as st
 from datetime import date, datetime
 
 import ftp_change
-from metrics.tss import DEFAULT_HR_METHOD, HR_METHODS
+import compare
+from metrics.tss import STANDARDS
 from db.queries import (get_setting, set_setting, auto_max_hr, auto_resting_hr,
                         recalculate_all_tss, deduplicate_activities)
 from config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, GARMIN_EMAIL, GARMIN_PASSWORD
@@ -25,6 +26,78 @@ from components.onboarding import GOAL_EXAMPLES, goal_keys_to_labels, infer_goal
 page_header("Settings", "Your profile, connected accounts and data tools")
 
 tab_profile, tab_connections, tab_data = st.tabs([":material/person: Profile", ":material/link: Connections", ":material/build: Data tools"])
+
+
+
+def _score_like() -> None:
+    """Choose which platform the app scores like. A change rescores every ride. When that
+    platform is connected, its thresholds can be copied in and its fitness shown next to the app's."""
+    if msg := st.session_state.pop("score_like_msg", None):
+        (st.success if msg[0] == "ok" else st.error)(msg[1])
+    current = compare.standard()
+    keys = list(STANDARDS)
+    choice = st.selectbox(
+        "Score like", keys, index=keys.index(current), format_func=lambda k: STANDARDS[k]["label"],
+        key="score_like_select",
+        help="How rides are scored, and which service the app checks its scores against. Power is "
+             "scored the same way (Coggan's TSS) by all three. "
+             + " ".join(f"{v['label']}: {v['about']}" for v in STANDARDS.values()))
+    st.caption(STANDARDS[choice]["about"])
+    if choice != current:
+        set_setting("score_like", choice)
+        with st.spinner("Rescoring your rides…"):
+            n = recalculate_all_tss()
+        st.session_state["score_like_msg"] = ("ok", f"Scoring like {STANDARDS[choice]['label']}. "
+                                                    f"Updated TSS for {n} activities.")
+        st.rerun()
+
+    service = STANDARDS[choice]["compare"]
+    if not service or not compare.connected(service):
+        return
+    name = compare.service_name(service)
+    if st.button(f"Use thresholds from {name}", key="copy_thresholds", icon=":material/download:",
+                 help=f"Copies FTP and LTHR from {name}, so both score rides on the same numbers. "
+                      "A new FTP counts from today; past rides keep the FTP they were ridden at."):
+        try:
+            th, fit = _service_thresholds(service)
+        except Exception as e:
+            st.session_state["score_like_msg"] = ("err", f"Couldn't read {name}. {e}")
+        else:
+            st.session_state["score_like_msg"] = ("ok", _apply_thresholds(name, th, fit))
+        st.rerun()
+
+
+def _service_thresholds(service: str) -> tuple[dict, float | None]:
+    """The service's thresholds and its fitness (CTL) today."""
+    today = date.today().isoformat()
+    if service == "trainingpeaks":
+        c = tp_auth.Client()
+        days = c.daily_fitness(today, today)
+        return c.thresholds(), (days.get(today) or {}).get("ctl")
+    days = intervals_auth.daily_fitness(today, today)
+    return intervals_auth.thresholds(), (days.get(today) or {}).get("ctl")
+
+
+def _apply_thresholds(name: str, th: dict, service_ctl: float | None) -> str:
+    from metrics.training_load import get_current_metrics
+    bits = []
+    ftp, lthr = th.get("ftp"), th.get("lthr")
+    if ftp and int(ftp) != int(float(get_setting("ftp_watts", 0) or 0)):
+        ftp_change.apply_new_ftp(int(ftp), f"From {name}")
+        set_setting("ftp_estimated", "0")
+        bits.append(f"FTP {int(ftp)} W")
+    if lthr and int(lthr) != int(float(get_setting("lthr", 0) or 0)):
+        set_setting("lthr", int(lthr))
+        set_setting("lthr_estimated", "0")
+        recalculate_all_tss()           # LTHR has no history, so heart rate scores follow it everywhere
+        bits.append(f"LTHR {int(lthr)} bpm")
+    text = (f"Copied from {name}: " + ", ".join(bits) + "." if bits
+            else f"FTP and LTHR already match {name}.")
+    ctl = get_current_metrics()["ctl"]
+    if service_ctl is not None:
+        text += f" Fitness today: {ctl:.1f} here, {float(service_ctl):.1f} in {name}."
+    return text
+
 
 # ── Tab 1: Athlete Profile ────────────────────────────────────────────────────
 with tab_profile:
@@ -72,27 +145,22 @@ with tab_profile:
             value=int(get_setting("lthr", 155) or 155), step=1,
             help=setting_help("lthr"),
         )
-        methods = list(HR_METHODS)
-        hr_method = st.selectbox(
-            "Heart rate TSS", methods, format_func=HR_METHODS.get,
-            index=methods.index(get_setting("hr_tss_method", "") or DEFAULT_HR_METHOD),
-            help="How rides without power, and strength and other sessions, are scored. TrainingPeaks "
-                 "style matches TrainingPeaks' hrTSS closely when LTHR is the same as in TrainingPeaks. "
-                 "TRIMP is Banister's published formula (as intervals.icu uses) and needs max and "
-                 "resting heart rate.")
+        _score_like()
         auto_max, auto_rest = auto_max_hr(), auto_resting_hr()
         h1, h2 = st.columns(2)
         max_hr_in = h1.number_input(
             "Max HR (bpm)", min_value=0, max_value=230, step=1,
             value=int(float(get_setting("max_hr_manual", 0) or 0)) or None, placeholder=(
                 f"Auto: {auto_max:.0f}" if auto_max else "Auto"),
-            help="Used for hrTSS on rides without power. Leave empty to use the highest heart rate "
+            help="Used by intervals.icu style and the published standard, for heart rate scores. Leave "
+                 "empty to use the highest heart rate "
                  "that more than one of your rides reached in the last year, which skips strap glitches.")
         rest_hr_in = h2.number_input(
             "Resting HR (bpm)", min_value=0, max_value=120, step=1,
             value=int(float(get_setting("resting_hr_manual", 0) or 0)) or None, placeholder=(
                 f"Auto: {auto_rest:.0f}" if auto_rest else "Auto"),
-            help="Used for hrTSS on rides without power. Leave empty to use your Garmin resting "
+            help="Used by intervals.icu style and the published standard, for heart rate scores. Leave "
+                 "empty to use your Garmin resting "
                  "heart rate averaged over the last 30 days.")
         init_ctl = st.number_input(
             "Starting CTL", min_value=0.0, max_value=200.0,
@@ -104,8 +172,7 @@ with tab_profile:
         old_ftp = int(get_setting("ftp_watts", 0) or 0)
         old_lthr = int(get_setting("lthr", 0) or 0)
         old_hr = (get_setting("max_hr_manual", "") or "", get_setting("resting_hr_manual", "") or "",
-                  get_setting("gender", "") or "", get_setting("hr_tss_method", "") or DEFAULT_HR_METHOD)
-        set_setting("hr_tss_method", hr_method)
+                  get_setting("gender", "") or "")
         set_setting("max_hr_manual", int(max_hr_in) if max_hr_in else "")
         set_setting("resting_hr_manual", int(rest_hr_in) if rest_hr_in else "")
         set_setting("weight_kg", weight)
@@ -129,7 +196,7 @@ with tab_profile:
         if lthr != old_lthr:
             set_setting("lthr_estimated", "0")
         new_hr = (get_setting("max_hr_manual", "") or "", get_setting("resting_hr_manual", "") or "",
-                  get_setting("gender", "") or "", get_setting("hr_tss_method", "") or DEFAULT_HR_METHOD)
+                  get_setting("gender", "") or "")
         if (lthr != old_lthr and lthr > 0) or new_hr != old_hr:
             # LTHR, max and resting heart rate have no history, so hrTSS follows them everywhere.
             with st.spinner("Updating TSS and zones for your rides…"):

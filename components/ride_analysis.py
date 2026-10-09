@@ -26,7 +26,7 @@ from db.queries import (clear_activity_tss, ftp_on, get_activity, get_peaks_betw
 from metrics import analysis as an
 from metrics import streams as sm
 from metrics.explain import TIPS
-from metrics.tss import label as tss_label, mismatch as tss_mismatch, tp_numbers as tss_numbers
+from metrics.tss import label as tss_label, mismatch as tss_mismatch, ref_numbers as tss_numbers
 from metrics.units import (climb_from_m, climb_unit, dist_from_km, fmt_climb, fmt_distance, speed_from_kph,
                            speed_unit)
 from metrics.zones import HR_ZONE_NAMES, POWER_ZONE_NAMES, ZONE_COLORS, get_hr_zones, get_power_zones
@@ -544,7 +544,7 @@ def render(act: dict) -> None:
         n = sm.numbers_from_streams(view, ftp, lthr, profile)
         _selection_banner(act["id"], sel, whole, n)
     _tiles(n)
-    _compare_with_trainingpeaks(act)
+    _compare_with_service(act)
     _edit_ride(act)
     if n.get("decoupling") is not None:
         d = n["decoupling"]
@@ -580,27 +580,31 @@ def render(act: dict) -> None:
         _coach(act)
 
 
-def _compare_with_trainingpeaks(act: dict) -> None:
-    """The app's TSS next to TrainingPeaks', with what explains a big difference."""
-    tp = tss_numbers(act)
-    if not tp:
+def _compare_with_service(act: dict) -> None:
+    """The app's TSS next to the compared service's (TrainingPeaks or intervals.icu), with what
+    explains a big difference."""
+    import compare
+    service = compare.compare_service()
+    ref = tss_numbers(act, service)
+    if not ref:
         return
-    gap = tss_mismatch(act)
+    name = compare.service_name(service)
+    gap = tss_mismatch(act, service)
     app = _n(act.get("tss"))
-    line = (f"TrainingPeaks: {tp['tss']:.0f} TSS"
-            + (f" from {'heart rate' if tp.get('scored_by') == 'hr' else tp.get('scored_by')}"
-               if tp.get("scored_by") in ("hr", "power") else "")
+    line = (f"{name}: {ref['tss']:.0f} TSS"
+            + (f" from {'heart rate' if ref.get('scored_by') == 'hr' else ref.get('scored_by')}"
+               if ref.get("scored_by") in ("hr", "power") else "")
             + (f". This app: {app:.0f} {tss_label(act.get('tss_source'))}." if app is not None else "."))
     if not gap:
         st.caption(line + " They agree.")
         return
     with st.container(border=True):
-        st.markdown(f":orange[**!**] **The app and TrainingPeaks score this ride differently** "
+        st.markdown(f":orange[**!**] **The app and {name} score this ride differently** "
                     f"({gap['diff']:+.0f} TSS, {gap['share'] * 100:.0f}%)")
         st.caption(line)
         for r in gap["reasons"]:
             st.markdown(f"- {r}")
-        st.caption("If TrainingPeaks has the right number, you can type it in with Edit ride below.")
+        st.caption(f"If {name} has the right number, you can type it in with Edit ride below.")
 
 
 def open_analysis(activity_id) -> None:

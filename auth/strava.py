@@ -16,7 +16,7 @@ from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta
 from db.queries import (get_setting, set_setting, upsert_activity, get_daily_tss,
                         ftp_history_rows, ftp_on, hr_profile)
-from metrics.tss import ride_tss, tss_duration
+from metrics.tss import ride_tss, time_rule, tss_duration
 from metrics.zones import estimate_zone_seconds
 import json
 
@@ -166,7 +166,7 @@ def sync_activities(client_id: str, client_secret: str, days_back: int = 60) -> 
             avg_hr = act.get("average_heartrate")
             max_hr = act.get("max_heartrate")
 
-            duration_s = tss_duration(moving_s, elapsed_s)
+            duration_s = tss_duration(moving_s, elapsed_s, rule=time_rule(profile))
             ride_ftp = ftp_on(act["start_date_local"][:10], history)
             tss, if_value, tss_source = ride_tss(duration_s, np, avg_hr, max_hr, ride_ftp, lthr,
                                                  act.get("perceived_exertion"), profile)
