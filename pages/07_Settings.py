@@ -231,10 +231,11 @@ with tab_connections:
                     _, msg = garmin_auth.sync(days_back=30)
                 st.session_state["garmin_sync_msg"] = msg
                 st.rerun()
-            if st.button("Load peak power and heart rate history (1 year)", icon=":material/bolt:",
+            if st.button("Load ride history from Garmin (1 year)", icon=":material/bolt:",
                          width="stretch",
-                         help="Reads your best power and heart rate for 5 s up to 2 h from Garmin for rides "
-                              "already in the app, for the Progress page. Adds no rides. Heart rate needs each "
+                         help="For rides already in the app: reads your best power and heart rate for 5 s up "
+                              "to 2 h, and for rides that came from Strava, Garmin's normalized power and timer "
+                              "time, so their TSS matches TrainingPeaks. Adds no rides. Heart rate needs each "
                               "ride's file, so the first run takes a minute or two."):
                 bar = st.progress(0.0, text="Reading rides from Garmin…")
                 try:
@@ -242,7 +243,8 @@ with tab_connections:
                         days_back=365,
                         progress=lambda done, total: bar.progress(done / max(total, 1),
                                                                   text=f"Ride {done} of {total}"))
-                    msg = f"Synced peak power and heart rate for {updated} of {seen} Garmin rides."
+                    msg = (f"Updated {updated} of {seen} rides from Garmin: peak power, heart rate, "
+                           "and normalized power and timer time for rides that came from Strava.")
                 except Exception as e:
                     msg = garmin_auth.friendly_error(e)
                 st.session_state["garmin_sync_msg"] = msg
