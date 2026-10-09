@@ -93,6 +93,8 @@ def _same_ride(a: dict, b: dict) -> bool:
     ta, tb = _times(a), _times(b)
     if not ta or not tb:
         return False
+    if a.get("sport_type") and b.get("sport_type") and is_ride(a) != is_ride(b):
+        return False                    # a strength session is never the same thing as a ride
     time_gap = min(abs(x - y) for x in ta for y in tb)
 
     da, db_ = a.get("distance_meters") or 0, b.get("distance_meters") or 0
@@ -534,15 +536,15 @@ def checklist_counts(today: str) -> dict:
 
 
 def get_daily_tss(start: str, end: str) -> dict:
-    """Return {date_str: total_tss} for the given date range."""
+    """Return {date_str: total_tss} for the given date range. Every sport counts, as in
+    TrainingPeaks: strength, hikes and skiing add to fitness and fatigue as well as rides."""
     conn = get_conn()
     rows = conn.execute(
-        f"""SELECT date, SUM(COALESCE(tss,0)) as total_tss
+        """SELECT date, SUM(COALESCE(tss,0)) as total_tss
            FROM activities
            WHERE date BETWEEN ? AND ?
-             AND LOWER(sport_type) IN ({_CYCLING_PLACEHOLDERS})
            GROUP BY date""",
-        (start, end, *CYCLING_SPORT_TYPES),
+        (start, end),
     ).fetchall()
     conn.close()
     return {r["date"]: r["total_tss"] for r in rows}

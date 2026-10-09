@@ -196,3 +196,62 @@ class TrainingPeaksTssTests(Base):
         q.set_activity_tss(aid, 70)
         self.assertFalse(q.set_tss_from_trainingpeaks(aid, 90))
         self.assertEqual(q.get_activity(aid)["tss"], 70)
+
+
+class OtherSportsTests(Base):
+    def _strength(self, day, mins=60, hr=80, gid=900):
+        return {"activityType": {"typeKey": "strength_training"}, "activityId": gid, "activityName": "Strength",
+                "startTimeLocal": f"{day} 18:00:00", "duration": mins * 60, "averageHR": hr, "maxHR": 110}
+
+    def test_strength_is_imported_scored_from_heart_rate_and_counts_toward_fitness(self):
+        day = (TODAY - timedelta(days=2)).isoformat()
+        api = mock.Mock()
+        api.get_activities_by_date.return_value = [self._strength(day)]
+        self.assertEqual(garmin_auth._sync_rides(api, 7), 0)          # not counted as a ride
+        a = q.get_activities(days_back=7)[0]
+        self.assertEqual((a["sport_type"], a["tss_source"]), ("strength_training", "hr"))
+        self.assertGreater(q.get_daily_tss(day, day)[day], 0)
+        self.assertFalse(q.is_ride(a))
+
+    def test_strength_without_heart_rate_is_skipped(self):
+        act = self._strength(TODAY.isoformat())
+        act.pop("averageHR")
+        self.assertIsNone(garmin_auth.other_activity_row(act, 167))
+
+    def test_a_strength_session_is_never_merged_with_a_ride(self):
+        day = (TODAY - timedelta(days=1)).isoformat()
+        q.upsert_activity(ride("strava_r", source="strava", date=day, duration_seconds=3600, elapsed_seconds=3600))
+        api = mock.Mock()
+        api.get_activities_by_date.return_value = [self._strength(day, mins=60)]
+        garmin_auth._sync_rides(api, 7)
+        self.assertEqual(len(q.get_activities(days_back=7)), 2)
+
+    def test_sessions_missing_from_the_workout_list_take_tss_from_the_fitness_chart(self):
+        from auth import trainingpeaks as tp
+        day = (TODAY - timedelta(days=3)).isoformat()
+        api = mock.Mock()
+        api.get_activities_by_date.return_value = [self._strength(day, mins=66, hr=74)]
+        garmin_auth._sync_rides(api, 7)
+        client = mock.Mock()
+        client.workouts.return_value = []
+        client.daily_tss.return_value = {day: 34.0}
+        self.assertEqual(tp.import_hr_tss(days_back=10, client=client), 1)
+        a = q.get_activities(days_back=7)[0]
+        self.assertEqual((a["tss"], a["tss_source"]), (34.0, "trainingpeaks"))
+
+
+class ResyncKeepsStreamScoreTests(Base):
+    def test_a_resync_keeps_the_dropout_score(self):
+        q.set_setting("lthr", "170")
+        act = {"activityType": {"typeKey": "road_biking"}, "activityId": 55,
+               "startTimeLocal": f"{TODAY - timedelta(days=1)} 08:00:00", "duration": 3600,
+               "normPower": 250, "averageHR": 170}
+        api = mock.Mock()
+        api.get_activities_by_date.return_value = [act]
+        streams = {"power": [250] * 1800 + [None] * 1800, "hr": [170] * 3600}
+        with mock.patch.object(garmin_auth, "_ride_file", return_value=b"fit"), \
+             mock.patch.object(garmin_auth, "_hr_peaks", return_value={5: 180}), \
+             mock.patch("metrics.streams.from_fit", return_value=streams):
+            garmin_auth._sync_rides(api, 7)
+            garmin_auth._sync_rides(api, 7)          # synced again
+        self.assertEqual(q.get_activities(days_back=7)[0]["tss_source"], "mixed")
