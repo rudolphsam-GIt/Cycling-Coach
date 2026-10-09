@@ -103,6 +103,15 @@ class Client:
         return self._json(self.s.get(f"{API}/fitness/v6/athletes/{self.user_id}/workouts/{start}/{end}",
                                      timeout=TIMEOUT)) or []
 
+    def daily_tss(self, start: str, end: str) -> dict[str, float]:
+        """{day: total TSS} from TrainingPeaks' fitness chart, which counts every workout,
+        including some its workout list leaves out."""
+        rows = self._json(self.s.post(
+            f"{API}/fitness/v1/athletes/{self.user_id}/reporting/performancedata/{start}/{end}",
+            json={"atlConstant": 7, "atlStart": 0, "ctlConstant": 42, "ctlStart": 0, "workoutTypes": []},
+            timeout=TIMEOUT)) or []
+        return {(r.get("workoutDay") or "")[:10]: float(r.get("tssActual") or 0) for r in rows}
+
     def create(self, payload: dict) -> str | None:
         data = self._json(self.s.post(f"{API}/fitness/v6/athletes/{self.user_id}/workouts",
                                       json=payload, timeout=TIMEOUT))
@@ -395,16 +404,18 @@ def sync_upcoming(today=None, client: Client | None = None, build_steps=None) ->
 BIKE_TYPES = (2, 8)          # TrainingPeaks' bike and mountain bike workout types
 
 
-def match_completed(tp_workouts: list[dict], rides: list[dict]) -> list[tuple[dict, dict]]:
-    """Pair TrainingPeaks' completed bike workouts with the app's rides: same day, closest
-    duration, within 45 minutes (TrainingPeaks often counts stops the app leaves out)."""
+def match_completed(tp_workouts: list[dict], rides: list[dict],
+                    types: tuple | None = BIKE_TYPES) -> list[tuple[dict, dict]]:
+    """Pair TrainingPeaks' completed workouts (bike ones, or any type with types=None) with the
+    app's activities: same day, closest duration, within 45 minutes (TrainingPeaks often counts
+    stops the app leaves out)."""
     by_day: dict[str, list[dict]] = {}
     for r in rides:
         if r.get("duration_seconds"):
             by_day.setdefault(r["date"], []).append(r)
     pairs, used = [], set()
     for w in sorted(tp_workouts, key=lambda w: w.get("workoutDay") or ""):
-        if w.get("workoutTypeValueId") not in BIKE_TYPES or not w.get("tssActual") or not w.get("totalTime"):
+        if (types and w.get("workoutTypeValueId") not in types) or not w.get("tssActual") or not w.get("totalTime"):
             continue
         cands = [r for r in by_day.get((w.get("workoutDay") or "")[:10], []) if r["id"] not in used
                  and abs(r["duration_seconds"] / 3600 - w["totalTime"]) <= 0.75]
@@ -428,9 +439,37 @@ def import_hr_tss(days_back: int = 60, client: Client | None = None) -> int:
         chunk_end = min(day + timedelta(days=180), end)
         tp_done += c.workouts(day.isoformat(), chunk_end.isoformat())
         day = chunk_end + timedelta(days=1)
-    rides = [r for r in q.get_activities(days_back=days_back + 1)
-             if (r.get("tss_source") or "") in q.TP_REPLACEABLE]
-    return sum(q.set_tss_from_trainingpeaks(r["id"], w["tssActual"]) for w, r in match_completed(tp_done, rides))
+    acts = [r for r in q.get_activities(days_back=days_back + 1) if (r.get("tss_source") or "") in q.TP_REPLACEABLE]
+    rides = [r for r in acts if q.is_ride(r)]
+    others = [r for r in acts if not q.is_ride(r)]
+    pairs = match_completed(tp_done, rides) + match_completed(
+        [w for w in tp_done if w.get("workoutTypeValueId") not in BIKE_TYPES], others, types=None)
+    changed = sum(q.set_tss_from_trainingpeaks(r["id"], w["tssActual"]) for w, r in pairs)
+
+    # TrainingPeaks' fitness chart counts some sessions (often strength) that its workout list
+    # leaves out. What's left on a day after the listed workouts goes to the app's unmatched
+    # non-ride sessions that day, split by duration.
+    matched = {r["id"] for _, r in pairs}
+    listed: dict[str, float] = {}
+    for w in tp_done:
+        if w.get("tssActual"):
+            day = (w.get("workoutDay") or "")[:10]
+            listed[day] = listed.get(day, 0.0) + float(w["tssActual"])
+    by_day: dict[str, list[dict]] = {}
+    for r in others:
+        if r["id"] not in matched:
+            by_day.setdefault(r["date"], []).append(r)
+    if by_day:
+        chart = c.daily_tss(min(by_day), max(by_day))
+        for day, items in by_day.items():
+            left = chart.get(day, 0.0) - listed.get(day, 0.0)
+            if left < 1:
+                continue
+            total = sum(r.get("duration_seconds") or 0 for r in items) or len(items)
+            for r in items:
+                share = (r.get("duration_seconds") or 0) / total if total > len(items) else 1 / len(items)
+                changed += q.set_tss_from_trainingpeaks(r["id"], round(left * share, 1))
+    return changed
 
 
 def last_result() -> tuple[str, str, str] | None:

@@ -157,6 +157,42 @@ def activity_row(act: dict, ftp: float, lthr: float, profile: dict | None = None
     }
 
 
+def other_activity_row(act: dict, lthr: float, profile: dict | None = None) -> dict | None:
+    """Map a Garmin activity that isn't a ride (strength, hike, ski...) to an activities row,
+    scored from heart rate, since these count toward fitness too. None for rides, or when there
+    is no heart rate to score it with."""
+    activity_type = ((act.get("activityType") or {}).get("typeKey", "") or "").lower().replace(" ", "_")
+    if not activity_type or activity_type in CYCLING_TYPES:
+        return None
+    duration_s = float(act.get("duration") or 0)
+    elapsed_s = float(act.get("elapsedDuration") or duration_s)
+    moving_s = float(act.get("movingDuration") or duration_s)
+    avg_hr, max_hr = act.get("averageHR"), act.get("maxHR")
+    if duration_s <= 0 or not avg_hr:
+        return None
+    tss, _, tss_source = ride_tss(tss_duration(moving_s, elapsed_s, duration_s), None, avg_hr, max_hr,
+                                  None, lthr, profile=profile)
+    return {
+        "source": "garmin",
+        "external_id": f"garmin_{act.get('activityId', '')}",
+        "date": (act.get("startTimeLocal") or "")[:10],
+        "name": act.get("activityName") or activity_type.replace("_", " ").title(),
+        "sport_type": activity_type,
+        "duration_seconds": int(moving_s),
+        "elapsed_seconds": int(elapsed_s),
+        "timer_seconds": int(duration_s),
+        "distance_meters": act.get("distance") or 0,
+        "elevation_gain_meters": act.get("elevationGain") or 0,
+        "avg_power_watts": None, "normalized_power": None,
+        "avg_hr": avg_hr, "max_hr": max_hr,
+        "tss": round(tss, 1) if tss else None,
+        "tss_source": tss_source if tss else None,
+        "if_value": None, "zone_time_json": None,
+        "raw_json": json.dumps({"activityId": act.get("activityId"), "activityName": act.get("activityName"),
+                                "startTimeLocal": act.get("startTimeLocal")}),
+    }
+
+
 def peak_powers(act: dict) -> dict[int, float]:
     """Best average power by duration in seconds, from Garmin's maxAvgPower_<secs>
     fields. Empty for rides without power or that the rider excluded from power
@@ -243,6 +279,12 @@ def _sync_rides(api, days_back: int) -> int:
         # Score each ride on the FTP it was ridden at, so a re-sync never rewrites history.
         day = (act.get("startTimeLocal") or "")[:10]
         row = activity_row(act, ftp_on(day, history) if day else ftp, lthr, profile)
+        if row is None:
+            # Strength, hikes and skiing count toward fitness too, but aren't rides.
+            other = other_activity_row(act, lthr, profile)
+            if other and other["date"]:
+                upsert_activity(other)
+            continue
         if row and row["date"]:
             activity_id = upsert_activity(row)
             save_peaks(activity_id, peak_powers(act))
@@ -251,6 +293,10 @@ def _sync_rides(api, days_back: int) -> int:
                 raw = _ride_file(api, act.get("activityId"))
                 save_hr_peaks(activity_id, _hr_peaks(api, act.get("activityId"), raw))
                 _score_from_file(activity_id, raw)
+            elif activity_id:
+                # A re-sync writes Garmin's summary TSS back; a ride already checked second by
+                # second (no power, or a dropout) keeps the score from that data.
+                rescore_from_streams(activity_id)
             count += 1
     return count
 
