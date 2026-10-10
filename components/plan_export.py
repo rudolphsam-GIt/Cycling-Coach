@@ -20,6 +20,7 @@ import exporters
 import garmin_workouts
 import programs
 from auth import intervals, trainingpeaks
+from db import schema
 from db.queries import get_setting, get_workouts
 from metrics.training_load import get_current_metrics
 
@@ -144,20 +145,22 @@ def render(today: date | None = None) -> None:
                        "are worked out.")
 
         folder = program["title"] if choice == PROGRAM and program else f"Plan {span}"
+        # Streamlit builds these files on click, on a server thread that doesn't know which athlete
+        # is open, so each is pinned to this athlete (their FTP sets the watts in the .fit files).
         c1, c2, c3 = st.columns(3)
-        c1.download_button("Download for TrainingPeaks", data=lambda: exporters.trainingpeaks_zip(rows, folder),
+        c1.download_button("Download for TrainingPeaks", data=schema.pinned(lambda: exporters.trainingpeaks_zip(rows, folder)),
                            file_name=f"{exporters.slug(folder)}_trainingpeaks.zip", mime="application/zip",
                            icon=":material/download:", width="stretch", on_click="ignore",
                            help="For free TrainingPeaks accounts. Zwift workout files with the date in each "
                                 "title. Import them all into one TrainingPeaks library folder, then drag each "
                                 "onto its day.")
-        c2.download_button("Download all files", data=lambda: exporters.all_files_zip(rows, folder),
+        c2.download_button("Download all files", data=schema.pinned(lambda: exporters.all_files_zip(rows, folder)),
                            file_name=f"{exporters.slug(folder)}_workouts.zip", mime="application/zip",
                            icon=":material/folder_zip:", width="stretch", on_click="ignore",
                            help="Zwift and TrainingPeaks (.zwo), Garmin and Wahoo (.fit), a list of the plan "
                                 "and how to import each.")
         has_ftp = float(get_setting("ftp_watts", 0) or 0) > 0
-        c3.download_button("Share package", data=lambda: share_package(rows, program if choice == PROGRAM else None),
+        c3.download_button("Share package", data=schema.pinned(lambda: share_package(rows, program if choice == PROGRAM else None)),
                            file_name=f"{exporters.slug(folder)}_share.zip", mime="application/zip",
                            icon=":material/send:", width="stretch", on_click="ignore", disabled=not has_ftp,
                            help="One zip to send to someone else. It has the plan as a PDF, a one page guide to "
