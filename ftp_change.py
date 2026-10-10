@@ -109,13 +109,17 @@ def start_garmin_resend(workout_ids: list[int]) -> bool:
     is already running."""
     if not _resend_lock.acquire(blocking=False):
         return False
+    from db import schema
+    path = schema.current_path()
 
     def run():
         try:
-            resend_to_garmin(workout_ids)
+            with schema.use(path):
+                resend_to_garmin(workout_ids)
         except Exception as e:
-            q.set_setting(GARMIN_RESULT_SETTING, json.dumps(
-                {"at": datetime.utcnow().isoformat(), "text": f"Couldn't update Garmin: {e}", "ok": False}))
+            with schema.use(path):
+                q.set_setting(GARMIN_RESULT_SETTING, json.dumps(
+                    {"at": datetime.utcnow().isoformat(), "text": f"Couldn't update Garmin: {e}", "ok": False}))
         finally:
             _resend_lock.release()
 

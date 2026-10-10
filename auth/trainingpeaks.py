@@ -532,10 +532,13 @@ def start_background_sync() -> bool:
     already running."""
     if is_syncing():
         return False
+    from db import schema
+    path = schema.current_path()
 
     def run():
         try:
-            run_locked()
+            with schema.use(path):
+                run_locked()
         except Exception:
             pass        # sync_upcoming records TrainingPeaks errors; anything else waits for the next try
 

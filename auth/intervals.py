@@ -234,10 +234,13 @@ def start_background_compare() -> bool:
     already running."""
     if _compare_lock.locked():
         return False
+    from db import schema
+    path = schema.current_path()
 
     def run():
         try:
-            run_compare_locked()
+            with schema.use(path):
+                run_compare_locked()
         except Exception:
             pass        # best effort; the next page load tries again
 

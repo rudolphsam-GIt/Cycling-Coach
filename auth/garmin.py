@@ -41,7 +41,9 @@ class GarminNotConnected(Exception):
 # ── Connecting ────────────────────────────────────────────────────────────────
 
 def is_connected() -> bool:
-    return os.path.isfile(TOKEN_FILE)
+    # One saved Garmin login serves the whole Mac, so it belongs to the owner's profile only.
+    from db import schema
+    return schema.is_owner() and os.path.isfile(TOKEN_FILE)
 
 
 def start_login(email: str, password: str):

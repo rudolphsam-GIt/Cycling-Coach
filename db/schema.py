@@ -1,6 +1,8 @@
 import json
 import sqlite3
 import os
+import threading
+from contextlib import contextmanager
 from config import DB_PATH
 
 SCHEMA = """
@@ -187,9 +189,50 @@ CREATE INDEX IF NOT EXISTS idx_programs_status ON programs(status);
 """
 
 
+# Which athlete's database a call uses. DB_PATH is the owner's (Sam's) file. Another athlete's
+# profile is chosen per browser session (session_state["db_path"], set in app.py), and a
+# background thread pins the path it started with via use(), so a profile switch mid sync
+# never sends its writes to the wrong athlete.
+_local = threading.local()
+
+
+def _session_path() -> str | None:
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+        ctx = get_script_run_ctx(suppress_warning=True)
+        if ctx is None:
+            return None
+        ss = ctx.session_state
+        return ss["db_path"] if "db_path" in ss else None
+    except Exception:
+        return None
+
+
+def current_path() -> str:
+    return getattr(_local, "path", None) or _session_path() or DB_PATH
+
+
+def is_owner() -> bool:
+    """True on the owner's own profile. Garmin, Strava, TrainingPeaks and intervals.icu
+    connect only there."""
+    return os.path.abspath(current_path()) == os.path.abspath(DB_PATH)
+
+
+@contextmanager
+def use(path: str):
+    """Pin this thread to one athlete's database for the block."""
+    old = getattr(_local, "path", None)
+    _local.path = path
+    try:
+        yield
+    finally:
+        _local.path = old
+
+
 def get_conn():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    path = current_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     return conn
 

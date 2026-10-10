@@ -32,14 +32,15 @@ _settings_cache: dict = {}
 def get_all_settings() -> dict:
     from db import schema
     import time
-    hit = _settings_cache.get(schema.DB_PATH)
+    path = schema.current_path()
+    hit = _settings_cache.get(path)
     if hit and time.monotonic() - hit[0] < _SETTINGS_TTL:
         return hit[1]
     conn = get_conn()
     rows = conn.execute("SELECT key, value FROM athlete_settings").fetchall()
     conn.close()
     values = {r["key"]: r["value"] for r in rows}
-    _settings_cache[schema.DB_PATH] = (time.monotonic(), values)
+    _settings_cache[path] = (time.monotonic(), values)
     return values
 
 
