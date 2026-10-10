@@ -692,6 +692,9 @@ def checklist(state: dict) -> list[dict]:
          "After a week, look at fitness, fatigue and form on the Today page to see what the work did.",
          int(state.get("rides_since_plan") or 0) >= 3),
     ]
+    if state.get("coached"):
+        # A coached athlete's rides come in as files, so there is nothing to connect.
+        steps = [s for s in steps if s[0] != "connect"]
     return [{"key": k, "title": t, "why": w, "done": d} for k, t, w, d in steps]
 
 

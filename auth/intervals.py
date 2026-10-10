@@ -235,14 +235,12 @@ def start_background_compare() -> bool:
     if _compare_lock.locked():
         return False
     from db import schema
-    path = schema.current_path()
 
     def run():
         try:
-            with schema.use(path):
-                run_compare_locked()
+            run_compare_locked()
         except Exception:
             pass        # best effort; the next page load tries again
 
-    threading.Thread(target=run, name="intervals-compare", daemon=True).start()
+    threading.Thread(target=schema.pinned(run), name="intervals-compare", daemon=True).start()
     return True

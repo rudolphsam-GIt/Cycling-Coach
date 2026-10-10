@@ -533,16 +533,14 @@ def start_background_sync() -> bool:
     if is_syncing():
         return False
     from db import schema
-    path = schema.current_path()
 
     def run():
         try:
-            with schema.use(path):
-                run_locked()
+            run_locked()
         except Exception:
             pass        # sync_upcoming records TrainingPeaks errors; anything else waits for the next try
 
-    threading.Thread(target=run, name="tp-sync", daemon=True).start()
+    threading.Thread(target=schema.pinned(run), name="tp-sync", daemon=True).start()
     return True
 
 

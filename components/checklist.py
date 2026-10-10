@@ -21,8 +21,10 @@ def current_state() -> dict:
     import auth.garmin as garmin_auth
     import auth.strava as strava_auth
 
+    from db import schema
     counts = checklist_counts(date.today().isoformat())
     return {
+        "coached": not schema.is_owner(),
         "connected": garmin_auth.is_connected() or strava_auth.is_connected(),
         # Chosen on purpose: a known FTP, or "estimate it for me". Either way there is nothing left to do.
         "ftp_confirmed": get_setting("ftp_estimated", "") == "0" or get_setting("ftp_choice", "") == "estimate",

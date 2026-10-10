@@ -229,6 +229,17 @@ def use(path: str):
         _local.path = old
 
 
+def pinned(fn):
+    """fn wrapped to run on the athlete's database that is current now. Use it for anything
+    handed to another thread or pool, which would otherwise fall back to the owner's file."""
+    path = current_path()
+
+    def run(*args, **kwargs):
+        with use(path):
+            return fn(*args, **kwargs)
+    return run
+
+
 def get_conn():
     path = current_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)

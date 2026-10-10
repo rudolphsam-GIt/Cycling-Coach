@@ -46,6 +46,8 @@ _head, _sync = st.columns([3, 1.5], vertical_alignment="bottom")
 with _head:
     page_header(f"{_greeting}{', ' + _first_name if _first_name else ''}",
                 date.today().strftime("%A, %B %-d"), eyebrow="Today")
+from db import schema as _schema
+_owner = _schema.is_owner()
 with _sync:
     if _garmin.is_connected():
         if st.button("Sync now", icon=":material/sync:", width="stretch",
@@ -55,8 +57,10 @@ with _sync:
             st.toast(_msg)
             st.rerun()
         st.caption(_garmin.last_sync_text())
-    else:
+    elif _owner:
         st.page_link(SETTINGS_PAGE, label="Connect Garmin", icon=":material/link:")
+    else:
+        st.page_link(SETTINGS_PAGE, label="Import rides", icon=":material/upload:")
 
 from components.onboarding import render_onboarding_welcome_banner
 render_onboarding_welcome_banner()
@@ -131,7 +135,7 @@ with col_recovery:
             "numbers yet. Open the Garmin Connect app on your phone to sync your watch.</div></div>",
             unsafe_allow_html=True,
         )
-    else:
+    elif _owner:
         st.markdown(
             "<div class='today-card'><div class='today-card-label'>Recovery</div>"
             "<div class='today-card-title'>No recovery data yet</div>"

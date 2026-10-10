@@ -83,6 +83,30 @@ class ProfileTests(unittest.TestCase):
             done.wait(5)
         self.assertEqual(seen, [p["path"]])
 
+    def test_step_builders_use_the_athletes_ftp(self):
+        import garmin_workouts
+        p = profiles.create_profile("Alex")
+        q.set_setting("ftp_watts", 330)
+        seen = []
+
+        def fake_structured(system, prompt, schema_, effort=None):
+            seen.append(prompt.splitlines()[0])
+            return {"steps": [{"kind": "interval", "minutes": 30, "low_pct": 60, "high_pct": 70}]}
+
+        with mock.patch.object(garmin_workouts.claude_client, "structured", fake_structured), \
+                mock.patch.object(garmin_workouts, "saved_steps", return_value=None), \
+                mock.patch("db.queries.save_workout_steps"):
+            with schema.use(p["path"]):
+                q.set_setting("ftp_watts", 240)
+                garmin_workouts.ensure_steps([{"id": 1, "name": "Endurance", "date": "2026-10-12"}])
+        self.assertEqual(seen, ["FTP: 240 W"])
+
+    def test_coached_checklist_has_no_connect_step(self):
+        from metrics import explain
+        keys = [s["key"] for s in explain.checklist({"coached": True})]
+        self.assertNotIn("connect", keys)
+        self.assertIn("connect", [s["key"] for s in explain.checklist({})])
+
     def test_garmin_only_on_owner(self):
         import auth.garmin as g
         p = profiles.create_profile("Alex")
