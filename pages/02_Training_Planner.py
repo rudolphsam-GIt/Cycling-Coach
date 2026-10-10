@@ -823,11 +823,9 @@ def render_quick_generate() -> None:
             weeks_out = 8
             race_date = today + timedelta(weeks=8)
 
-        lo = int(current_ctl)
-        hi = max(min(150, int(current_ctl * 1.6) + 10), lo + 1)
+        lo, hi, default = planning.target_ctl_range(current_ctl)
         target_ctl = st.slider(
-            "Target peak CTL", min_value=lo, max_value=hi,
-            value=min(max(int(current_ctl * 1.2), lo), hi), step=1,
+            "Target peak CTL", min_value=lo, max_value=hi, value=default, step=1,
             help="The fitness (CTL) you want to arrive at race day with, before the taper drops it.",
         )
         phase_label = st.selectbox("Phase focus", list(planning.PHASE_LABELS.values()))
@@ -837,7 +835,8 @@ def render_quick_generate() -> None:
                      disabled=chosen_race is None):
             drafted = planning.generate_block(
                 current_ctl, target_ctl, race_date, phase_key,
-                days_per_week=int(float(get_setting("days_per_week", 0) or 0)) or None)
+                days_per_week=int(float(get_setting("days_per_week", 0) or 0)) or None,
+                available_days=get_setting("available_days", "") or None)
             new_ids = [add_workout({
                 "date": w["date"], "name": w["name"], "workout_type": w["workout_type"],
                 "description": w["description"], "structured_json": None,

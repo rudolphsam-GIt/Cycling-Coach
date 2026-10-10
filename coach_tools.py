@@ -388,7 +388,8 @@ TOOLS = [
                        "with a taper worked into the end. This does not propose or save anything — "
                        "use it as a starting scaffold for a multi-week plan you're building with "
                        "the athlete in conversation, then adjust it based on what they tell you "
-                       "before calling propose_workouts with the final version.",
+                       "before calling propose_workouts with the final version. When the athlete has "
+                       "set the weekdays they can ride, the rides land only on those days.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -758,4 +759,5 @@ def _generate_block(args: dict) -> list[dict]:
     except (TypeError, ValueError):
         days = None
     return planning.generate_block(current_ctl, float(target_ctl), race_date, phase_focus, start,
-                                   days_per_week=days)
+                                   days_per_week=days,
+                                   available_days=get_setting("available_days", "") or None)

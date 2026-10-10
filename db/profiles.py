@@ -68,6 +68,11 @@ def _cached_name(path: str) -> str:
     return name
 
 
+def owner_name() -> str:
+    """The owner's name, as saved in their own database."""
+    return _cached_name(schema.DB_PATH) or "the coach"
+
+
 def list_profiles() -> list[dict]:
     """The owner first, then coached athletes by name. Each is {slug, name, path, owner}."""
     out = [{"slug": OWNER, "name": _cached_name(schema.DB_PATH) or "Me", "path": schema.DB_PATH,

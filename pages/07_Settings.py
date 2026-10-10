@@ -5,6 +5,7 @@ from datetime import date, datetime
 
 import ftp_change
 import compare
+import planning
 from metrics.tss import STANDARDS
 from db.queries import (get_setting, set_setting, auto_max_hr, auto_resting_hr,
                         recalculate_all_tss, deduplicate_activities)
@@ -130,6 +131,13 @@ with tab_profile:
                              int(float(get_setting("weekly_hours_target", 6) or 6)))
     days_per_week = t2.slider("Days a week to train", 1, 7,
                               int(float(get_setting("days_per_week", 4) or 4)))
+    available_days = st.multiselect(
+        "Days they can ride" if not schema.is_owner() else "Days you can ride",
+        list(planning.WEEKDAYS), default=planning.parse_days(get_setting("available_days", "")),
+        placeholder="Any day",
+        help="Generated blocks and the coach put rides only on these days, with the long ride on a "
+             "weekend day when one is picked. Leave empty to plan by the number of days instead. "
+             "When days are picked, the days a week setting follows them.")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -190,7 +198,8 @@ with tab_profile:
         set_setting("goal_text", goal_text.strip())
         set_setting("primary_goal", ",".join(infer_goal_keys(goal_text)))
         set_setting("weekly_hours_target", weekly_hours)
-        set_setting("days_per_week", days_per_week)
+        set_setting("available_days", ",".join(available_days))
+        set_setting("days_per_week", len(available_days) or days_per_week)
         ftp_note = ""
         if ftp != old_ftp and ftp > 0:
             # Past rides keep the FTP they were ridden at; upcoming workouts follow the new one.
