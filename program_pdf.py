@@ -9,6 +9,7 @@ character the standard PDF fonts cannot draw.
 from __future__ import annotations
 
 import io
+from datetime import date, timedelta
 from xml.sax.saxutils import escape
 
 from reportlab.graphics.shapes import Drawing, Line, PolyLine, Rect, String
@@ -21,6 +22,7 @@ from reportlab.platypus import (BaseDocTemplate, Frame, KeepTogether, PageBreak,
                                 Paragraph, Spacer, Table, TableStyle)
 
 import programs
+from exporters import guide_sections, step_lines
 from metrics import explain
 
 INK = colors.HexColor("#1B2236")
@@ -181,17 +183,15 @@ def _glossary(st: dict) -> list:
     return out
 
 
-def build_pdf(program: dict, ctl_by_week: dict | None = None, subtitle: str | None = None) -> bytes:
-    """The program as a PDF. `ctl_by_week` ({week: CTL}) adds the projected fitness line."""
-    st = _styles()
-    buf = io.BytesIO()
+def _new_doc(buf, title: str) -> BaseDocTemplate:
+    """A letter page document with the title and page number in the footer."""
     margin = 0.7 * inch
     doc = BaseDocTemplate(buf, pagesize=letter, leftMargin=margin, rightMargin=margin,
                           topMargin=0.75 * inch, bottomMargin=0.75 * inch,
-                          title=_plain(program["title"]), author="Cycling Coach")
+                          title=_plain(title), author="Cycling Coach")
     frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="body",
                   leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
-    title_short = _plain(program["title"])[:70]
+    title_short = _plain(title)[:70]
 
     def footer(canvas, _doc):
         canvas.saveState()
@@ -204,6 +204,16 @@ def build_pdf(program: dict, ctl_by_week: dict | None = None, subtitle: str | No
         canvas.restoreState()
 
     doc.addPageTemplates([PageTemplate(id="p", frames=[frame], onPage=footer)])
+    return doc
+
+
+def build_pdf(program: dict, ctl_by_week: dict | None = None, subtitle: str | None = None,
+              extra=None) -> bytes:
+    """The program as a PDF. `ctl_by_week` ({week: CTL}) adds the projected fitness line.
+    `extra(styles, width)` may return more flowables, which follow on a new page."""
+    st = _styles()
+    buf = io.BytesIO()
+    doc = _new_doc(buf, program["title"])
     width = doc.width
     weeks = programs.week_plan(program)
     story: list = []
@@ -331,6 +341,8 @@ def build_pdf(program: dict, ctl_by_week: dict | None = None, subtitle: str | No
     if program["notes"]:
         story += [Paragraph("Good to know", st["h1"])] + _bullets(program["notes"], st)
     story += _glossary(st)
+    if extra:
+        story += [PageBreak(), *extra(st, width)]
 
     doc.build(story)
     return buf.getvalue()
@@ -339,3 +351,74 @@ def build_pdf(program: dict, ctl_by_week: dict | None = None, subtitle: str | No
 def filename(program: dict) -> str:
     safe = "".join(c if c.isalnum() else "_" for c in _plain(program["title"])).strip("_")
     return f"{safe or 'training_program'}.pdf"
+
+
+def _schedule_story(rows: list, athlete_name: str, ftp: float | None, st: dict, width: float) -> list:
+    """Title block and one table per week: date, day, workout, minutes, TSS and the main targets."""
+    from garmin_workouts import total_minutes
+    who = (athlete_name or "").strip()
+    n = len(rows)
+    sub = [f"{n} ride{'s' if n != 1 else ''}"]
+    if rows:
+        sub.append(programs.span_label(rows[0][0]["date"], rows[-1][0]["date"]))
+    if ftp:
+        sub.append(f"FTP {ftp:g} W")
+    story = [Paragraph(_t(f"{who} training schedule" if who else "Training schedule"), st["title"]),
+             Spacer(1, 4), Paragraph(_t(" · ".join(sub)), st["sub"]),
+             Paragraph(_t("Targets are in watts, with the percent of FTP beside them. Warm ups and cool downs "
+                          "are in the workout files."), st["small"])]
+    by_week: dict[str, list] = {}
+    for workout, steps in sorted(rows, key=lambda r: r[0]["date"]):
+        d = date.fromisoformat(workout["date"])
+        by_week.setdefault((d - timedelta(days=d.weekday())).isoformat(), []).append((d, workout, steps))
+    widths = [0.6 * inch, 0.45 * inch, 1.6 * inch, 0.45 * inch, 0.4 * inch, width - 3.5 * inch]
+    for monday, items in by_week.items():
+        minutes = sum(total_minutes(steps) for _, _, steps in items)
+        tss = sum(w.get("tss_planned") or 0 for _, w, _ in items)
+        head = Paragraph(_t(f"Week of {programs.day_label(monday)}"), st["h2"])
+        info = Paragraph(_t(f"{len(items)} ride{'s' if len(items) != 1 else ''}, {minutes / 60:.1f} hours, "
+                            f"{tss:.0f} TSS"), st["small"])
+        table = [[Paragraph(h, st["head"]) for h in ("Date", "Day", "Workout", "Min", "TSS", "Main targets")]]
+        for d, w, steps in items:
+            targets = step_lines(steps, ftp, main_only=True) if ftp else []
+            table.append([Paragraph(_t(programs.day_label(w["date"])), st["cell"]),
+                          Paragraph(_t(f"{d:%a}"), st["cell"]),
+                          Paragraph(_t(w.get("name") or "Workout"), st["cellb"]),
+                          Paragraph(_t(round(total_minutes(steps))), st["cell"]),
+                          Paragraph(_t(round(w.get("tss_planned") or 0)), st["cell"]),
+                          Paragraph("<br/>".join(_t(x) for x in targets), st["cell"])])
+        story.append(KeepTogether([head, info, Spacer(1, 3), _table(table, widths, st)]))
+    return story
+
+
+def schedule_pdf(rows: list, athlete_name: str = "", ftp: float | None = None, program: dict | None = None,
+                 ctl_by_week: dict | None = None) -> bytes:
+    """The plan on paper. With a program, its full PDF comes first and the ride by ride schedule
+    follows on new pages. Without one, the schedule is the whole document."""
+    who = (athlete_name or "").strip()
+    if program:
+        return build_pdf(program, ctl_by_week, subtitle=who or None,
+                         extra=lambda st, width: _schedule_story(rows, who, ftp, st, width))
+    st = _styles()
+    buf = io.BytesIO()
+    doc = _new_doc(buf, f"{who} training schedule" if who else "Training schedule")
+    doc.build(_schedule_story(rows, who, ftp, st, doc.width))
+    return buf.getvalue()
+
+
+def import_guide_pdf(folder: str = "Training plan", contents: list[str] | None = None) -> bytes:
+    """The import guide on one page, from the same text as HOW_TO_IMPORT.txt."""
+    st = _styles()
+    small = ParagraphStyle("g", parent=st["base"], fontSize=8, leading=10.2)
+    head = ParagraphStyle("gh", parent=st["h2"], fontSize=10, leading=12, spaceBefore=5, spaceAfter=1)
+    buf = io.BytesIO()
+    doc = _new_doc(buf, "How to import this plan")
+    story = [Paragraph("How to import this plan", st["title"]), Spacer(1, 4)]
+    if contents:
+        story.append(Paragraph("What is in the folder", head))
+        story += [Paragraph(_t(c), small) for c in contents]
+    for heading, lines in guide_sections(folder):
+        story.append(Paragraph(_t(heading), head))
+        story += [Paragraph(_t(line), small) for line in lines]
+    doc.build(story)
+    return buf.getvalue()

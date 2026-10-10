@@ -6,6 +6,7 @@ route here, the Garmin send and the single .fit download.
 
   Download for TrainingPeaks   .zwo files titled with their dates, for the TrainingPeaks library
   Download all files           .zwo, .fit, plan.csv and how to import
+  Share package                one folder to send an athlete: plan PDF, import guide, calendar file and workouts
   Sync to intervals.icu        dated, on to Zwift on every computer and to Garmin (official API)
   TrainingPeaks calendar       synced on its own once signed in (unofficial, needs Premium)
 """
@@ -19,7 +20,8 @@ import exporters
 import garmin_workouts
 import programs
 from auth import intervals, trainingpeaks
-from db.queries import get_workouts
+from db.queries import get_setting, get_workouts
+from metrics.training_load import get_current_metrics
 
 RANGE_KEY = "export_range"
 MSG_KEY = "export_msg"
@@ -67,6 +69,17 @@ def group_failures(rides: list[dict], errors: dict) -> dict[str, list[str]]:
         if w["id"] in errors and garmin_workouts.saved_steps(w) is None:
             out.setdefault(errors[w["id"]], []).append(f"{programs.day_label(w['date'])} {w['name']}")
     return out
+
+
+def share_package(rows: list, folder_program: dict | None) -> bytes:
+    """The zip to send an athlete. `folder_program` is the active program when the range is the
+    program, so its full PDF leads the plan."""
+    ftp = float(get_setting("ftp_watts", 0) or 0)
+    ctl = None
+    if folder_program:
+        m = get_current_metrics()
+        ctl = programs.weekly_ctl(folder_program, programs.projected_fitness(folder_program, m["ctl"], m["atl"]))
+    return exporters.share_package_zip(rows, get_setting("athlete_name", "") or "", ftp, folder_program, ctl)
 
 
 def _show_message() -> None:
@@ -131,7 +144,7 @@ def render(today: date | None = None) -> None:
                        "are worked out.")
 
         folder = program["title"] if choice == PROGRAM and program else f"Plan {span}"
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         c1.download_button("Download for TrainingPeaks", data=lambda: exporters.trainingpeaks_zip(rows, folder),
                            file_name=f"{exporters.slug(folder)}_trainingpeaks.zip", mime="application/zip",
                            icon=":material/download:", width="stretch", on_click="ignore",
@@ -143,6 +156,13 @@ def render(today: date | None = None) -> None:
                            icon=":material/folder_zip:", width="stretch", on_click="ignore",
                            help="Zwift and TrainingPeaks (.zwo), Garmin and Wahoo (.fit), a list of the plan "
                                 "and how to import each.")
+        has_ftp = float(get_setting("ftp_watts", 0) or 0) > 0
+        c3.download_button("Share package", data=lambda: share_package(rows, program if choice == PROGRAM else None),
+                           file_name=f"{exporters.slug(folder)}_share.zip", mime="application/zip",
+                           icon=":material/send:", width="stretch", on_click="ignore", disabled=not has_ftp,
+                           help="One zip to send to someone else. It has the plan as a PDF, a one page guide to "
+                                "importing it, a calendar file, and the workout files." if has_ftp else
+                                "Set your FTP in Settings first, so power targets can be worked out.")
 
         s1, s2 = st.columns(2)
         if intervals.is_connected():
