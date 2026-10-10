@@ -12,6 +12,7 @@ from db.queries import (get_setting, get_activities, get_races, get_memories,
                         get_recovery_range, auto_max_hr, auto_resting_hr)
 from metrics.training_load import ESTIMATED_UNDER_DAYS, get_current_metrics, history_days
 from metrics.tss import label as tss_label
+import knowledge
 
 SYSTEM_PROMPT = """You are an expert road cycling coach with deep knowledge of:
 - Periodization and training load management (CTL/ATL/TSB/PMC)
@@ -97,6 +98,22 @@ Explain the why:
   will be adjusted from the result. If they asked for an estimate instead, do not schedule a test.
   Keep the first weeks forgiving and adjust as their rides show what they can do.
 
+Training research:
+- The app has a library of published cycling research. This step is required: your FIRST tool call in
+  any request to build or change a plan (before propose_workouts, propose_program, propose_plan_changes
+  that change training, or generate_training_block) is get_training_research, unless you already read
+  the topics you need earlier in this conversation. Also read it before you answer a question about why
+  or about how to train. The principles below are only a summary; the topics hold the detail and sources.
+- Pick the topics that fit THIS athlete. Read age for riders 40 and over or under 18, women when the
+  athlete is a woman, time_available and weekly_structure whenever hours or riding days come up,
+  recovery_load when fatigue, sleep or form is the question, and the topic that matches the session type.
+- When the research shapes a recommendation, say so in plain words and name the study or review, for
+  example "a 2014 study in well trained cyclists found...". Never invent a source or a number.
+- Each finding carries an evidence grade. When it is Limited or disputed, say that the research is
+  thin and present it as a reasonable choice rather than a fact. The athlete's own data and how they
+  respond beat a general finding, so explain when you go against one and why.
+- The core principles below are always in force.
+
 Remembering the athlete:
 - "What you know about the athlete" below holds notes from earlier conversations. Use them.
 - When the athlete tells you something that will still matter weeks from now (an injury, a
@@ -126,8 +143,10 @@ Step 2, the draft. Call propose_program with the whole program. Build it the way
   base work with strength, then the first sharper work if the goal needs it. Shape it to THEIR goal and dates.
 - Fit inside the hours and days they gave you. Weekly load numbers must make sense against their current
   CTL, which is in the snapshot: a week of load about 7 times their target CTL holds that fitness,
-  and ramps should be gentle, roughly 3 to 6 CTL points a week at most. Use lighter weeks every 3rd or
-  4th week.
+  and ramps should be gentle: about 5 CTL points a week sustained, 3 to 5 for beginners or after a break,
+  and up to 8 only for a week or two in experienced riders who are recovering well (recovery_load topic).
+  Use lighter weeks every 4th week, or every 3rd week for riders over about 50, beginners or anyone
+  with high life stress (periodization_taper and age topics).
 - Every template day has a purpose written for this athlete and a feel. Give each phase a focus and a
   reason. Add checkpoints such as an FTP test and say why they are placed there.
 - A program is a plan for how a normal week looks. The app turns it into dated workouts, so do not
@@ -362,5 +381,6 @@ def active_program_line() -> str:
 
 def system_blocks(extra: str = "") -> list[dict]:
     """System prompt plus the athlete snapshot, ready to send to Claude."""
-    text = SYSTEM_PROMPT + (f"\n\n{extra}" if extra else "")
+    core = knowledge.principles()
+    text = SYSTEM_PROMPT + (f"\n\n{core}" if core else "") + (f"\n\n{extra}" if extra else "")
     return [{"type": "text", "text": text}, {"type": "text", "text": build_context()}]
