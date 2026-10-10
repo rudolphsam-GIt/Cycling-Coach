@@ -359,6 +359,26 @@ class PdfTests(unittest.TestCase):
         raw["notes"] = []
         self.assertTrue(program_pdf.build_pdf(programs.validate(raw)).startswith(b"%PDF"))
 
+    def test_the_schedule_handles_repeats_and_open_power(self):
+        steps = [{"kind": "warmup", "minutes": 10, "low_pct": 50, "high_pct": 65},
+                 {"kind": "repeat", "repeat_count": 3, "repeat_steps": [
+                     {"kind": "interval", "minutes": 15, "low_pct": 88, "high_pct": 92},
+                     {"kind": "recovery", "minutes": 5, "low_pct": None, "high_pct": None}]}]
+        open_steps = [{"kind": "interval", "minutes": 30, "low_pct": None, "high_pct": None}]
+        rows = [({"id": 1, "date": "2026-10-12", "name": "A & B <i>", "tss_planned": 80}, steps),
+                ({"id": 2, "date": "2026-10-21", "name": "Open", "tss_planned": None}, open_steps)]
+        self.assertTrue(program_pdf.schedule_pdf(rows, "Alex", 300).startswith(b"%PDF"))
+        self.assertTrue(program_pdf.schedule_pdf([], "", None).startswith(b"%PDF"))
+        p = programs.validate(sample())
+        with_program = program_pdf.schedule_pdf(rows, "Alex", 300, p)
+        self.assertGreater(len(with_program), len(program_pdf.build_pdf(p)))
+
+    def test_the_import_guide_is_one_page(self):
+        import exporters
+        data = program_pdf.import_guide_pdf("Alex training plan", exporters.CONTENTS)
+        self.assertTrue(data.startswith(b"%PDF"))
+        self.assertEqual(data.count(b"/Type /Page\n"), 1)
+
     def test_text_helpers(self):
         self.assertEqual(program_pdf._plain("a ≥ b → c"), "a >= b to c")
         self.assertEqual(program_pdf._t("a<b&c"), "a&lt;b&amp;c")

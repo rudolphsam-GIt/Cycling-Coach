@@ -165,6 +165,87 @@ class ZipTests(Base):
 
     def test_the_instructions_avoid_em_dashes(self):
         self.assertNotIn("—", exporters.HOW_TO)
+        for text in (exporters.guide_text("X", exporters.CONTENTS), " ".join(exporters.CONTENTS)):
+            self.assertNotIn("—", text)
+            self.assertNotIn("–", text)
+            self.assertNotIn(" - ", text)
+
+    def test_the_guide_claims_only_what_was_confirmed(self):
+        text = exporters.guide_text("X", exporters.CONTENTS)
+        self.assertIn("Import Workout", text)
+        self.assertIn("NewFiles", text)
+        self.assertIn("not confirmed it for Forerunner", text)
+        self.assertNotIn("Upload", text)
+
+
+OPEN_STEPS = [{"kind": "warmup", "minutes": 5, "low_pct": None, "high_pct": None},
+              {"kind": "interval", "minutes": 20, "low_pct": None, "high_pct": None}]
+
+
+class IcsTests(Base):
+    def rows(self):
+        return [({**W, "id": 1, "date": "2026-10-12", "name": "Tempo, long; hard\\ \u65e5\u672c" + "x" * 90}, STEPS),
+                ({**W, "id": 2, "date": "2026-10-13", "name": "Open", "purpose": "Line one\nLine two"}, OPEN_STEPS)]
+
+    def unfold(self, text):
+        return text.replace("\r\n ", "")
+
+    def test_it_is_a_valid_calendar_with_crlf_and_short_lines(self):
+        ics = exporters.plan_ics(self.rows(), "Alex", 300)
+        raw = ics.encode("utf-8")
+        self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))
+        self.assertTrue(ics.startswith("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"))
+        self.assertTrue(ics.endswith("END:VCALENDAR\r\n"))
+        for line in raw.split(b"\r\n"):
+            self.assertLessEqual(len(line), 75)
+            line.decode("utf-8")                       # no character was split in half
+        flat = self.unfold(ics)
+        for want in ("PRODID:", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Alex training plan"):
+            self.assertIn(want, flat)
+
+    def test_one_event_per_workout_with_stable_ids_and_all_day_dates(self):
+        a, b = exporters.plan_ics(self.rows(), "Alex", 300), exporters.plan_ics(self.rows(), "Alex", 300)
+        flat = self.unfold(a)
+        self.assertEqual(flat.count("BEGIN:VEVENT"), 2)
+        self.assertIn("UID:cc-1-2026-10-12@cycling-coach", flat)
+        self.assertIn("DTSTART;VALUE=DATE:20261012", flat)
+        self.assertIn("DTEND;VALUE=DATE:20261013", flat)
+        uids = lambda t: [l for l in self.unfold(t).split("\r\n") if l.startswith("UID:")]
+        self.assertEqual(uids(a), uids(b))
+
+    def test_text_is_escaped_and_the_description_has_watts(self):
+        flat = self.unfold(exporters.plan_ics(self.rows(), "Alex", 300))
+        self.assertIn("Tempo\\, long\\; hard\\\\", flat)
+        self.assertIn("Line one\\nLine two", flat)
+        self.assertIn("3 rounds of 15 min at 264 to 276 W (88 to 92% FTP)", flat)
+        self.assertIn("with no power target", flat)               # open power does not break it
+
+    def test_no_athlete_name_still_works(self):
+        self.assertIn("X-WR-CALNAME:Training plan", exporters.plan_ics(self.rows()))
+
+
+class SharePackageTests(Base):
+    def rows(self):
+        return [({**W, "id": 1, "date": D(1)}, STEPS), ({**W, "id": 2, "date": D(2), "name": "Open"}, OPEN_STEPS)]
+
+    def test_the_zip_has_one_named_folder_with_everything(self):
+        zf = zipfile.ZipFile(io.BytesIO(exporters.share_package_zip(self.rows(), "Alex", 300)))
+        names = zf.namelist()
+        self.assertTrue(all(n.startswith("Alex training plan/") for n in names))
+        inner = {n.split("/", 1)[1] for n in names}
+        for want in ("Plan.pdf", "How to import.pdf", "HOW_TO_IMPORT.txt", "plan.ics", "plan.csv"):
+            self.assertIn(want, inner)
+        self.assertEqual(sum(n.startswith("zwo/") for n in inner), 2)
+        self.assertEqual(sum(n.startswith("fit/") for n in inner), 2)
+        for pdf in ("Plan.pdf", "How to import.pdf"):
+            self.assertTrue(zf.read(f"Alex training plan/{pdf}").startswith(b"%PDF"))
+        guide = zf.read("Alex training plan/HOW_TO_IMPORT.txt").decode()
+        self.assertIn("Alex training plan", guide)
+        self.assertNotIn("—", guide)
+
+    def test_a_blank_name_gets_a_plain_folder(self):
+        zf = zipfile.ZipFile(io.BytesIO(exporters.share_package_zip(self.rows(), "  ", 300)))
+        self.assertTrue(zf.namelist()[0].startswith("Training plan/"))
 
 
 # ── Steps built once and kept ─────────────────────────────────────────────────
