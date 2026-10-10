@@ -158,11 +158,18 @@ def _watt_range(step: dict, ftp: float) -> str:
 STEP_LABEL = {"warmup": "Warm up", "cooldown": "Cool down", "recovery": "Easy", "interval": "Ride"}
 
 
-def _leaf_text(step: dict, ftp: float) -> str:
+def _leaf_text(step: dict, ftp: float, in_repeat: bool = False) -> str:
+    mins = f"{step['minutes']:g} min"
+    if in_repeat:
+        # "4 rounds of 5 min at 228 to 252 W, then 3 min easy at ..." reads better than labels.
+        mins += " easy" if step["kind"] == "recovery" else ""
+        if step.get("low_pct") is None:
+            return f"{mins} with no power target"
+        return f"{mins} at {_watt_range(step, ftp)}"
     label = STEP_LABEL.get(step["kind"], "Ride")
     if step.get("low_pct") is None:
-        return f"{label} {step['minutes']:g} min with no power target"
-    return f"{label} {step['minutes']:g} min at {_watt_range(step, ftp)}"
+        return f"{label} {mins} with no power target"
+    return f"{label} {mins} at {_watt_range(step, ftp)}"
 
 
 def step_lines(steps: list, ftp: float, main_only: bool = False) -> list[str]:
@@ -170,7 +177,7 @@ def step_lines(steps: list, ftp: float, main_only: bool = False) -> list[str]:
     cool down and easy parts are left out (unless nothing else is left)."""
     def one(s):
         if s["kind"] == "repeat":
-            inner = ", then ".join(_leaf_text(x, ftp) for x in s["repeat_steps"])
+            inner = ", then ".join(_leaf_text(x, ftp, in_repeat=True) for x in s["repeat_steps"])
             return f"{s['repeat_count']} rounds of {inner}"
         return _leaf_text(s, ftp)
     keep = [s for s in steps if not main_only or s["kind"] in ("interval", "repeat")]
@@ -188,11 +195,15 @@ def plan_ics(rows: list[tuple[dict, list]], athlete_name: str = "", ftp: float |
              f"X-WR-CALNAME:{_ics_text(f'{who} training plan' if who else 'Training plan')}"]
     for workout, steps in rows:
         day = date.fromisoformat(workout["date"])
-        facts = [workout.get("purpose") or "", f"{round(total_minutes(steps))} minutes."]
+        purpose = (workout.get("purpose") or "").strip()
+        if purpose and purpose[-1] not in ".!?":
+            purpose += "."
+        facts = [purpose, f"{round(total_minutes(steps))} minutes."]
         if workout.get("tss_planned"):
             facts.append(f"Planned training load {round(workout['tss_planned'])} TSS.")
         if workout.get("feel"):
-            facts.append(f"Feel. {workout['feel']}")
+            feel = workout["feel"].strip().rstrip(".")
+            facts.append(f"It should feel {feel[:1].lower()}{feel[1:]}.")
         text = " ".join(x for x in facts if x)
         if ftp:
             text += "\n\n" + "\n".join(step_lines(steps, ftp))

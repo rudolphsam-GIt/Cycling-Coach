@@ -217,7 +217,7 @@ class IcsTests(Base):
         flat = self.unfold(exporters.plan_ics(self.rows(), "Alex", 300))
         self.assertIn("Tempo\\, long\\; hard\\\\", flat)
         self.assertIn("Line one\\nLine two", flat)
-        self.assertIn("3 rounds of Ride 15 min at 264 to 276 W (88 to 92% FTP)", flat)
+        self.assertIn("3 rounds of 15 min at 264 to 276 W (88 to 92% FTP)", flat)
         self.assertIn("with no power target", flat)               # open power does not break it
 
     def test_no_athlete_name_still_works(self):
