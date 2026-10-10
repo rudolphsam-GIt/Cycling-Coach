@@ -25,7 +25,7 @@ def _migrate_once(path: str):
     return True
 
 
-from components import profile_switcher  # noqa: E402
+from components import athlete_form, profile_switcher  # noqa: E402
 
 profile_switcher.apply()          # which athlete's database this browser session uses
 _migrate_once(schema.current_path())
@@ -72,6 +72,10 @@ if is_setup_complete():
 
 if not is_setup_complete():
     pg = st.navigation([st.Page(render_setup_needed, title="Setup", icon=":material/directions_bike:")])
+elif athlete_form.is_open():
+    # The coach's Add athlete form takes over the main area until it is saved or cancelled.
+    pg = st.navigation([st.Page(athlete_form.render_athlete_form, title="Add athlete",
+                                icon=":material/person_add:")])
 elif not is_onboarding_complete():
     pg = st.navigation([st.Page(render_onboarding, title="Welcome", icon=":material/directions_bike:")])
 else:

@@ -9,8 +9,8 @@ from datetime import date, timedelta
 
 from components.onboarding import parse_goal_keys
 from db.queries import (get_setting, get_activities, get_races, get_memories,
-                        get_recovery_range)
-from metrics.training_load import get_current_metrics
+                        get_recovery_range, auto_max_hr, auto_resting_hr)
+from metrics.training_load import ESTIMATED_UNDER_DAYS, get_current_metrics, history_days
 from metrics.tss import label as tss_label
 
 SYSTEM_PROMPT = """You are an expert road cycling coach with deep knowledge of:
@@ -194,6 +194,56 @@ def _units_note() -> str:
     return "The athlete prefers " + " and ".join(parts) + "."
 
 
+def _hr_line() -> str:
+    """Max and resting heart rate, set by hand or worked out from rides and recovery."""
+    parts = []
+    for label, key, auto in (("Max HR", "max_hr_manual", auto_max_hr), ("Resting HR", "resting_hr_manual",
+                                                                       auto_resting_hr)):
+        val = get_setting(key, "") or ""
+        if val:
+            parts.append(f"{label}: {val}bpm")
+        else:
+            found = auto()
+            parts.append(f"{label}: {found:.0f}bpm (from their data)" if found else f"{label}: unknown")
+    return " | ".join(parts)
+
+
+def _days_line() -> str:
+    from planning import parse_days
+    days = parse_days(get_setting("available_days", ""))
+    if not days:
+        return ""
+    return (f"  Days they can ride: {', '.join(days)}. Put every ride and gym session you propose on these "
+            "weekdays only, including programs, and keep the long ride on a weekend day if one is listed.")
+
+
+def _load_note(ctl_seed: float) -> str:
+    """A warning when the training load numbers are still mostly the starting estimate."""
+    days = history_days()
+    if days >= ESTIMATED_UNDER_DAYS:
+        return ""
+    have = f"only {days} days of ride history" if days else "no rides recorded yet"
+    if ctl_seed:
+        return (f"  Note: there is {have}. CTL and ATL above start from an estimated seed of {ctl_seed:.0f} "
+                "set from their experience, not measured from rides. Do not quote them as measured "
+                "fitness. Treat them as a rough starting guess and say so if you use them.")
+    return (f"  Note: there is {have}, so CTL and ATL above are built from very little data and "
+            "understate real fitness. Do not quote them as measured fitness.")
+
+
+def _coach_line() -> str:
+    """For an athlete Sam coaches, who is actually reading the replies."""
+    from db import profiles, schema
+    if schema.is_owner():
+        return ""
+    name = (get_setting("athlete_name", "") or "this athlete").strip()
+    coach = profiles.owner_name()
+    return (f"WHO YOU ARE TALKING TO: {coach} is the coach and is planning for {name}, an athlete they coach. "
+            f"{coach} is the one reading and writing these messages, not {name}. Address {coach} and talk "
+            f"about {name} in the third person. Where these instructions say \"the athlete\", they mean "
+            f"{name}, and confirmations on screen are made by {coach}.\n")
+
+
 def build_context() -> str:
     ftp = get_setting("ftp_watts", "unknown")
     weight = get_setting("weight_kg", "unknown")
@@ -248,23 +298,33 @@ def build_context() -> str:
     hours_str = f"{weekly_hours} hrs/week" if weekly_hours else "unknown"
     days_str = f"{days_per_week} days/week" if days_per_week else "unknown"
     goal_words = f'  In the athlete\'s own words, their goals are: "{goal_text}"' if goal_text else ""
+    athlete_name = (get_setting("athlete_name", "") or "").strip()
+    name_line = f"  Name: {athlete_name}" if athlete_name else ""
+    try:
+        ctl_seed = float(get_setting("ctl_start", 0) or 0)
+    except (TypeError, ValueError):
+        ctl_seed = 0.0
 
     return f"""
-ATHLETE DATA (use this to give specific coaching advice):
+{_coach_line()}ATHLETE DATA (use this to give specific coaching advice):
+{name_line}
 {goal_words}
 {f"  {goal_note}" if goal_note else ""}
   Weekly training time available: {hours_str} over {days_str}. Fit plans inside this and say so if it is not enough for the goal.
+{_days_line()}
 
 Experience: {experience}{sex_note}
 Units: {units_note}
 Physiology:
   FTP: {ftp}W{ftp_note} | Weight: {weight}kg | W/kg: {w_per_kg} | LTHR: {lthr}bpm
+  {_hr_line()}
 
 Current Training Load:
   CTL (Fitness): {metrics['ctl']:.1f}
   ATL (Fatigue): {metrics['atl']:.1f}
   TSB (Form): {metrics['tsb']:.1f} ({tsb_label})
   7-day ramp rate: {metrics['ramp_rate']:+.1f}
+{_load_note(ctl_seed)}
 
 Latest recovery (Garmin):
 {_recovery_line()}

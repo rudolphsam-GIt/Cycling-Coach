@@ -112,7 +112,6 @@ def render_onboarding():
             captions=[v["detail"] for v in RIDER_TYPES.values()],
             help="There are no wrong answers. This sets how much the app and your coach explain, "
                  "and gives you a friendly starting point for your power numbers.")
-        experience_label = experience_for(rider_type)
 
         activity = st.radio(
             "How active are you right now, away from the bike or on it?", list(ACTIVITY_LEVEL),
@@ -180,50 +179,64 @@ def render_onboarding():
             st.error("Tell us a little about your goals before continuing. A sentence is plenty.")
 
         if submitted and goal_text.strip():
-            exp = EXPERIENCE[experience_label]
-            goal_key_list = infer_goal_keys(goal_text)
-            goal_keys_str = ",".join(goal_key_list)
-
-            ftp_input, lthr_input = ftp_in or None, lthr_in or None
-            final_ftp = ftp_input if ftp_input else start["start"]
-            final_lthr = lthr_input if lthr_input else (lthr_from_age(age) if age else exp["lthr_default"])
-
-            set_setting("athlete_name", name or "")
-            set_setting("primary_goal", goal_keys_str)
-            set_setting("goal_text", goal_text.strip())
-            set_setting("days_per_week", days_per_week)
-            set_setting("experience_level", experience_label)
-            set_setting("weekly_hours_target", weekly_hours)
-            set_setting("weight_kg", weight)
-            set_setting("weight_unit", unit)
-            set_setting("distance_unit", dist_unit)
-            set_setting("lthr", final_lthr)
-            set_setting("ctl_start", exp["ctl_start"])
-            set_setting("ftp_choice", ftp_choice)
-            set_setting("ftp_estimated", "0" if ftp_input else "1")
-            if age:
-                set_setting("birth_year", date.today().year - int(age))
-            set_setting("rider_type", rider_type)
-            set_setting("gender", gender)
-            if gender in GENDER_PROFILE_TABLE:
-                set_setting("power_profile_table", GENDER_PROFILE_TABLE[gender])
-            set_setting("activity_level", activity)
-            set_setting("ftp_range_low", start["low"])
-            set_setting("ftp_range_high", start["high"])
-            set_setting("lthr_estimated", "0" if lthr_input else "1")
-            ftp_change.apply_new_ftp(final_ftp, "Initial estimate from onboarding" if not ftp_input else "")
-
-            if race_name.strip() and race_date:
-                add_race({
-                    "name": race_name.strip(), "date": race_date.isoformat(),
-                    "distance_km": None, "elevation_gain_meters": None,
-                    "category": None, "target_time_seconds": None,
-                    "notes": "",
-                })
-
+            goal_key_list = save_answers(
+                name=name, goal_text=goal_text, rider_type=rider_type, activity=activity, gender=gender,
+                age=age, weekly_hours=weekly_hours, days_per_week=days_per_week, weight=weight, unit=unit,
+                dist_unit=dist_unit, ftp_choice=ftp_choice, ftp_input=ftp_in, lthr_input=lthr_in,
+                race_name=race_name, race_date=race_date)
             set_setting("onboarding_complete", "1")
             st.session_state["onboarding_just_finished"] = goal_key_list
             st.rerun()
+
+
+def save_answers(*, name: str, goal_text: str, rider_type: str, activity: str, gender: str,
+                 age: float | None, weekly_hours: float, days_per_week: int, weight: float, unit: str,
+                 dist_unit: str, ftp_choice: str, ftp_input: float | None, lthr_input: float | None,
+                 race_name: str = "", race_date: date | None = None) -> list[str]:
+    """Write a new rider's answers to the current athlete's database: settings, the starting
+    fitness seed, FTP (logged through apply_new_ftp so its history starts here) and an optional
+    race. Shared by onboarding and the coach's Add athlete form. Returns the goal keys."""
+    exp = EXPERIENCE[experience_for(rider_type)]
+    goal_key_list = infer_goal_keys(goal_text)
+    start = starting_ftp_range(weight, rider_type, activity, gender, age)
+
+    ftp_input, lthr_input = ftp_input or None, lthr_input or None
+    final_ftp = ftp_input if ftp_input else start["start"]
+    final_lthr = lthr_input if lthr_input else (lthr_from_age(age) if age else exp["lthr_default"])
+
+    set_setting("athlete_name", name or "")
+    set_setting("primary_goal", ",".join(goal_key_list))
+    set_setting("goal_text", goal_text.strip())
+    set_setting("days_per_week", days_per_week)
+    set_setting("experience_level", experience_for(rider_type))
+    set_setting("weekly_hours_target", weekly_hours)
+    set_setting("weight_kg", weight)
+    set_setting("weight_unit", unit)
+    set_setting("distance_unit", dist_unit)
+    set_setting("lthr", final_lthr)
+    set_setting("ctl_start", exp["ctl_start"])
+    set_setting("ftp_choice", ftp_choice)
+    set_setting("ftp_estimated", "0" if ftp_input else "1")
+    if age:
+        set_setting("birth_year", date.today().year - int(age))
+    set_setting("rider_type", rider_type)
+    set_setting("gender", gender)
+    if gender in GENDER_PROFILE_TABLE:
+        set_setting("power_profile_table", GENDER_PROFILE_TABLE[gender])
+    set_setting("activity_level", activity)
+    set_setting("ftp_range_low", start["low"])
+    set_setting("ftp_range_high", start["high"])
+    set_setting("lthr_estimated", "0" if lthr_input else "1")
+    ftp_change.apply_new_ftp(final_ftp, "Initial estimate from onboarding" if not ftp_input else "")
+
+    if (race_name or "").strip() and race_date:
+        add_race({
+            "name": race_name.strip(), "date": race_date.isoformat(),
+            "distance_km": None, "elevation_gain_meters": None,
+            "category": None, "target_time_seconds": None,
+            "notes": "",
+        })
+    return goal_key_list
 
 
 NEW_RIDER = "New to structured training"
@@ -248,6 +261,9 @@ def build_first_block_message() -> str:
         except (TypeError, ValueError):
             return None
 
+    from db import profiles, schema
+    from planning import parse_days
+
     races = get_races(upcoming_only=True)
     return first_block_message(
         goals=_goals_for_message(get_setting),
@@ -256,7 +272,9 @@ def build_first_block_message() -> str:
         hours=num("weekly_hours_target"), ftp=num("ftp_watts"),
         ftp_estimated=get_setting("ftp_estimated", "") == "1",
         skip_test=get_setting("ftp_choice", "") == "estimate",
-        race=races[0] if races else None, name=get_setting("athlete_name", "") or None)
+        race=races[0] if races else None, name=get_setting("athlete_name", "") or None,
+        ride_days=parse_days(get_setting("available_days", "")),
+        coach=None if schema.is_owner() else profiles.owner_name())
 
 
 def _go_first_block() -> None:
@@ -268,9 +286,11 @@ def _go_first_block() -> None:
 
 def first_block_button(key: str) -> None:
     """Opens the coach with a first block request already written."""
-    if st.button("Build my first block", key=key, type="primary", icon=":material/auto_awesome:",
-                 help="Opens your coach with a request for a four week starting block, "
-                      "written from your goals and hours"):
+    from db import schema
+    label, whose = ("Build my first block", "your") if schema.is_owner() else ("Build their first block", "their")
+    if st.button(label, key=key, type="primary", icon=":material/auto_awesome:",
+                 help=f"Opens the coach with a request for a four week starting block, "
+                      f"written from {whose} goals and hours"):
         _go_first_block()
 
 
@@ -278,6 +298,10 @@ def render_onboarding_welcome_banner():
     """Shown once on the Dashboard right after onboarding completes."""
     goal_key_list = st.session_state.pop("onboarding_just_finished", None)
     if not goal_key_list:
+        return
+    from db import schema
+    if not schema.is_owner():
+        _coached_welcome()
         return
     blurbs = [GOAL_BLURB[k] for k in goal_key_list if k in GOAL_BLURB]
     blurb_str = " ".join(blurbs)
@@ -300,4 +324,18 @@ def render_onboarding_welcome_banner():
             st.info(f"You did not enter an FTP, and that is completely fine. {range_text} Your first training "
                     "block will start with an FTP test, so we know where to go from there.",
                     icon=":material/speed:")
+    first_block_button("welcome_first_block")
+
+
+def _coached_welcome() -> None:
+    """Shown once after the coach adds an athlete."""
+    from db.queries import get_setting
+    name = get_setting("athlete_name", "") or "Your athlete"
+    rides = st.session_state.pop("athlete_rides_note", "")
+    st.success(f"{name} is set up. Everything you do here now goes into their plan only."
+               + (f" {rides}" if rides else ""))
+    if get_setting("ftp_estimated", "") == "1":
+        st.info("Their FTP is an estimate for now. "
+                + ("The first block will start with an FTP test." if get_setting("ftp_choice", "") == "test"
+                   else "It will be refined from the rides you upload."), icon=":material/speed:")
     first_block_button("welcome_first_block")

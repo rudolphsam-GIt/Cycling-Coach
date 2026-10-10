@@ -25,6 +25,28 @@ def _seeds() -> tuple[float, float]:
             float(get_setting("atl_start", 0) or 0))
 
 
+# compute_pmc carries the seed in from the day before the first ride. Six weeks of real rides
+# (one CTL time constant) is enough to build fitness on their own, so the seed is dropped then
+# rather than counted on top of them.
+SEED_COVER_DAYS = 42
+# Under four weeks of rides, CTL and ATL still lean mostly on the seed.
+ESTIMATED_UNDER_DAYS = 28
+
+
+def history_days(today: date | None = None) -> int:
+    """Days of activity history up to today, 0 when there is none."""
+    from db.queries import first_activity_date
+    first = first_activity_date()
+    if not first:
+        return 0
+    return max(((today or date.today()) - date.fromisoformat(first[:10])).days, 0)
+
+
+def rides_cover_seed(today: date | None = None) -> bool:
+    """True when the rides go back far enough that the starting CTL seed should be 0."""
+    return history_days(today) >= SEED_COVER_DAYS
+
+
 def compute_pmc(
     start: date,
     end: date,

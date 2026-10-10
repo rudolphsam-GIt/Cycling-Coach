@@ -56,12 +56,10 @@ def render() -> None:
     if current != profiles.OWNER:
         st.markdown(f'<div class="profile-badge">Coaching <b>{_esc(names.get(current, current))}</b>. '
                     "Changes here only affect their plan.</div>", unsafe_allow_html=True)
-    with st.popover("Add athlete", icon=":material/person_add:", use_container_width=True):
-        name = st.text_input("Name", key="new_athlete_name", placeholder="Alex")
-        if st.button("Create", type="primary", key="new_athlete_go", disabled=not name.strip()):
-            p = profiles.create_profile(name)
-            switch_to(p["slug"])
-            st.rerun()
+    # Opens the Add athlete form in the main area (app.py shows it in place of the pages).
+    from components import athlete_form
+    st.button("Add athlete", icon=":material/person_add:", width="stretch", key="new_athlete_open",
+              on_click=athlete_form.open_form, disabled=athlete_form.is_open())
 
 
 def _esc(text: str) -> str:

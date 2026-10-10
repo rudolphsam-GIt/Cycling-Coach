@@ -701,36 +701,44 @@ def checklist(state: dict) -> list[dict]:
 def first_block_message(*, goals: list[str], experience: str, hours: float | None,
                         ftp: float | None, ftp_estimated: bool, race: dict | None = None,
                         name: str | None = None, days: float | None = None,
-                        skip_test: bool = False) -> str:
-    """The first message sent to the coach for a new rider."""
+                        skip_test: bool = False, ride_days: list[str] | None = None,
+                        coach: str | None = None) -> str:
+    """The first message sent to the coach for a new rider. With `coach`, it is written by
+    that coach about the rider instead of by the rider."""
     goal_text = "; ".join(goals) if goals else "general fitness"
+    i, my, me = ("they", "their", "them") if coach else ("I", "my", "me")
     time = ""
     if hours and days:
-        time = f" and I can train about {hours:g} hours a week, spread over {days:g} days"
+        time = f" and {i} can train about {hours:g} hours a week, spread over {days:g} days"
     elif hours:
-        time = f" and I can train about {hours:g} hours a week"
+        time = f" and {i} can train about {hours:g} hours a week"
     elif days:
-        time = f" and I can train {days:g} days a week"
-    lines = [
-        f"Hi, I'm {name}." if name else "Hi.",
-        f"My goals, in my own words, are: {goal_text}. My training experience is {experience.lower()}"
-        + time + ".",
-    ]
+        time = f" and {i} can train {days:g} days a week"
+    if coach:
+        lines = [f"Hi, I'm {coach}. I'm planning for {name or 'an athlete'}, an athlete I coach."]
+    else:
+        lines = [f"Hi, I'm {name}." if name else "Hi."]
+    lines.append(f"{my.title()} goals, in {my} own words, are: {goal_text}. {my.title()} training experience is "
+                 f"{experience.lower()}" + time + ".")
+    if ride_days:
+        day_list = ", ".join(ride_days[:-1]) + " and " + ride_days[-1] if len(ride_days) > 1 else ride_days[0]
+        lines.append(f"{i.title()} can ride on {day_list}, so please put the rides on those days.")
     if race:
-        lines.append(f"My main race is {race.get('name') or 'a race'} on {race.get('date')}.")
+        lines.append(f"{my.title()} main race is {race.get('name') or 'a race'} on {race.get('date')}.")
     if ftp:
-        lines.append(f"My FTP is set to {float(ftp):.0f} W"
-                     + (", but that is only an estimate because I do not know my real one." if ftp_estimated else "."))
+        lines.append(f"{my.title()} FTP is set to {float(ftp):.0f} W"
+                     + (f", but that is only an estimate because {i} do not know {my} real one."
+                        if ftp_estimated else "."))
     if ftp_estimated and skip_test:
-        lines.append("I would rather not do an FTP test, so please plan around the estimate and keep the first "
-                     "weeks forgiving. Say how the plan will be refined as my rides come in.")
+        lines.append(f"{i.title()} would rather not do an FTP test, so please plan around the estimate and keep "
+                     f"the first weeks forgiving. Say how the plan will be refined as {my} rides come in.")
     elif ftp_estimated:
         lines.append("Please build a guided 20 minute FTP test into the first week, after a couple of easy "
                      "days, and tell me how the rest of the block will be adjusted once we know the result. "
                      "Keep the days before the test forgiving.")
     lines.append(
-        "Please build me a first training block of about four weeks, starting easy. Explain in plain "
+        f"Please build {me} a first training block of about four weeks, starting easy. Explain in plain "
         "words what the block is trying to build and why, what each week is for, and for every "
-        "workout what it is for, what I should focus on, and how it should feel. Define any "
-        "training terms the first time you use them. Include strength sessions if they fit my goals.")
+        f"workout what it is for, what {i} should focus on, and how it should feel. Define any "
+        f"training terms the first time you use them. Include strength sessions if they fit {my} goals.")
     return " ".join(lines)
