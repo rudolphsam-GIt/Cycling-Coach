@@ -316,6 +316,9 @@ if activities:
         ride_detail.ride_detail(picked, key="dash_ride")
     else:
         st.caption("Select a ride to see its details.")
-else:
+elif _owner:
     st.info("No activities yet. Connect Strava or Garmin to sync your rides.")
     st.page_link(SETTINGS_PAGE, label="Connect in Settings", icon=":material/link:")
+else:
+    st.info("No rides yet. Ask them for .fit files from Garmin Connect or Strava and import them.")
+    st.page_link(SETTINGS_PAGE, label="Import rides in Settings", icon=":material/upload:")
