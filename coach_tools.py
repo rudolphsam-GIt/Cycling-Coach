@@ -16,6 +16,7 @@ from db.queries import (get_activities, get_workouts, get_races, get_wellness_ra
                         add_memory,
                         WORKOUT_TYPES)
 from metrics.training_load import compute_pmc, get_current_metrics
+import knowledge
 import planning
 import programs
 
@@ -129,7 +130,7 @@ TOOLS = [
     },
     {
         "name": "propose_workouts",
-        "description": "Propose workouts to add to the athlete's Training Planner. Nothing is saved "
+        "description": "Read the relevant get_training_research topics first. Propose workouts to add to the athlete's Training Planner. Nothing is saved "
                        "until the athlete confirms, so call this whenever they ask you to plan, "
                        "schedule or import workouts, then tell them to review and confirm below. "
                        "For a multi-week block, tag each workout with phase and week_number so the "
@@ -283,7 +284,7 @@ TOOLS = [
     },
     {
         "name": "propose_program",
-        "description": "Save a multi month training program (for example an off season) as a draft "
+        "description": "Read the relevant get_training_research topics first. Save a multi month training program (for example an off season) as a draft "
                        "the athlete reviews, discusses with you and downloads as a PDF. Use it only "
                        "after you have talked through their goals and limits. Nothing goes on their "
                        "calendar until they press Add to my calendar, so never say it has. To revise, "
@@ -383,7 +384,7 @@ TOOLS = [
     },
     {
         "name": "generate_training_block",
-        "description": "Generate a draft periodized block of rides from today (or a given start "
+        "description": "Read the relevant get_training_research topics first. Generate a draft periodized block of rides from today (or a given start "
                        "date) to a race date, ramping weekly training load toward a target CTL "
                        "with a taper worked into the end. This does not propose or save anything — "
                        "use it as a starting scaffold for a multi-week plan you're building with "
@@ -400,6 +401,22 @@ TOOLS = [
                 "start_date": {"type": "string", "description": "YYYY-MM-DD, defaults to today if omitted"},
             },
             "required": ["target_ctl", "race_date", "phase_focus"],
+        },
+    },
+    {
+        "name": "get_training_research",
+        "description": "Read the app's library of published cycling training research: graded findings, "
+                       "concrete rules and references. Call it before you build a block, program or "
+                       "weekly plan, and when the athlete asks why. Topics: "
+                       + "; ".join(f"{k} ({t})" for k, t in knowledge.topic_titles().items()) + ".",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "topics": {"type": "array", "minItems": 1, "maxItems": knowledge.MAX_TOPICS_PER_CALL,
+                           "items": {"type": "string", "enum": knowledge.list_topics()},
+                           "description": "One to three topics that fit the question and this athlete."},
+            },
+            "required": ["topics"],
         },
     },
 ]
@@ -420,6 +437,7 @@ STATUS_LABELS = {
     "propose_strength_sessions": "Drafting strength sessions",
     "generate_training_block": "Sketching a training block",
     "propose_program": "Drafting your program",
+    "get_training_research": "Reading the training research",
 }
 
 
@@ -536,12 +554,25 @@ def run_tool(name: str, args: dict, proposals: list[dict]) -> str:
         result = _generate_block(args)
     elif name == "propose_program":
         return _propose_program(args)
+    elif name == "get_training_research":
+        return _training_research(args)
     else:
         raise ToolInputError(f"unknown tool {name}")
 
     if not result and name not in ("propose_workouts", "propose_strength_sessions", "propose_plan_changes"):
         return "No data found for that period."
     return json.dumps(result, default=str)
+
+
+def _training_research(args: dict) -> str:
+    topics = args.get("topics")
+    if (not isinstance(topics, list) or not 0 < len(topics) <= knowledge.MAX_TOPICS_PER_CALL
+            or not all(isinstance(t, str) for t in topics)):
+        raise ToolInputError(f"topics must be a list of 1 to {knowledge.MAX_TOPICS_PER_CALL} topic names")
+    try:
+        return knowledge.get_topics(list(dict.fromkeys(topics)))
+    except KeyError as e:
+        raise ToolInputError(f"unknown topic {e.args[0]}; choose from {knowledge.list_topics()}") from None
 
 
 def _propose_program(args: dict) -> str:
