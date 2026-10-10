@@ -163,8 +163,10 @@ def ensure_steps(workouts: list[dict], progress=None, max_workers: int = 4) -> d
     if todo:
         _ftp()                               # a missing FTP is one clear message, not one per workout
     done = 0
+    from db import schema
+    build = schema.pinned(build_steps)       # workers read this athlete's FTP, not the owner's
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(build_steps, w): w for w in todo}
+        futures = {pool.submit(build, w): w for w in todo}
         for f in as_completed(futures):
             w = futures[f]
             try:

@@ -109,6 +109,7 @@ def start_garmin_resend(workout_ids: list[int]) -> bool:
     is already running."""
     if not _resend_lock.acquire(blocking=False):
         return False
+    from db import schema
 
     def run():
         try:
@@ -119,7 +120,7 @@ def start_garmin_resend(workout_ids: list[int]) -> bool:
         finally:
             _resend_lock.release()
 
-    threading.Thread(target=run, name="garmin-ftp-resend", daemon=True).start()
+    threading.Thread(target=schema.pinned(run), name="garmin-ftp-resend", daemon=True).start()
     return True
 
 

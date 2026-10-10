@@ -9,9 +9,15 @@ import streamlit as st
 from metrics import explain
 
 
-@st.cache_data(ttl=15, show_spinner=False)
 def rider_numbers() -> dict:
     """The rider's own numbers for the "Your number" part of a help card."""
+    from db import schema
+    return _rider_numbers(schema.current_path())
+
+
+@st.cache_data(ttl=15, show_spinner=False)
+def _rider_numbers(db_path: str) -> dict:
+    # db_path is only the cache key, so each athlete's numbers are cached apart.
     from db.queries import get_setting
     from metrics.training_load import get_current_metrics
 

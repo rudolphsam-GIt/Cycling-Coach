@@ -234,6 +234,7 @@ def start_background_compare() -> bool:
     already running."""
     if _compare_lock.locked():
         return False
+    from db import schema
 
     def run():
         try:
@@ -241,5 +242,5 @@ def start_background_compare() -> bool:
         except Exception:
             pass        # best effort; the next page load tries again
 
-    threading.Thread(target=run, name="intervals-compare", daemon=True).start()
+    threading.Thread(target=schema.pinned(run), name="intervals-compare", daemon=True).start()
     return True

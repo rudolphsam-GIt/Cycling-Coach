@@ -37,6 +37,10 @@ _CSS = """
 [data-testid="stMainBlockContainer"] { padding-top: 2.2rem; max-width: 1280px; }
 
 /* Sidebar navigation */
+.profile-badge {
+    margin: -4px 0 10px; padding: 8px 10px; border-radius: 8px; font-size: 0.82rem;
+    border: 1px solid var(--accent); color: var(--text-1);
+}
 [data-testid="stSidebar"] { border-right: 1px solid var(--border); }
 [data-testid="stSidebarNavSeparator"] { border-color: var(--border); }
 [data-testid="stNavSectionHeader"] {

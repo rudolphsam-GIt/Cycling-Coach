@@ -2,6 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import streamlit as st
+from db import schema
 from db.schema import run_migrations
 from config import is_setup_complete
 from components import inject_styles
@@ -17,13 +18,17 @@ inject_styles()
 
 
 @st.cache_resource
-def _migrate_once():
-    # Schema setup only needs to run once per server process, not every rerun.
-    run_migrations()
+def _migrate_once(path: str):
+    # Schema setup only needs to run once per database file per server process, not every rerun.
+    with schema.use(path):
+        run_migrations()
     return True
 
 
-_migrate_once()
+from components import profile_switcher  # noqa: E402
+
+profile_switcher.apply()          # which athlete's database this browser session uses
+_migrate_once(schema.current_path())
 
 
 def render_setup_needed():
@@ -61,6 +66,10 @@ def render_setup_needed():
         )
 
 
+if is_setup_complete():
+    with st.sidebar:
+        profile_switcher.render()
+
 if not is_setup_complete():
     pg = st.navigation([st.Page(render_setup_needed, title="Setup", icon=":material/directions_bike:")])
 elif not is_onboarding_complete():
@@ -89,7 +98,10 @@ else:
                     url_path="settings"),
         ],
     })
-if is_setup_complete() and is_onboarding_complete() and not st.session_state.get("auto_synced"):
+# Garmin, TrainingPeaks and intervals.icu belong to the owner's profile only.
+owner = schema.is_owner()
+
+if owner and is_setup_complete() and is_onboarding_complete() and not st.session_state.get("auto_synced"):
     # Pull new rides and recovery from Garmin once per visit, if it's been a few hours.
     st.session_state["auto_synced"] = True
     import auth.garmin as garmin_auth
@@ -99,7 +111,7 @@ if is_setup_complete() and is_onboarding_complete() and not st.session_state.get
         if result:
             st.toast(result[1])
 
-if is_setup_complete() and is_onboarding_complete():
+if owner and is_setup_complete() and is_onboarding_complete():
     # Keep the TrainingPeaks calendar in step with the plan, in the background.
     import auth.trainingpeaks as tp
     if tp.is_enabled():
