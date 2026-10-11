@@ -62,6 +62,7 @@ def save_athlete(answers: dict, fit_files=None) -> dict:
         set_setting("resting_hr_manual", int(answers["resting_hr"]) if answers.get("resting_hr") else "")
         set_setting("available_days", ",".join(days))
         set_setting("onboarding_complete", "1")
+        planning.save_target_plan(answers.get("plan_start"), answers.get("plan_weeks"))
         imported, message = 0, ""
         if fit_files:
             from auth.fit_import import import_fit_files
@@ -171,6 +172,22 @@ def render_athlete_form() -> None:
         race_name = r1.text_input("Race name", placeholder="e.g. OBRA Road Race #3", key="af_race_name")
         race_date = r2.date_input("Race date", value=None, min_value=date.today(), key="af_race_date")
 
+        st.markdown("**Their training plan**")
+        p1, p2 = st.columns([3, 2])
+        plan_start = p1.date_input("Plan start date", value=planning.next_monday(), min_value=date.today(),
+                                   key="af_plan_start",
+                                   help="The day their first plan week starts. A Monday keeps the weeks lined up.")
+        plan_weeks = p2.number_input("Plan length (weeks)", min_value=planning.PLAN_WEEKS_MIN,
+                                     max_value=planning.PLAN_WEEKS_MAX, value=planning.PLAN_WEEKS_DEFAULT,
+                                     step=1, key="af_plan_weeks")
+        if plan_start and plan_weeks:
+            span = planning.plan_span_text(plan_start, int(plan_weeks))
+            if race_date:
+                to_race = (race_date - plan_start).days / 7
+                span += (f". The race is {to_race:.0f} weeks after the start" if to_race >= 1
+                         else ". The race is before the plan starts")
+            st.caption(span + ".")
+
         st.markdown("**Their rides (optional)**")
         st.caption(HISTORY_ASK)
         fit_files = st.file_uploader(
@@ -197,6 +214,7 @@ def render_athlete_form() -> None:
                     "available_days": available_days, "weight": weight, "unit": unit, "dist_unit": dist_unit,
                     "ftp_choice": ftp_choice, "ftp_input": ftp_in, "lthr_input": lthr_in,
                     "max_hr": max_hr, "resting_hr": resting_hr, "current_ctl": ctl_in,
+                    "plan_start": plan_start, "plan_weeks": plan_weeks,
                     "race_name": race_name, "race_date": race_date,
                 }, fit_files)
             from components import profile_switcher

@@ -192,3 +192,43 @@ def generate_block(current_ctl: float, target_ctl: float, race_date: date,
             })
 
     return workouts
+
+
+# ── Target plan (set when a coach adds an athlete) ────────────────────────────
+
+PLAN_WEEKS_DEFAULT = 8
+PLAN_WEEKS_MIN, PLAN_WEEKS_MAX = 2, 60          # the same limits programs.validate uses
+
+
+def next_monday(today: date | None = None) -> date:
+    """Today if it is a Monday, else the coming Monday."""
+    today = today or date.today()
+    return today + timedelta(days=(7 - today.weekday()) % 7)
+
+
+def target_plan(today: date | None = None) -> dict | None:
+    """The plan start date and length in weeks the coach set for this athlete, with its last day.
+    None when they aren't set or the plan has already ended."""
+    from db.queries import get_setting
+    try:
+        start = date.fromisoformat(get_setting("plan_start_date", "") or "")
+        weeks = int(float(get_setting("plan_weeks", 0) or 0))
+    except (TypeError, ValueError):
+        return None
+    if not PLAN_WEEKS_MIN <= weeks <= PLAN_WEEKS_MAX:
+        return None
+    end = start + timedelta(weeks=weeks) - timedelta(days=1)
+    if end < (today or date.today()):
+        return None
+    return {"start": start, "weeks": weeks, "end": end}
+
+
+def save_target_plan(start: date | None, weeks: int | None) -> None:
+    from db.queries import set_setting
+    set_setting("plan_start_date", start.isoformat() if start and weeks else "")
+    set_setting("plan_weeks", int(weeks) if start and weeks else "")
+
+
+def plan_span_text(start: date, weeks: int) -> str:
+    end = start + timedelta(weeks=weeks) - timedelta(days=1)
+    return f"{start:%a %b} {start.day} to {end:%a %b} {end.day}, {end.year}"

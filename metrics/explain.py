@@ -702,9 +702,11 @@ def first_block_message(*, goals: list[str], experience: str, hours: float | Non
                         ftp: float | None, ftp_estimated: bool, race: dict | None = None,
                         name: str | None = None, days: float | None = None,
                         skip_test: bool = False, ride_days: list[str] | None = None,
-                        coach: str | None = None) -> str:
+                        coach: str | None = None, plan: dict | None = None) -> str:
     """The first message sent to the coach for a new rider. With `coach`, it is written by
-    that coach about the rider instead of by the rider."""
+    that coach about the rider instead of by the rider. With `plan` ({start, weeks, end}, from
+    planning.target_plan) it asks for a plan of that length from that date instead of a four
+    week first block."""
     goal_text = "; ".join(goals) if goals else "general fitness"
     i, my, me = ("they", "their", "them") if coach else ("I", "my", "me")
     time = ""
@@ -736,9 +738,17 @@ def first_block_message(*, goals: list[str], experience: str, hours: float | Non
         lines.append("Please build a guided 20 minute FTP test into the first week, after a couple of easy "
                      "days, and tell me how the rest of the block will be adjusted once we know the result. "
                      "Keep the days before the test forgiving.")
-    lines.append(
-        f"Please build {me} a first training block of about four weeks, starting easy. Explain in plain "
-        "words what the block is trying to build and why, what each week is for, and for every "
+    if plan:
+        start, end = plan["start"], plan["end"]
+        lines.append(
+            f"Please build {me} a {plan['weeks']} week training plan starting {start:%A} {start.isoformat()} "
+            f"and ending {end:%A} {end.isoformat()}, starting easy. Explain in plain "
+            "words what the plan is trying to build and why, what each week is for, and for every ")
+    else:
+        lines.append(
+            f"Please build {me} a first training block of about four weeks, starting easy. Explain in plain "
+            "words what the block is trying to build and why, what each week is for, and for every ")
+    lines[-1] += (
         f"workout what it is for, what {i} should focus on, and how it should feel. Define any "
         f"training terms the first time you use them. Include strength sessions if they fit {my} goals.")
     return " ".join(lines)

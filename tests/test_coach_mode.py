@@ -288,6 +288,67 @@ class CoachContextTests(_TempOwner):
         self.assertNotIn("—", m)
 
 
+class TargetPlanTests(_TempOwner):
+    def test_next_monday(self):
+        import planning
+        self.assertEqual(planning.next_monday(date(2026, 10, 12)), date(2026, 10, 12))   # a Monday
+        self.assertEqual(planning.next_monday(date(2026, 10, 11)), date(2026, 10, 12))   # a Sunday
+        self.assertEqual(planning.next_monday(date(2026, 10, 13)), date(2026, 10, 19))
+
+    def test_saved_plan_reads_back_with_its_last_day_and_clears(self):
+        import planning
+        start = planning.next_monday()
+        planning.save_target_plan(start, 12)
+        plan = planning.target_plan()
+        self.assertEqual((plan["start"], plan["weeks"]), (start, 12))
+        self.assertEqual(plan["end"], start + timedelta(days=83))
+        planning.save_target_plan(None, 12)
+        self.assertIsNone(planning.target_plan())
+
+    def test_a_finished_or_bad_plan_is_ignored(self):
+        import planning
+        planning.save_target_plan(date.today() - timedelta(weeks=10), 4)
+        self.assertIsNone(planning.target_plan())
+        q.set_setting("plan_start_date", "next week")
+        self.assertIsNone(planning.target_plan())
+        planning.save_target_plan(date.today(), 99)
+        self.assertIsNone(planning.target_plan())
+
+    def test_the_first_request_asks_for_that_plan(self):
+        from metrics import explain
+        plan = {"start": date(2026, 10, 19), "weeks": 12, "end": date(2027, 1, 10)}
+        m = explain.first_block_message(goals=["Ride a century"], experience="New", hours=6, days=3,
+                                        ftp=180, ftp_estimated=False, name="Alex", coach="Sam", plan=plan)
+        self.assertIn("build them a 12 week training plan starting Monday 2026-10-19 and ending "
+                      "Sunday 2027-01-10", m)
+        self.assertNotIn("four weeks", m)
+        self.assertIn("what each week is for, and for every workout what it is for", m)
+        plain = explain.first_block_message(goals=["x"], experience="New", hours=6, days=3, ftp=180,
+                                            ftp_estimated=False)
+        self.assertIn("first training block of about four weeks", plain)
+
+    def test_the_coach_sees_the_plan(self):
+        import planning
+        from coach_context import build_context
+        planning.save_target_plan(date(2026, 10, 19), 12)
+        with mock.patch("planning.date") as d:
+            d.today.return_value = date(2026, 10, 12)
+            d.fromisoformat = date.fromisoformat
+            text = build_context()
+        self.assertIn("Target plan set by their coach: 12 weeks, from Monday 2026-10-19 to Sunday 2027-01-10", text)
+
+    def test_add_athlete_saves_the_plan(self):
+        from components import athlete_form
+        import planning
+        start = planning.next_monday()
+        with mock.patch("ftp_change.apply_new_ftp"):
+            result = athlete_form.save_athlete(_answers(plan_start=start, plan_weeks=10), None)
+        with schema.use(result["path"]):
+            self.assertEqual(planning.target_plan()["weeks"], 10)
+            from components.onboarding import build_first_block_message
+            self.assertIn("a 10 week training plan starting", build_first_block_message())
+
+
 class FormTextTests(unittest.TestCase):
     def test_no_em_dashes_in_new_text(self):
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

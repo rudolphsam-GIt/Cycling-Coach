@@ -263,6 +263,16 @@ def _days_line() -> str:
             "weekdays only, including programs, and keep the long ride on a weekend day if one is listed.")
 
 
+def _plan_line() -> str:
+    from planning import target_plan
+    plan = target_plan()
+    if not plan:
+        return ""
+    s, e = plan["start"], plan["end"]
+    return (f"  Target plan set by their coach: {plan['weeks']} weeks, from {s:%A} {s.isoformat()} to "
+            f"{e:%A} {e.isoformat()}. Draft programs with this start date and length unless asked otherwise.")
+
+
 def _load_note(ctl_seed: float) -> str:
     """A warning when the training load numbers are still mostly the starting estimate."""
     days = history_days()
@@ -358,6 +368,7 @@ def build_context() -> str:
 {f"  {goal_note}" if goal_note else ""}
   Weekly training time available: {hours_str} over {days_str}. Fit plans inside this and say so if it is not enough for the goal.
 {_days_line()}
+{_plan_line()}
 
 Experience: {experience}{sex_note}
 Units: {units_note}

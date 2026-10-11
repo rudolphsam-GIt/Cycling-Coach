@@ -269,7 +269,7 @@ def build_first_block_message() -> str:
             return None
 
     from db import profiles, schema
-    from planning import parse_days
+    from planning import parse_days, target_plan
 
     races = get_races(upcoming_only=True)
     return first_block_message(
@@ -281,7 +281,7 @@ def build_first_block_message() -> str:
         skip_test=get_setting("ftp_choice", "") == "estimate",
         race=races[0] if races else None, name=get_setting("athlete_name", "") or None,
         ride_days=parse_days(get_setting("available_days", "")),
-        coach=None if schema.is_owner() else profiles.owner_name())
+        coach=None if schema.is_owner() else profiles.owner_name(), plan=target_plan())
 
 
 def _go_first_block() -> None:
@@ -294,10 +294,15 @@ def _go_first_block() -> None:
 def first_block_button(key: str) -> None:
     """Opens the coach with a first block request already written."""
     from db import schema
+    from planning import target_plan
     label, whose = ("Build my first block", "your") if schema.is_owner() else ("Build their first block", "their")
+    plan = target_plan()
+    if plan:
+        label = label.replace("first block", "plan")
+    ask = (f"a {plan['weeks']} week plan starting {plan['start']:%b} {plan['start'].day}" if plan
+           else "a four week starting block")
     if st.button(label, key=key, type="primary", icon=":material/auto_awesome:",
-                 help=f"Opens the coach with a request for a four week starting block, "
-                      f"written from {whose} goals and hours"):
+                 help=f"Opens the coach with a request for {ask}, written from {whose} goals and hours"):
         _go_first_block()
 
 

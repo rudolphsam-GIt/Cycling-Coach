@@ -138,6 +138,17 @@ with tab_profile:
         help="Generated blocks and the coach put rides only on these days, with the long ride on a "
              "weekend day when one is picked. Leave empty to plan by the number of days instead. "
              "When days are picked, the days a week setting follows them.")
+    if not schema.is_owner():
+        _plan = planning.target_plan()
+        pl1, pl2 = st.columns([3, 2])
+        plan_start = pl1.date_input(
+            "Plan start date", value=_plan["start"] if _plan else None, key="settings_plan_start",
+            placeholder="Not set", help="The day their first plan week starts. The coach drafts plans from it.")
+        plan_weeks = pl2.number_input(
+            "Plan length (weeks)", min_value=planning.PLAN_WEEKS_MIN, max_value=planning.PLAN_WEEKS_MAX,
+            value=_plan["weeks"] if _plan else None, step=1, placeholder="Not set", key="settings_plan_weeks")
+        if plan_start and plan_weeks:
+            st.caption(planning.plan_span_text(plan_start, int(plan_weeks)) + ".")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -200,6 +211,8 @@ with tab_profile:
         set_setting("weekly_hours_target", weekly_hours)
         set_setting("available_days", ",".join(available_days))
         set_setting("days_per_week", len(available_days) or days_per_week)
+        if not schema.is_owner():
+            planning.save_target_plan(plan_start, plan_weeks)
         ftp_note = ""
         if ftp != old_ftp and ftp > 0:
             # Past rides keep the FTP they were ridden at; upcoming workouts follow the new one.
