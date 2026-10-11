@@ -6,6 +6,7 @@ from datetime import date
 from components.units import distance_switch, unit_switch, weight_input
 import ftp_change
 from db.queries import set_setting, add_race
+from metrics.training_load import apply_current_ctl
 from metrics.explain import (ACTIVITY_DETAILS, ACTIVITY_LEVEL, DEFAULT_ACTIVITY, RIDER_TYPES,
                              GENDER_LABELS, GENDER_PROFILE_TABLE, DEFAULT_GENDER, experience_for, ftp_reassurance,
                              lthr_from_age, starting_ftp_range)
@@ -167,6 +168,11 @@ def render_onboarding():
             placeholder="Leave blank if you don't know it",
             help="The heart rate you can hold for about an hour of hard riding. We'll estimate it if you skip this.")
 
+        ctl_in = st.number_input(
+            "Current fitness, CTL (optional)", min_value=0, max_value=200, value=None, step=1,
+            placeholder="Leave blank if you don't know it",
+            help="Called Fitness in TrainingPeaks and intervals.icu. Not the Fitness number in Strava, which uses its own scale. Leave blank to start from your answers above.")
+
         st.markdown("**Training for a specific race? (optional)**")
         race_name = st.text_input("Race name", placeholder="e.g. OBRA Road Race #3",
                                   label_visibility="collapsed")
@@ -184,6 +190,7 @@ def render_onboarding():
                 age=age, weekly_hours=weekly_hours, days_per_week=days_per_week, weight=weight, unit=unit,
                 dist_unit=dist_unit, ftp_choice=ftp_choice, ftp_input=ftp_in, lthr_input=lthr_in,
                 race_name=race_name, race_date=race_date)
+            apply_current_ctl(ctl_in)
             set_setting("onboarding_complete", "1")
             st.session_state["onboarding_just_finished"] = goal_key_list
             st.rerun()

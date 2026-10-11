@@ -68,6 +68,32 @@ def _span(days: int) -> str:
     return f"{round(days / 30.4)} months"
 
 
+def seed_for_ctl(target: float, today: date | None = None) -> float:
+    """The starting fitness that makes today's CTL read `target`, given the rides already in.
+    The seed fades the longer the history, so with months of rides it is solved from a small
+    remainder; it is kept between 0 and twice the target so early history stays believable."""
+    today = today or date.today()
+    from_rides = compute_pmc(today, today, 0.0, 0.0)["ctl"].iloc[-1]
+    from db.queries import first_activity_date
+    first = first_activity_date()
+    days = (today - date.fromisoformat(first[:10])).days + 1 if first else 1
+    left = (1 - CTL_ALPHA) ** max(days, 1)
+    return round(min(max((target - from_rides) / left, 0.0), 2 * target), 1)
+
+
+def apply_current_ctl(target: float | None) -> float | None:
+    """Set the starting fitness from a CTL the rider already knows (TrainingPeaks or intervals.icu
+    call it Fitness), so today's CTL here matches it. Fatigue starts level with it. Call after
+    their rides are in. Returns the seed, or None when no CTL was given."""
+    from db.queries import set_setting
+    if not target or target <= 0:
+        return None
+    seed = seed_for_ctl(float(target))
+    set_setting("ctl_start", seed)
+    set_setting("atl_start", seed)
+    return seed
+
+
 def history_days(today: date | None = None) -> int:
     """Days of activity history up to today, 0 when there is none."""
     from db.queries import first_activity_date

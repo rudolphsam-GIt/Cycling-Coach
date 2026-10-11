@@ -152,6 +152,12 @@ class AthleteFormSaveTests(_TempOwner):
             self.assertEqual([r["name"] for r in q.get_races(upcoming_only=True)], ["Gran Fondo"])
         self.assertEqual(result["imported"], 2)
 
+    def test_a_known_ctl_is_matched_after_their_rides_are_in(self):
+        result, _ = self._save(ride_days_ago=[2, 9, 16, 23, 30], current_ctl=48)
+        with schema.use(result["path"]):
+            from metrics.training_load import compute_pmc
+            self.assertAlmostEqual(compute_pmc(date.today(), date.today())["ctl"].iloc[-1], 48, delta=0.1)
+
     def test_six_weeks_of_rides_keep_the_seed(self):
         result, _ = self._save(ride_days_ago=[2, 20, 45])
         self.assertEqual(result["history_days"], 45)
@@ -187,6 +193,45 @@ class SeedRuleTests(_TempOwner):
         today = date.today()
         ctl = compute_pmc(today - timedelta(days=1), today)["ctl"].iloc[-1]
         self.assertAlmostEqual(ctl, 50, delta=0.5)
+
+
+class CurrentCtlTests(_TempOwner):
+    """A CTL the rider already knows sets the seed so today's fitness here matches it."""
+    def ctl_today(self):
+        from metrics.training_load import compute_pmc
+        return compute_pmc(date.today(), date.today())["ctl"].iloc[-1]
+
+    def test_no_rides_reads_the_number_given(self):
+        from metrics.training_load import apply_current_ctl
+        apply_current_ctl(60)
+        self.assertAlmostEqual(self.ctl_today(), 60, delta=0.1)
+        self.assertEqual(q.get_setting("atl_start"), q.get_setting("ctl_start"))
+
+    def test_rides_are_counted_and_the_rest_comes_from_the_seed(self):
+        from metrics.training_load import apply_current_ctl
+        for ago in range(0, 42, 2):
+            _add_ride(ago, tss=80)
+        seed = apply_current_ctl(55)
+        self.assertGreater(seed, 0)
+        self.assertAlmostEqual(self.ctl_today(), 55, delta=0.1)
+
+    def test_a_number_below_what_the_rides_show_starts_from_zero(self):
+        from metrics.training_load import apply_current_ctl
+        for ago in range(42):
+            _add_ride(ago, tss=100)
+        self.assertEqual(apply_current_ctl(20), 0)
+
+    def test_long_history_keeps_the_seed_believable(self):
+        from metrics.training_load import seed_for_ctl
+        _add_ride(300, tss=50)
+        self.assertEqual(seed_for_ctl(70), 140)
+
+    def test_blank_changes_nothing(self):
+        from metrics.training_load import apply_current_ctl
+        q.set_setting("ctl_start", 45)
+        self.assertIsNone(apply_current_ctl(None))
+        self.assertIsNone(apply_current_ctl(0))
+        self.assertEqual(q.get_setting("ctl_start"), "45")
 
 
 class HistoryNoteTests(unittest.TestCase):

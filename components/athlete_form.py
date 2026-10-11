@@ -17,7 +17,7 @@ from db.queries import get_setting, set_setting
 from metrics.explain import (ACTIVITY_DETAILS, ACTIVITY_LEVEL, DEFAULT_ACTIVITY, DEFAULT_GENDER,
                              GENDER_LABELS, RIDER_TYPES, starting_ftp_range)
 from metrics.units import DISTANCE_UNITS, UNITS
-from metrics.training_load import HISTORY_ASK, history_days, history_note
+from metrics.training_load import HISTORY_ASK, apply_current_ctl, history_days, history_note
 
 OPEN_KEY = "adding_athlete"
 
@@ -66,6 +66,7 @@ def save_athlete(answers: dict, fit_files=None) -> dict:
         if fit_files:
             from auth.fit_import import import_fit_files
             imported, message = import_fit_files(fit_files)
+        apply_current_ctl(answers.get("current_ctl"))         # after the rides, which it accounts for
         days = history_days() if imported else 0
     return {**p, "imported": imported, "message": message, "history_days": days}
 
@@ -149,6 +150,11 @@ def render_athlete_form() -> None:
                        f"watts. They will start at {start['start']:.0f} W, refined from their rides"
                        + (" and the test." if ftp_choice == "test" else "."))
 
+        ctl_in = st.number_input(
+            "Current fitness, CTL (optional)", min_value=0, max_value=200, value=None, step=1,
+            placeholder="From their experience", key="af_ctl",
+            help="Called Fitness in TrainingPeaks and intervals.icu. Not the Fitness number in Strava, which uses its own scale. Leave blank to start from their experience.")
+
         st.markdown("**Heart rate**")
         h1, h2, h3 = st.columns(3)
         lthr_in = h1.number_input("Threshold HR", min_value=0, max_value=220, value=None, step=1,
@@ -190,7 +196,7 @@ def render_athlete_form() -> None:
                     "activity": activity, "gender": gender, "age": age, "weekly_hours": weekly_hours,
                     "available_days": available_days, "weight": weight, "unit": unit, "dist_unit": dist_unit,
                     "ftp_choice": ftp_choice, "ftp_input": ftp_in, "lthr_input": lthr_in,
-                    "max_hr": max_hr, "resting_hr": resting_hr,
+                    "max_hr": max_hr, "resting_hr": resting_hr, "current_ctl": ctl_in,
                     "race_name": race_name, "race_date": race_date,
                 }, fit_files)
             from components import profile_switcher
