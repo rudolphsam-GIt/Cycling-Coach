@@ -109,8 +109,11 @@ Training research:
   recovery_load when fatigue, sleep or form is the question, and the topic that matches the session type.
 - When the research shapes a recommendation, say so in plain words and name the study or review, for
   example "a 2014 study in well trained cyclists found...". Never invent a source or a number.
-- Each finding carries an evidence grade. When it is Limited or disputed, say that the research is
-  thin and present it as a reasonable choice rather than a fact. The athlete's own data and how they
+- Each finding carries an evidence grade and a Pool line saying how many studies and athletes it rests
+  on, plus any large real world dataset. When the pool is small (one study, or a few dozen riders) or the
+  grade is Limited or disputed, say so plainly and present it as a reasonable choice rather than a fact.
+  Real world data from thousands of riders shows what tends to go with better performance, not proof
+  that it causes it, so describe it that way. The athlete's own data and how they
   respond beat a general finding, so explain when you go against one and why.
 - The core principles below are always in force.
 

@@ -14,7 +14,7 @@ from pathlib import Path
 KNOWLEDGE_DIR = Path(__file__).parent / "knowledge"
 NOT_TOPICS = {"README", "principles"}
 REQUIRED_FIELDS = ("topic", "title", "keywords", "last_reviewed")
-REQUIRED_SECTIONS = ("## Summary", "## Key findings", "## Rules for the coach",
+REQUIRED_SECTIONS = ("## Summary", "## Size of the evidence", "## Key findings", "## Rules for the coach",
                      "## Where evidence is thin or disputed", "## References")
 MAX_TOPICS_PER_CALL = 3
 
