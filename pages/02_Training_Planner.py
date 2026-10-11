@@ -502,7 +502,6 @@ def open_item(kind: str, item_id) -> None:
     st.session_state[plan_cal.OPEN_KEY] = {"kind": kind, "id": item_id}
 
 
-@st.dialog("Planned and ridden", width="large")
 def rpe_picker(w: dict, key: str) -> None:
     """How hard the workout felt, 1 to 10, saved as soon as it is picked."""
     def save():
@@ -532,6 +531,7 @@ def over_plan_review(w: dict, ride: dict) -> None:
         st.rerun()
 
 
+@st.dialog("Planned and ridden", width="large")
 def compare_dialog(item_id) -> None:
     """A done workout: what was planned next to the ride that did it."""
     w = get_workout(int(item_id)) if item_id is not None else None
