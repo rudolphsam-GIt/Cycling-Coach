@@ -162,9 +162,9 @@ def generate_block(current_ctl: float, target_ctl: float, race_date: date,
         week_start = today + timedelta(weeks=wk)
         for day_offset in range(7):
             w_date = week_start + timedelta(days=day_offset)
-            # With chosen weekdays each date takes that weekday's session. Without them the
-            # template simply runs from the start date, as it always has.
-            _, w_type, weight_frac = tmpl[w_date.weekday()] if days else tmpl[day_offset]
+            # Each date takes its own weekday's session, so the long ride stays on the weekend
+            # whatever day the block starts on.
+            _, w_type, weight_frac = tmpl[w_date.weekday()]
             if not w_type or weight_frac == 0:
                 continue
             day_tss = round(week_tss * (weight_frac / total_weight))
