@@ -205,7 +205,7 @@ Strength sessions and races also get their own markers on the day they happen. T
 3. Send a workout to Garmin, or download it as a `.fit` file.
 4. Add a workout on that day. Pick the date, type, and training stress, and write a description.
 
-**One thing to know.** The calendar matches planned workouts to rides by date only. If you planned a workout for Tuesday and rode on Tuesday, it counts as done, even if the ride was a different workout. Planned workouts are not tied to specific rides. If you do two rides in one day, both count toward that day's total. The status colors are worked out when you look at the calendar and are never saved, so they always reflect the latest ride data.
+**One thing to know.** The calendar matches planned workouts to rides on the same day. If you planned a workout for Tuesday and rode on Tuesday, it counts as done. If you ride more than once that day, the biggest ride goes with the biggest workout, and you can open the workout and pick the right ride under **Ridden as**. That choice is kept, and the comparison, the done and over plan marks, the ride analysis and your coach all use it. Both rides still count toward the day's total. The status colors are worked out when you look at the calendar and are never saved, so they always reflect the latest ride data.
 
 ## Chatting with the coach
 

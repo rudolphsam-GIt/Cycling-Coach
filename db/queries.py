@@ -639,6 +639,14 @@ def set_key_session(wid: int, on: bool) -> None:
     conn.close()
 
 
+def link_workout(wid: int, activity_id: int | None) -> None:
+    """Say which ride did a planned workout, or None to let the calendar choose again."""
+    conn = get_conn()
+    conn.execute("UPDATE workouts SET activity_id=? WHERE id=?", (activity_id, wid))
+    conn.commit()
+    conn.close()
+
+
 def set_rpe(wid: int, rpe: int | None) -> None:
     """How hard the athlete says a workout felt, 1 to 10, or None to clear it."""
     if rpe is not None and not 1 <= int(rpe) <= 10:

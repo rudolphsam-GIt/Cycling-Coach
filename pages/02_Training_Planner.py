@@ -14,7 +14,8 @@ from db.queries import (get_workouts, add_workout, update_workout, delete_workou
                          get_setting, get_races, WORKOUT_TYPES,
                          get_workout, get_strength_session, delete_strength_session, garmin_status, save_message, get_conversation_history, get_conversation_window,
                          get_memories, forget_memory, save_phase_notes, get_phase_notes, set_key_session,
-                         set_rpe, get_my_workouts, delete_my_workout)
+                         set_rpe, get_my_workouts, delete_my_workout,
+                         link_workout)
 import auth.garmin as garmin_auth
 import exporters
 import garmin_workouts
@@ -539,6 +540,21 @@ def compare_dialog(item_id) -> None:
         return
     ride = _paired_ride(w)
     st.markdown(f"### :green[:material/check_box:] {w['name']}")
+    day_rides = plan_cal.get_day(w["date"], st.session_state.get(plan_cal.MONTH_DAYS_KEY)).rides
+    if ride and len(day_rides) > 1:
+        def label(r):
+            tss = f", {r['tss']:.0f} TSS" if r.get("tss") else ""
+            return f"{r.get('name') or 'Ride'}{tss}"
+        ids = [r["id"] for r in day_rides]
+
+        def relink():
+            link_workout(w["id"], st.session_state["cmp_link"])
+            st.session_state.pop(plan_cal.MONTH_DAYS_KEY, None)    # read the new pairing fresh
+        st.selectbox("Ridden as", ids, index=ids.index(ride["id"]), key="cmp_link",
+                     format_func=lambda i: label(next(r for r in day_rides if r["id"] == i)),
+                     on_change=relink,
+                     help="You rode more than once this day. Pick the ride that did this workout and the "
+                          "comparison, the done and over plan marks, and your coach all use it.")
     st.caption(f"{fmt_day(w['date'])} · " + workout_summary(w)
                + (f" · Ridden as {ride.get('name') or 'a ride'}" if ride else ""))
     workout_compare.render(w, ride, key=f"cmp_{w['id']}")

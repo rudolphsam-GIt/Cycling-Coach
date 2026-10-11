@@ -132,17 +132,23 @@ def is_over_plan(workout: dict, ride: dict | None) -> bool:
 
 
 def pair_day(planned: list, rides: list, day: date, today: date) -> tuple[list, list]:
-    """Match one day's rides to its planned workouts. Workouts and rides are matched by
-    date (the app has no other link), so on a day with several of each the biggest ride
-    goes with the biggest workout, by TSS (or ride time when a ride has no TSS). Workouts
-    already marked done come first. Returns (pairs, unplanned rides), with pairs in the
-    order the workouts were given."""
-    w_order = sorted(range(len(planned)),
-                     key=lambda i: (not planned[i].get("completed"),
-                                    -(_num(planned[i].get("tss_planned")) or 0.0), i))
-    r_order = sorted(range(len(rides)), key=lambda i: (-_ride_size(rides[i]), i))
+    """Match one day's rides to its planned workouts. A workout linked to one of the day's rides
+    (its activity_id, set when the athlete picks the ride) gets that ride. The rest are matched
+    by size, so on a day with several of each the biggest ride goes with the biggest workout, by
+    TSS (or ride time when a ride has no TSS). Workouts already marked done come first. Returns
+    (pairs, unplanned rides), with pairs in the order the workouts were given."""
     ride_for = {}
     if day <= today:
+        index_of = {r.get("id"): i for i, r in enumerate(rides) if r.get("id") is not None}
+        for wi, w in enumerate(planned):
+            ri = index_of.get(w.get("activity_id"))
+            if ri is not None and ri not in ride_for.values():
+                ride_for[wi] = ri
+        w_order = sorted((i for i in range(len(planned)) if i not in ride_for),
+                         key=lambda i: (not planned[i].get("completed"),
+                                        -(_num(planned[i].get("tss_planned")) or 0.0), i))
+        r_order = sorted((i for i in range(len(rides)) if i not in ride_for.values()),
+                         key=lambda i: (-_ride_size(rides[i]), i))
         for wi, ri in zip(w_order, r_order):
             ride_for[wi] = ri
     used = set(ride_for.values())

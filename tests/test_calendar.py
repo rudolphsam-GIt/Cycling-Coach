@@ -406,3 +406,28 @@ class OverPlanTests(unittest.TestCase):
             self.assertEqual(c.derive_status(day, today, [w], [r], 60, ridden), "over" if over else "done")
         self.assertFalse(c.is_over_plan(w, None))
         self.assertFalse(c.is_over_plan({"tss_planned": None}, {"tss": 200}))
+
+
+class LinkedRideTests(unittest.TestCase):
+    def test_a_linked_ride_wins_over_the_size_rule(self):
+        from components import calendar as c
+        day, today = date(2026, 10, 5), date(2026, 10, 6)
+        big = {"id": 1, "date": day.isoformat(), "name": "Long ride", "tss_planned": 150}
+        small = {"id": 2, "date": day.isoformat(), "name": "Openers", "tss_planned": 30}
+        commute = {"id": 10, "date": day.isoformat(), "name": "Commute", "tss": 25}
+        group = {"id": 11, "date": day.isoformat(), "name": "Group ride", "tss": 160}
+        pairs, extra = c.pair_day([big], [commute, group], day, today)
+        self.assertEqual(pairs[0]["ride"]["id"], 11)                    # by size, the group ride
+        pairs, extra = c.pair_day([{**big, "activity_id": 10}], [commute, group], day, today)
+        self.assertEqual(pairs[0]["ride"]["id"], 10)                    # the athlete said the commute
+        self.assertEqual([r["id"] for r in extra], [11])
+        pairs, _ = c.pair_day([big, {**small, "activity_id": 11}], [commute, group], day, today)
+        self.assertEqual({p["workout"]["id"]: p["ride"]["id"] for p in pairs}, {1: 10, 2: 11})
+
+    def test_a_link_to_a_ride_that_is_gone_falls_back(self):
+        from components import calendar as c
+        day, today = date(2026, 10, 5), date(2026, 10, 6)
+        w = {"id": 1, "date": day.isoformat(), "name": "Endurance", "tss_planned": 60, "activity_id": 99}
+        r = {"id": 10, "date": day.isoformat(), "name": "Ride", "tss": 55}
+        pairs, _ = c.pair_day([w], [r], day, today)
+        self.assertEqual(pairs[0]["ride"]["id"], 10)

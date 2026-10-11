@@ -292,3 +292,12 @@ class RpeTests(Base):
         self.assertIsNone(q.get_workout(wid)["rpe"])
         with self.assertRaises(ValueError):
             q.set_rpe(wid, 11)
+
+
+class LinkTests(Base):
+    def test_link_and_unlink(self):
+        wid = self.ride(D(-1))
+        q.link_workout(wid, 42)
+        self.assertEqual(q.get_workout(wid)["activity_id"], 42)
+        q.link_workout(wid, None)
+        self.assertIsNone(q.get_workout(wid)["activity_id"])
