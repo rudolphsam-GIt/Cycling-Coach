@@ -171,6 +171,14 @@ class StorageTests(unittest.TestCase):
 
 
 class DisplayTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        p = mock.patch.object(schema, "DB_PATH", os.path.join(self.tmp.name, "t.db"))
+        p.start()
+        self.addCleanup(p.stop)
+        self.addCleanup(self.tmp.cleanup)
+        schema.run_migrations()
+
     def test_tooltip_shows_purpose_and_feel_escaped(self):
         w = {"id": 1, "date": SOON, "name": "Easy", "workout_type": "Endurance", "tss_planned": 40,
              "completed": 0, "description": "", "purpose": "Builds <b>base</b> & more",
@@ -183,6 +191,7 @@ class DisplayTests(unittest.TestCase):
 
     def test_garmin_description_carries_feel_and_purpose(self):
         import garmin_workouts
+        q.set_setting("ftp_watts", "250")
         kind = sorted(garmin_workouts.STEP_KINDS)[0]
         steps = [{"kind": kind, "minutes": 30, "low_pct": 60, "high_pct": 70}]
         payload = garmin_workouts.to_garmin_json(

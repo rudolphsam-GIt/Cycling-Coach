@@ -113,6 +113,14 @@ class MathTests(unittest.TestCase):
 
 
 class SummaryTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        p = mock.patch.object(schema, "DB_PATH", os.path.join(self.tmp.name, "t.db"))
+        p.start()
+        self.addCleanup(p.stop)
+        self.addCleanup(self.tmp.cleanup)
+        schema.run_migrations()
+
     def test_stored_numbers_win_and_gaps_are_filled_from_the_streams(self):
         from components import ride_analysis as ra
         act = {"duration_seconds": 3600, "distance_meters": 30000, "elevation_gain_meters": 300, "tss": 60,
