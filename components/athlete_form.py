@@ -17,7 +17,7 @@ from db.queries import get_setting, set_setting
 from metrics.explain import (ACTIVITY_DETAILS, ACTIVITY_LEVEL, DEFAULT_ACTIVITY, DEFAULT_GENDER,
                              GENDER_LABELS, RIDER_TYPES, starting_ftp_range)
 from metrics.units import DISTANCE_UNITS, UNITS
-from metrics.training_load import HISTORY_ASK, history_days, history_note, rides_cover_seed
+from metrics.training_load import HISTORY_ASK, history_days, history_note
 
 OPEN_KEY = "adding_athlete"
 
@@ -49,9 +49,8 @@ def is_open() -> bool:
 
 def save_athlete(answers: dict, fit_files=None) -> dict:
     """Create the athlete's profile and fill it in. Settings and FTP go in first, so ride files
-    imported afterwards are scored on their FTP and heart rates. When the files reach back six
-    weeks or more, the starting fitness seed is dropped so it doesn't count on top of the rides.
-    Returns the new profile plus {imported, message, seed_reset}."""
+    imported afterwards are scored on their FTP and heart rates. The starting fitness seed stays and
+    fades out as the rides build fitness. Returns the new profile plus {imported, message, history_days}."""
     days = planning.parse_days(answers.get("available_days"))
     shared = {k: answers.get(k) for k in _SHARED}
     shared["days_per_week"] = len(days) or answers.get("days_per_week") or len(DEFAULT_DAYS)
@@ -63,26 +62,18 @@ def save_athlete(answers: dict, fit_files=None) -> dict:
         set_setting("resting_hr_manual", int(answers["resting_hr"]) if answers.get("resting_hr") else "")
         set_setting("available_days", ",".join(days))
         set_setting("onboarding_complete", "1")
-        imported, message, seed_reset = 0, "", False
+        imported, message = 0, ""
         if fit_files:
             from auth.fit_import import import_fit_files
             imported, message = import_fit_files(fit_files)
-            if imported and rides_cover_seed():
-                set_setting("ctl_start", 0)
-                set_setting("atl_start", 0)
-                seed_reset = True
         days = history_days() if imported else 0
-    return {**p, "imported": imported, "message": message, "seed_reset": seed_reset, "history_days": days}
+    return {**p, "imported": imported, "message": message, "history_days": days}
 
 
 def _rides_note(result: dict) -> str:
     if not result["imported"]:
         return result["message"]
     note = result["message"]
-    if result["seed_reset"]:
-        note += " Their rides go back six weeks or more, so fitness is worked out from the rides alone."
-    else:
-        note += " Their fitness starts from an estimate until more rides are in."
     if (more := history_note(result.get("history_days", 0))):
         note += " " + more
     return note

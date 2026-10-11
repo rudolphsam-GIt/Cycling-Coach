@@ -151,17 +151,14 @@ class AthleteFormSaveTests(_TempOwner):
             self.assertEqual(s["ctl_start"], "25")          # short history keeps the experience seed
             self.assertEqual([r["name"] for r in q.get_races(upcoming_only=True)], ["Gran Fondo"])
         self.assertEqual(result["imported"], 2)
-        self.assertFalse(result["seed_reset"])
 
-    def test_six_weeks_of_rides_replace_the_seed(self):
+    def test_six_weeks_of_rides_keep_the_seed(self):
         result, _ = self._save(ride_days_ago=[2, 20, 45])
-        self.assertTrue(result["seed_reset"])
         self.assertEqual(result["history_days"], 45)
         from components.athlete_form import _rides_note
         self.assertIn("Rides go back 6 weeks, enough for fitness", _rides_note(result))
         with schema.use(result["path"]):
-            self.assertEqual(float(q.get_setting("ctl_start")), 0)
-            self.assertEqual(float(q.get_setting("atl_start")), 0)
+            self.assertEqual(float(q.get_setting("ctl_start")), 25)
 
     def test_no_files_and_estimated_ftp(self):
         result, calls = self._save(files=None, ftp_choice="estimate", ftp_input=None, max_hr=None,
@@ -178,13 +175,18 @@ class AthleteFormSaveTests(_TempOwner):
 
 
 class SeedRuleTests(_TempOwner):
-    def test_rides_cover_seed(self):
-        from metrics.training_load import rides_cover_seed
-        self.assertFalse(rides_cover_seed())
-        _add_ride(41)
-        self.assertFalse(rides_cover_seed())
-        _add_ride(42)
-        self.assertTrue(rides_cover_seed())
+    def test_a_steady_rider_reads_at_their_level_after_six_weeks(self):
+        """Six weeks of 50 TSS a day from a rider seeded at 50 reads 50. Dropping the seed
+        would start from zero and read about a third low."""
+        from datetime import date, timedelta
+        from metrics.training_load import compute_pmc
+        q.set_setting("ctl_start", 50)
+        q.set_setting("atl_start", 50)
+        for ago in range(42):
+            _add_ride(ago, tss=50)
+        today = date.today()
+        ctl = compute_pmc(today - timedelta(days=1), today)["ctl"].iloc[-1]
+        self.assertAlmostEqual(ctl, 50, delta=0.5)
 
 
 class HistoryNoteTests(unittest.TestCase):
