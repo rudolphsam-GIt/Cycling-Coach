@@ -215,7 +215,7 @@ class TooltipTests(unittest.TestCase):
             today=date(2026, 10, 15))
         tip = cal.day_tooltip(days["2026-10-05"])
         for needle in ("Mon 5 Oct 2026", "(Done)", "<b>Planned</b>", "Threshold 4x8",
-                       "90 TSS", "<b>Done</b>", "Morning ride", "1:00", "30.0 km", "200 W avg",
+                       "90 TSS", "<b>Ridden</b>", "done as Morning ride", "Morning ride", "1:00", "30.0 km", "200 W avg",
                        "NP 215", "IF 0.82", "Planned 90 TSS, Actual 70 TSS (78%)"):
             self.assertIn(needle, tip)
 
@@ -263,7 +263,7 @@ class PayloadTests(unittest.TestCase):
         locked = lambda iso: {(c["kind"], c["id"]): c["locked"] for c in self.day(p, iso)["chips"]}
         self.assertEqual(locked("2026-10-05"), {("ride", 1): False})      # skipped, so it can be moved
         self.assertEqual(locked("2026-10-20"), {("ride", 2): False})
-        self.assertEqual(locked("2026-10-21"), {("ride", 3): True})
+        self.assertEqual(locked("2026-10-21"), {("compare", 3): True})   # done, opens plan vs ride
         self.assertEqual(locked("2026-10-22"), {("strength", 7): False})
         self.assertEqual(locked("2026-10-23"), {("strength", 8): True})
         self.assertEqual(locked("2026-10-16"), {("done", 9): True})
@@ -294,6 +294,100 @@ class PayloadTests(unittest.TestCase):
         self.assertEqual(t["plan_to_date"], 100)
         self.assertEqual(t["actual"], 80)   # Sept 30 is outside the month
         self.assertEqual(t["rides"], 1)
+
+
+
+class PairingTests(unittest.TestCase):
+    """Which ride goes with which planned workout, and how each workout reads on the grid."""
+    TODAY = date(2026, 10, 15)
+
+    def pairs(self, iso, workouts=(), activities=()):
+        return build(workouts=workouts, activities=activities, today=self.TODAY)[iso]
+
+    def test_one_workout_one_ride_pair_up(self):
+        d = self.pairs("2026-10-05", [W("2026-10-05", id=1)], [A("2026-10-05", id=9)])
+        self.assertEqual(len(d.pairs), 1)
+        self.assertEqual(d.pairs[0]["ride"]["id"], 9)
+        self.assertEqual(d.pairs[0]["state"], "done")
+        self.assertEqual(d.unplanned, [])
+
+    def test_ride_with_no_plan_is_unplanned(self):
+        d = self.pairs("2026-10-06", activities=[A("2026-10-06", id=9)])
+        self.assertEqual(d.pairs, [])
+        self.assertEqual([r["id"] for r in d.unplanned], [9])
+
+    def test_biggest_ride_goes_with_biggest_workout(self):
+        d = self.pairs("2026-10-05",
+                       [W("2026-10-05", name="Spin", tss=30, id=1), W("2026-10-05", name="Long", tss=150, id=2)],
+                       [A("2026-10-05", name="Coffee", tss=25, id=8), A("2026-10-05", name="Big day", tss=140, id=9)])
+        ride_of = {p["workout"]["id"]: p["ride"]["id"] for p in d.pairs}
+        self.assertEqual(ride_of, {2: 9, 1: 8})
+        self.assertEqual([p["workout"]["id"] for p in d.pairs], [1, 2])   # order kept
+
+    def test_extra_ride_on_a_planned_day_stays_unplanned(self):
+        d = self.pairs("2026-10-05", [W("2026-10-05", tss=90, id=1)],
+                       [A("2026-10-05", name="Commute", tss=15, id=8), A("2026-10-05", name="Intervals", tss=85, id=9)])
+        self.assertEqual(d.pairs[0]["ride"]["id"], 9)
+        self.assertEqual([r["id"] for r in d.unplanned], [8])
+
+    def test_ride_without_tss_ranked_by_time(self):
+        d = self.pairs("2026-10-05", [W("2026-10-05", id=1)],
+                       [A("2026-10-05", tss=None, duration_seconds=1200, id=8),
+                        A("2026-10-05", tss=None, duration_seconds=7200, id=9)])
+        self.assertEqual(d.pairs[0]["ride"]["id"], 9)
+
+    def test_marked_done_workout_gets_the_ride_first(self):
+        d = self.pairs("2026-10-05", [W("2026-10-05", tss=200, id=1), W("2026-10-05", tss=50, completed=1, id=2)],
+                       [A("2026-10-05", id=9)])
+        ride_of = {p["workout"]["id"]: p["ride"] and p["ride"]["id"] for p in d.pairs}
+        self.assertEqual(ride_of, {1: None, 2: 9})
+        self.assertEqual([p["state"] for p in d.pairs], ["missed", "done"])
+
+    def test_states(self):
+        self.assertEqual(self.pairs("2026-10-05", [W("2026-10-05")]).pairs[0]["state"], "missed")
+        self.assertEqual(self.pairs("2026-10-20", [W("2026-10-20")]).pairs[0]["state"], "planned")
+        self.assertEqual(self.pairs("2026-10-15", [W("2026-10-15")]).pairs[0]["state"], "planned")   # today
+        self.assertEqual(self.pairs("2026-10-05", [W("2026-10-05", completed=1)]).pairs[0]["state"], "done")
+        # Done early from the edit dialog, on a day still to come.
+        self.assertEqual(self.pairs("2026-10-20", [W("2026-10-20", completed=1)]).pairs[0]["state"], "done")
+
+    def test_future_ride_is_never_paired(self):
+        # Rides are never dated ahead, but a clock or time zone slip must not tick a future workout.
+        d = self.pairs("2026-10-20", [W("2026-10-20", id=1)], [A("2026-10-20", id=9)])
+        self.assertIsNone(d.pairs[0]["ride"])
+        self.assertEqual(d.pairs[0]["state"], "planned")
+
+    def chips(self, iso, workouts=(), activities=()):
+        days = build(workouts=workouts, activities=activities, today=self.TODAY)
+        p = cal.build_payload(days, None, self.TODAY)
+        return next(d for d in p["days"] if d["date"] == iso)["chips"]
+
+    def test_done_workout_and_its_ride_are_one_chip(self):
+        chips = self.chips("2026-10-05", [W("2026-10-05", name="Threshold", tss=90, id=1)],
+                           [A("2026-10-05", name="Morning ride", tss=84, id=9)])
+        self.assertEqual(len(chips), 1)
+        c = chips[0]
+        self.assertEqual((c["kind"], c["id"], c["state"], c["locked"]), ("compare", 1, "done", True))
+        self.assertEqual(c["tss"], 84)            # the TSS ridden
+        self.assertEqual(c["color"], cal.theme.GOOD)
+
+    def test_chip_states_and_kinds(self):
+        def one(iso, **kw):
+            (c,) = self.chips(iso, **kw)
+            return c["kind"], c["state"], c["locked"]
+        self.assertEqual(one("2026-10-05", workouts=[W("2026-10-05", id=1)]), ("ride", "missed", False))
+        self.assertEqual(one("2026-10-20", workouts=[W("2026-10-20", id=1)]), ("ride", "planned", False))
+        self.assertEqual(one("2026-10-06", activities=[A("2026-10-06", id=9)]), ("done", "extra", True))
+        self.assertEqual(one("2026-10-07", workouts=[W("2026-10-07", completed=1, id=1)]),
+                         ("compare", "done", True))
+
+    def test_planned_chip_shows_planned_tss(self):
+        (c,) = self.chips("2026-10-20", [W("2026-10-20", tss=75, id=1)])
+        self.assertEqual(c["tss"], 75)
+
+    def test_tooltip_marks_state(self):
+        days = build(workouts=[W("2026-10-05", name="Skipped")], today=self.TODAY)
+        self.assertIn("Skipped (Endurance), 60 TSS, missed", cal.day_tooltip(days["2026-10-05"]))
 
 
 if __name__ == "__main__":

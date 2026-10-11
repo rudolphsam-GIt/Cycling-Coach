@@ -5,7 +5,9 @@ Pure part: build_month_data turns workouts, activities, strength sessions and
 races into one DayData per date of the displayed grid (Monday first, including
 the leading and trailing days of the neighbouring months). The status of each
 day is derived from those inputs and never written to the database. Matching is
-by date only, because planned workouts are not linked to activities.
+by date only, because planned workouts are not linked to activities. Within a day,
+pair_day puts each ride with one planned workout (biggest with biggest), so a
+completed workout and the ride that did it show as one item with a green check.
 
 build_payload turns that data into the JSON the interactive grid draws.
 
@@ -52,6 +54,8 @@ class DayData:
     planned_tss: float = 0.0
     actual_tss: float = 0.0
     status: str = "rest"
+    pairs: list = field(default_factory=list)     # {"workout", "ride" or None, "state"} per planned
+    unplanned: list = field(default_factory=list) # rides not paired with a planned workout
 
 
 # ── Small helpers ─────────────────────────────────────────────────────────────
@@ -104,6 +108,41 @@ def derive_status(day: date, today: date, planned: list, rides: list,
     return "extra" if rides else "rest"
 
 
+def _ride_size(r: dict) -> float:
+    tss = _num(r.get("tss"))
+    return tss if tss is not None else (_num(r.get("duration_seconds")) or 0.0) / 36.0
+
+
+def workout_state(workout: dict, ride: dict | None, day: date, today: date) -> str:
+    """'done' when the workout is marked done or a ride on its day was paired with it,
+    'missed' when its day has passed without either, 'planned' otherwise."""
+    if workout.get("completed") or (ride is not None and day <= today):
+        return "done"
+    return "missed" if day < today else "planned"
+
+
+def pair_day(planned: list, rides: list, day: date, today: date) -> tuple[list, list]:
+    """Match one day's rides to its planned workouts. Workouts and rides are matched by
+    date (the app has no other link), so on a day with several of each the biggest ride
+    goes with the biggest workout, by TSS (or ride time when a ride has no TSS). Workouts
+    already marked done come first. Returns (pairs, unplanned rides), with pairs in the
+    order the workouts were given."""
+    w_order = sorted(range(len(planned)),
+                     key=lambda i: (not planned[i].get("completed"),
+                                    -(_num(planned[i].get("tss_planned")) or 0.0), i))
+    r_order = sorted(range(len(rides)), key=lambda i: (-_ride_size(rides[i]), i))
+    ride_for = {}
+    if day <= today:
+        for wi, ri in zip(w_order, r_order):
+            ride_for[wi] = ri
+    used = set(ride_for.values())
+    pairs = []
+    for i, w in enumerate(planned):
+        ride = rides[ride_for[i]] if i in ride_for else None
+        pairs.append({"workout": w, "ride": ride, "state": workout_state(w, ride, day, today)})
+    return pairs, [r for i, r in enumerate(rides) if i not in used]
+
+
 def grid_dates(year: int, month: int) -> list[date]:
     """Every date shown in the month grid, Monday first."""
     return [d for week in pycal.Calendar(0).monthdatescalendar(year, month) for d in week]
@@ -137,6 +176,7 @@ def build_month_data(year: int, month: int, workouts: list, activities: list,
         dd.actual_tss = sum(_num(r.get("tss")) or 0.0 for r in dd.rides)
         dd.status = derive_status(date.fromisoformat(iso), today, dd.planned,
                                   dd.rides, dd.planned_tss, dd.actual_tss)
+        dd.pairs, dd.unplanned = pair_day(dd.planned, dd.rides, date.fromisoformat(iso), today)
     return days
 
 
@@ -218,15 +258,21 @@ def day_tooltip(day: DayData, unit: str = "km") -> str:
 
     if day.planned:
         parts.append("<b>Planned</b>")
-        for w in day.planned[:3]:
-            head = _short(w.get("name") or "Workout", 40)
+        pairs = day.pairs or [{"workout": w, "ride": None, "state": ""} for w in day.planned]
+        for pair in pairs[:3]:
+            w = pair["workout"]
+            head = STATE_MARK.get(pair["state"], "") + _short(w.get("name") or "Workout", 40)
             if w.get("workout_type"):
                 head += f" ({_short(w['workout_type'], 20)})"
             tss = _num(w.get("tss_planned"))
             if tss:
                 head += f", {round(tss)} TSS"
-            if w.get("completed"):
+            if pair["ride"] is not None:
+                head += f", done as {_short(pair['ride'].get('name') or 'a ride', 30)}"
+            elif w.get("completed"):
                 head += ", marked done"
+            elif pair["state"] == "missed":
+                head += ", missed"
             parts.append(_esc(head))
             desc = _short(w.get("description"), 120)
             if desc:
@@ -239,7 +285,7 @@ def day_tooltip(day: DayData, unit: str = "km") -> str:
             parts.append(f"+{len(day.planned) - 3} more")
 
     if day.rides:
-        parts.append("<b>Done</b>")
+        parts.append("<b>Ridden</b>")
         for r in day.rides[:3]:
             facts = ", ".join(_ride_facts(r, unit))
             parts.append(_esc(_short(r.get("name") or "Ride", 40) + (f", {facts}" if facts else "")))
@@ -291,35 +337,46 @@ def day_tooltip(day: DayData, unit: str = "km") -> str:
 # ── Grid payload ──────────────────────────────────────────────────────────────
 
 MAX_CHIPS = 3
+# The mark in front of a planned workout. The grid draws these as boxes, the tooltip as text.
+STATE_MARK = {"done": "\u2713 ", "missed": "\u2717 ", "planned": ""}
 
 
 def _chips(day: DayData, today: date) -> list[dict]:
-    """The items drawn inside one cell. Unfinished planned rides and planned strength can be
-    dragged, including skipped ones from days that have passed. `kind` is what the page acts on."""
-    upcoming = date.fromisoformat(day.date) >= today
-    status_color = theme.STATUS_COLORS.get(day.status, theme.ACCENT)
+    """The items drawn inside one cell. `kind` is what the page acts on and `state` how it looks.
+
+    A planned workout is a box. Done (marked done, or a ride on its day was paired with it)
+    shows a green check, opens the plan against the ride, and shows the ridden TSS. Upcoming
+    shows an empty box with its planned TSS, missed a red cross; both can be dragged, so a
+    skipped workout can still be moved. A ride with no planned workout is drawn without a box.
+    Rides paired with a workout are part of its chip and not drawn again."""
+    pairs, unplanned = ((day.pairs, day.unplanned) if day.pairs or day.unplanned
+                        else pair_day(day.planned, day.rides, date.fromisoformat(day.date), today))
     chips = []
-    for w in day.planned:
-        done = bool(w.get("completed"))
-        tss = _num(w.get("tss_planned"))
+    for pair in pairs:
+        w, ride, state = pair["workout"], pair["ride"], pair["state"]
+        done = state == "done"
+        tss = _num(ride.get("tss")) if ride is not None else None
+        if tss is None:
+            tss = _num(w.get("tss_planned"))
         chips.append({
-            "kind": "ride", "id": w.get("id"), "label": _short(w.get("name") or "Workout", 22),
-            "tss": round(tss) if tss else None, "done": done,
-            "locked": done,
-            "color": theme.GOOD if done else (theme.STATUS_COLORS["planned"] if upcoming else status_color),
+            "kind": "compare" if done else "ride", "id": w.get("id"),
+            "label": _short(w.get("name") or "Workout", 22),
+            "tss": round(tss) if tss else None, "done": done, "locked": done, "state": state,
+            "color": theme.STATUS_COLORS["done" if done else state],
         })
     for s in day.strength:
         chips.append({
             "kind": "strength", "id": s.get("id"), "label": _short(s["name"], 22), "tss": None,
-            "done": not s["planned"], "locked": not s["planned"],
+            "done": not s["planned"], "locked": not s["planned"], "state": "strength",
             "color": theme.STRENGTH,
         })
-    for r in day.rides:
+    for r in unplanned:
         tss = _num(r.get("tss"))
         gap = tss_mismatch(r)
         chips.append({
             "kind": "done", "id": r.get("id"), "label": _short(r.get("name") or "Ride", 22),
-            "tss": round(tss) if tss else None, "done": True, "locked": True, "color": theme.GOOD,
+            "tss": round(tss) if tss else None, "done": True, "locked": True, "state": "extra",
+            "color": theme.STATUS_COLORS["extra"],
             # A ! when the compared service scored this ride very differently; the ride popup explains.
             "flag": (f"{gap['name']} has {round(gap['ref'])} TSS for this ride. Open it to see why."
                      if gap else None),
@@ -349,10 +406,12 @@ def build_payload(days: dict, selected: str | None, today: date, unit: str = "km
     return {
         "today": today.isoformat(), "selected": selected, "days": out,
         "weekdays": WEEKDAYS,
-        "colors": {"text1": theme.TEXT1, "text2": theme.TEXT2, "text3": theme.TEXT3,
+        "colors": {"bg": theme.BG, "text1": theme.TEXT1, "text2": theme.TEXT2, "text3": theme.TEXT3,
                    "surface": theme.SURFACE, "raised": theme.RAISED, "border": theme.BORDER,
                    "accent": theme.ACCENT, "race": theme.RACE, "strength": theme.STRENGTH,
-                   "good": theme.GOOD, "warn": theme.WARN},
+                   "good": theme.GOOD, "warn": theme.WARN, "bad": theme.BAD,
+                   "extra": theme.STATUS_COLORS["extra"], "goodbg": _rgba(theme.GOOD, 0.16),
+                   "extrabg": _rgba(theme.STATUS_COLORS["extra"], 0.10)},
     }
 
 
@@ -427,17 +486,35 @@ def _cb_pick(widget_key: str) -> None:
         _set_sel(picked)
 
 
+def _legend_mark(kind: str, color: str) -> str:
+    """The same marks the grid draws, for the legend."""
+    base = ("display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;"
+            "border-radius:3px;font-size:10px;font-weight:800;line-height:1;box-sizing:border-box;")
+    if kind == "done":
+        return f'<span style="{base}background:{color};color:{theme.BG}">\u2713</span>'
+    if kind == "missed":
+        return f'<span style="{base}border:1.5px solid {color};color:{color}">\u2717</span>'
+    if kind == "planned":
+        return f'<span style="{base}border:1.5px solid {color}"></span>'
+    if kind == "ride":
+        return (f'<span style="display:inline-block;width:9px;height:9px;border-radius:50%;'
+                f'background:{color};margin:0 2px"></span>')
+    return (f'<span style="display:inline-block;width:10px;height:10px;border-radius:2px;'
+            f'background:{color}"></span>')
+
+
 def _legend_html() -> str:
-    chips = [(theme.STATUS_COLORS["planned"], "Planned"), (theme.STATUS_COLORS["done"], "Done"),
-             (theme.STATUS_COLORS["short"], "Short of plan"), (theme.STATUS_COLORS["missed"], "Missed"),
-             (theme.STATUS_COLORS["extra"], "Unplanned ride"), (theme.STRENGTH, "Strength"),
-             (theme.RACE, "Race")]
-    items = "".join(
+    items = [("done", theme.STATUS_COLORS["done"], "Workout done"),
+             ("planned", theme.STATUS_COLORS["planned"], "Workout to do"),
+             ("missed", theme.STATUS_COLORS["missed"], "Workout missed"),
+             ("ride", theme.STATUS_COLORS["extra"], "Ride with no workout planned"),
+             ("bar", theme.STRENGTH, "Strength"), ("bar", theme.RACE, "Race"),
+             ("bar", theme.STATUS_COLORS["short"], "Amber day, ridden but short of plan")]
+    html_items = "".join(
         f'<span style="display:inline-flex;align-items:center;gap:6px;margin:2px 14px 2px 0;'
-        f'font-size:0.85rem;color:{theme.TEXT2}">'
-        f'<span style="width:10px;height:10px;border-radius:50%;background:{c};display:inline-block"></span>'
-        f'{label}</span>' for c, label in chips)
-    return f'<div style="display:flex;flex-wrap:wrap;margin:4px 0 8px 0">{items}</div>'
+        f'font-size:0.85rem;color:{theme.TEXT2}">{_legend_mark(kind, c)}{label}</span>'
+        for kind, c, label in items)
+    return f'<div style="display:flex;flex-wrap:wrap;margin:4px 0 8px 0">{html_items}</div>'
 
 
 def _totals_text(totals: dict, label: str) -> str:
@@ -612,8 +689,9 @@ def render_month_calendar(key: str = "cal"):
     calendar_dnd.render_grid(build_payload(days, sel, today, distance_unit()), key=grid_key,
                              on_event=_cb_grid)
     st.markdown(_legend_html(), unsafe_allow_html=True)
-    st.caption("Drag an upcoming workout to another day. Click a workout to open and edit it. "
-               "The number on each workout is its planned TSS, the training stress it should add.")
+    st.caption("Drag a workout you have not done yet to another day. Click or double click a workout "
+               "to open it. A done workout opens the plan next to the ride you did. The number on a "
+               "workout to do is its planned TSS, on a done workout or a ride it is the TSS you rode.")
 
     pick_key = f"{key}_pick"
     st.session_state[pick_key] = date.fromisoformat(sel) if sel else today

@@ -5,7 +5,7 @@ Python sends one JSON payload (components.calendar.build_payload) and gets back
 three one shot events:
 
     move    {kind, id, from, to}   a workout or strength session was dropped on a day
-    open    {kind, id, date}       a workout chip was clicked
+    open    {kind, id, date}       a chip was clicked or double clicked (opened once either way)
     select  {date}                 an empty part of a day was clicked
 
 The grid moves the chip on screen straight away. Python then saves the change
@@ -58,6 +58,20 @@ CSS = """
 .chip.dragging { opacity: .35; }
 .chip:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
 .chip.open { cursor: pointer; }
+.chip .mark { flex: none; display: inline-flex; align-items: center; justify-content: center;
+              width: 13px; height: 13px; border-radius: 3px; font-size: 10px; font-weight: 800;
+              line-height: 1; margin-right: 5px; }
+.chip .lead { display: flex; align-items: center; min-width: 0; }
+.chip.st-done { background: var(--goodbg); }
+.chip.st-done .mark { background: var(--good); color: var(--bg); }
+.chip.st-planned { background: transparent; border: 1px dashed var(--c); border-left: 3px solid var(--c); }
+.chip.st-planned .mark { border: 1.5px solid var(--c); }
+.chip.st-missed { background: transparent; border: 1px dashed var(--border); border-left: 3px solid var(--c); }
+.chip.st-missed .name { color: var(--text3); }
+.chip.st-missed .mark { border: 1.5px solid var(--c); color: var(--c); }
+.chip.st-extra { background: var(--extrabg); }
+.chip.st-extra .mark { width: 8px; height: 8px; border-radius: 50%; background: var(--c); margin: 0 6px 0 2px; }
+.chip.st-missed.locked, .chip.st-done.locked, .chip.st-extra.locked { opacity: 1; }
 .more { font-size: 0.7rem; color: var(--text3); padding-left: 4px; }
 .tip { position: absolute; z-index: 20; max-width: 300px; padding: 8px 10px; border-radius: 8px;
        background: var(--surface); border: 1px solid var(--border); color: var(--text1);
@@ -89,6 +103,17 @@ export default function (component) {
 
   let drag = null;
   let tipTimer = null;
+  let clickTimer = null;
+  let lastOpen = 0;
+  const MARKS = { done: '\u2713', missed: '\u2717', planned: '', extra: '' };
+  const LABELS = { done: 'Done, ', missed: 'Missed, ', planned: 'To do, ', extra: 'Ride, ' };
+  const openChip = (c, day) => {
+    const now = Date.now();
+    if (now - lastOpen < 900) return;
+    lastOpen = now;
+    hideTip();
+    fire('open', { kind: c.kind, id: c.id, date: day.date });
+  };
   const hideTip = () => { clearTimeout(tipTimer); tip.style.display = 'none'; };
   const showTip = (cell, html) => {
     tip.innerHTML = html;               // escaped in Python by day_tooltip
@@ -125,7 +150,14 @@ export default function (component) {
     for (const c of day.chips) {
       const chip = el('div', 'chip');
       chip.style.setProperty('--c', c.color);
-      chip.append(el('span', 'name', c.label));
+      const lead = el('span', 'lead');
+      if (c.state && c.state !== 'strength') {
+        chip.classList.add('st-' + c.state);
+        lead.append(el('span', 'mark', MARKS[c.state] || ''));
+      }
+      lead.append(el('span', 'name', c.label));
+      chip.append(lead);
+      chip.setAttribute('aria-label', (LABELS[c.state] || '') + c.label);
       if (c.tss) chip.append(el('span', 'tss', String(c.tss)));
       if (c.flag) {
         const f = el('span', 'flag', '!');
@@ -160,9 +192,18 @@ export default function (component) {
           drag = null;
         });
       }
+      // Single and double click both open the item, once. A single click waits a moment so a
+      // double click is not read as two clicks, and nothing fires again right after an open,
+      // because the popup that opens would otherwise catch the second click and close.
       chip.addEventListener('click', (e) => {
         e.stopPropagation();
-        fire('open', { kind: c.kind, id: c.id, date: day.date });
+        clearTimeout(clickTimer);
+        clickTimer = setTimeout(() => openChip(c, day), 220);
+      });
+      chip.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        clearTimeout(clickTimer);
+        openChip(c, day);
       });
       chips.append(chip);
     }
@@ -198,7 +239,7 @@ export default function (component) {
     cells.push(cell);
     grid.append(cell);
   }
-  return () => { clearTimeout(tipTimer); };
+  return () => { clearTimeout(tipTimer); clearTimeout(clickTimer); };
 }
 """
 
