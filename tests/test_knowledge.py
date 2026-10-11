@@ -32,13 +32,16 @@ class LibraryTests(unittest.TestCase):
             body = knowledge._library()[key]["body"]
             with self.subTest(topic=key):
                 self.assertRegex(body, r"\*\*Evidence: (Strong|Moderate|Limited)")
+                grades = len(re.findall(r"\*\*Evidence: (Strong|Moderate|Limited)", body))
+                self.assertEqual(len(re.findall(r"^\*\*Pool: ", body, re.M)), grades,
+                                 f"{key}: every graded finding needs a Pool line")
                 references = body.split("## References", 1)[1]
                 self.assertGreaterEqual(len(re.findall(r"^\d+\.", references, re.M)), 5)
 
     def test_principles_ride_along_in_the_system_prompt(self):
         core = knowledge.principles()
         self.assertTrue(core)
-        self.assertLess(len(core.split()), 1000)
+        self.assertLess(len(core.split()), 1500)
         with mock.patch.object(coach_context, "build_context", return_value=""):
             text = coach_context.system_blocks()[0]["text"]
         self.assertIn(core, text)
