@@ -13,7 +13,9 @@ from components import ftp_help, plan_export, plan_impact_ui, ride_analysis, wor
 from db.queries import (get_workouts, add_workout, update_workout, delete_workout,
                          get_setting, get_races, WORKOUT_TYPES,
                          get_workout, get_strength_session, delete_strength_session, garmin_status, save_message, get_conversation_history, get_conversation_window,
-                         get_memories, forget_memory, save_phase_notes, get_phase_notes)
+                         get_memories, forget_memory, save_phase_notes, get_phase_notes, set_key_session,
+                         set_rpe, get_my_workouts, delete_my_workout,
+                         link_workout)
 import auth.garmin as garmin_auth
 import exporters
 import garmin_workouts
@@ -418,6 +420,7 @@ def workout_dialog(kind: str, item_id, state: dict) -> None:
     if not editable:
         st.write(w.get("description") or "No description.")
         why_block(w)
+        rpe_picker(w, f"dlg_rpe_{w['id']}")
         st.caption("A workout marked done stays as it is. Undo done if you need to change it.")
         with st.container(horizontal=True):
             if w.get("completed"):
@@ -431,6 +434,10 @@ def workout_dialog(kind: str, item_id, state: dict) -> None:
                 st.rerun()
         return
 
+    st.toggle("Key workout", value=bool(w.get("key_session")), key="dlg_key",
+              on_change=lambda: set_key_session(w["id"], st.session_state["dlg_key"]),
+              help="A key workout is one you want to protect. Your coach keeps it on its day and "
+                   "rearranges the sessions around it, unless you ask to change this one by name.")
     name = st.text_input("Workout name", value=w["name"], key="dlg_name")
     c1, c2 = st.columns(2)
     wtype = c1.selectbox("Type", WORKOUT_TYPES, key="dlg_type",
@@ -495,6 +502,35 @@ def open_item(kind: str, item_id) -> None:
     st.session_state[plan_cal.OPEN_KEY] = {"kind": kind, "id": item_id}
 
 
+def rpe_picker(w: dict, key: str) -> None:
+    """How hard the workout felt, 1 to 10, saved as soon as it is picked."""
+    def save():
+        set_rpe(w["id"], st.session_state.get(key))
+    st.pills("How hard did it feel? (1 easy, 10 all out)", list(range(1, 11)), key=key,
+             default=w.get("rpe"), on_change=save,
+             help="Your rating goes to your coach with the ride, so it can tell a hard day from a hard number.")
+
+
+def over_plan_review(w: dict, ride: dict) -> None:
+    """A ride well over its plan: say by how much and offer a coach review of the next 3 days."""
+    planned, ridden = float(w.get("tss_planned") or 0), float(ride.get("tss") or 0)
+    st.warning(f"This ride was {ridden:.0f} TSS against {planned:.0f} planned, "
+               f"{(ridden / planned - 1) * 100:.0f}% more than the plan asked for.",
+               icon=":material/trending_up:")
+    if not coach_available:
+        return
+    if st.button("Ask the coach to review the next 3 days", key="cmp_review", icon=":material/forum:"):
+        felt = f" It felt {w['rpe']} out of 10." if w.get("rpe") else ""
+        end = date.fromisoformat(w["date"]) + timedelta(days=3)
+        st.session_state["pending_message"] = (
+            f"My ride on {fmt_day(w['date'])} ({w['name']}) was harder than planned, {ridden:.0f} TSS "
+            f"against {planned:.0f}.{felt} Please check my fatigue and recovery and look at my plan "
+            f"up to {fmt_day(end.isoformat())}. Propose changes only if they are needed, keep my key "
+            f"workouts where they are, and don't overreact to one ride.")
+        st.session_state["plan_jump"] = "coach"
+        st.rerun()
+
+
 @st.dialog("Planned and ridden", width="large")
 def compare_dialog(item_id) -> None:
     """A done workout: what was planned next to the ride that did it."""
@@ -504,9 +540,27 @@ def compare_dialog(item_id) -> None:
         return
     ride = _paired_ride(w)
     st.markdown(f"### :green[:material/check_box:] {w['name']}")
+    day_rides = plan_cal.get_day(w["date"], st.session_state.get(plan_cal.MONTH_DAYS_KEY)).rides
+    if ride and len(day_rides) > 1:
+        def label(r):
+            tss = f", {r['tss']:.0f} TSS" if r.get("tss") else ""
+            return f"{r.get('name') or 'Ride'}{tss}"
+        ids = [r["id"] for r in day_rides]
+
+        def relink():
+            link_workout(w["id"], st.session_state["cmp_link"])
+            st.session_state.pop(plan_cal.MONTH_DAYS_KEY, None)    # read the new pairing fresh
+        st.selectbox("Ridden as", ids, index=ids.index(ride["id"]), key="cmp_link",
+                     format_func=lambda i: label(next(r for r in day_rides if r["id"] == i)),
+                     on_change=relink,
+                     help="You rode more than once this day. Pick the ride that did this workout and the "
+                          "comparison, the done and over plan marks, and your coach all use it.")
     st.caption(f"{fmt_day(w['date'])} · " + workout_summary(w)
                + (f" · Ridden as {ride.get('name') or 'a ride'}" if ride else ""))
     workout_compare.render(w, ride, key=f"cmp_{w['id']}")
+    if ride and plan_cal.is_over_plan(w, ride):
+        over_plan_review(w, ride)
+    rpe_picker(w, f"cmp_rpe_{w['id']}")
     # A button inside a popup only reruns the popup, so each one reruns the whole page itself.
     with st.container(horizontal=True):
         if ride and st.button("Open the full ride analysis", key="cmp_ride", type="primary",
@@ -606,6 +660,7 @@ def render_calendar_tab() -> None:
 
 STARTER_FALLBACK = [
     "Help me build a training block",
+    "Help me build a workout of my own",
     "What should my focus be this week?",
     "Suggest a workout for today",
     "How is my training load looking, am I overdoing it?",
@@ -880,12 +935,25 @@ def render_quick_generate() -> None:
         phase_label = st.selectbox("Phase focus", list(planning.PHASE_LABELS.values()))
         phase_key = next(k for k, v in planning.PHASE_LABELS.items() if v == phase_label)
 
+        block = planning.plan_block(
+            current_ctl, target_ctl, race_date, phase_key,
+            days_per_week=int(float(get_setting("days_per_week", 0) or 0)) or None,
+            available_days=get_setting("available_days", "") or None)
+        outlook = block["outlook"]
+        if chosen_race is not None:
+            if outlook["reachable"]:
+                st.caption(f"Fitness climbs about {outlook['ramp_per_week']:.1f} points a week to a peak of "
+                           f"**{outlook['peak_ctl']:.0f}** before the taper, and is about "
+                           f"{outlook['race_day_ctl']:.0f} on race day as the taper freshens you up.")
+            else:
+                st.warning(f"A target of {target_ctl} isn't reachable by race day while fitness climbs by at "
+                           f"most {outlook['max_ramp_per_week']:.0f} points a week. This block builds as far as "
+                           f"that allows and peaks at about **{outlook['peak_ctl']:.0f}**.",
+                           icon=":material/info:")
+
         if st.button("Generate training block", width="stretch", type="primary",
                      disabled=chosen_race is None):
-            drafted = planning.generate_block(
-                current_ctl, target_ctl, race_date, phase_key,
-                days_per_week=int(float(get_setting("days_per_week", 0) or 0)) or None,
-                available_days=get_setting("available_days", "") or None)
+            drafted = block["workouts"]
             new_ids = [add_workout({
                 "date": w["date"], "name": w["name"], "workout_type": w["workout_type"],
                 "description": w["description"], "structured_json": None,
@@ -901,7 +969,8 @@ def render_quick_generate() -> None:
                     new_ids.append(test_id)
             st.session_state["wizard_generated_ids"] = new_ids
             st.session_state["wizard_msg"] = (f"Generated {len(drafted)} workouts over {weeks_out} "
-                                              f"weeks, targeting CTL {target_ctl} before the taper.")
+                                              f"weeks. Fitness peaks at about CTL {outlook['peak_ctl']:.0f} "
+                                              f"before the taper.")
             st.rerun()
 
         if gen_ids := st.session_state.get("wizard_generated_ids"):
@@ -924,9 +993,40 @@ def render_quick_generate() -> None:
                 st.session_state.pop("wizard_msg", None)
 
 
+def add_my_workout_to_plan(mw: dict, day: date) -> None:
+    """Put a workout from My workouts on a day, with its saved steps."""
+    add_workout({"date": day.isoformat(), "name": mw["name"], "workout_type": mw.get("workout_type") or "Other",
+                 "description": mw.get("description") or "", "structured_json": json.dumps(mw["steps"]),
+                 "tss_planned": mw.get("tss"), "notes": "From My workouts",
+                 "purpose": mw.get("purpose"), "feel": mw.get("feel")})
+    st.toast(f"Added {mw['name']} on {fmt_day(day.isoformat())}")
+
+
+def render_my_workouts() -> None:
+    saved = get_my_workouts()
+    with st.expander(f"My workouts ({len(saved)})" if saved else "My workouts"):
+        if not saved:
+            st.caption("Workouts you build with your coach and choose to keep land here. In the Coach tab, "
+                       "try \"Help me build a workout of my own\".")
+            return
+        for mw in saved:
+            with st.container(border=True):
+                st.markdown(f"**{mw['name']}** · {mw.get('workout_type') or 'Other'} · {mw.get('tss') or 0:.0f} TSS")
+                st.caption(mw.get("description") or "")
+                if mw.get("purpose"):
+                    st.caption(f"Why. {mw['purpose']}")
+                with st.container(horizontal=True, vertical_alignment="bottom"):
+                    day = st.date_input("Day", value=today, min_value=today, key=f"mw_day_{mw['id']}")
+                    st.button("Add to plan", key=f"mw_add_{mw['id']}", icon=":material/add:",
+                              on_click=add_my_workout_to_plan, args=(mw, day))
+                    st.button("Remove", key=f"mw_del_{mw['id']}", icon=":material/delete:",
+                              on_click=delete_my_workout, args=(mw["id"],))
+
+
 def render_manage_tab() -> None:
     plan_export.render(today)
     render_quick_generate()
+    render_my_workouts()
 
     view = st.segmented_control("Show", ["This week", "All upcoming"], default="This week",
                                 required=True, key="manage_view", label_visibility="collapsed")

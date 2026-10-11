@@ -222,6 +222,13 @@ def render(workout: dict, ride: dict | None, *, streams: dict | None = None, ste
     if steps is None:
         from garmin_workouts import saved_steps
         steps = saved_steps(workout)
+    if steps is None:
+        import workout_recipes          # a standard workout's recipe is known without building it
+        if workout_recipes.uses_recipe(workout):
+            try:
+                steps = workout_recipes.steps_for(workout)
+            except workout_recipes.RecipeError:
+                steps = None
     if ftp is None:
         ftp = q.ftp_on(workout["date"])
     if streams is None and ride and ride.get("id"):

@@ -6,7 +6,8 @@ the athlete as a card with before and after, and only applied when the athlete
 confirms. The same rules are checked again at apply time, because the plan may have
 changed since the proposal was made.
 
-Anything not done can be changed. That includes a workout whose day passed without it being
+Anything not done can be changed. A workout the athlete marked as key is the exception: the coach
+may only change it when the athlete asked for that workout by name. That includes a workout whose day passed without it being
 done (a skipped workout), which can be moved to any day. An upcoming one can't be moved into
 the past, and done ones stay as they are. move_error holds that rule for the coach and the
 calendar alike.
@@ -93,6 +94,11 @@ def validate_change(raw: dict, today: date | None = None, workout_types: list | 
         raise ChangeError(f"action must be one of {list(ACTIONS)}")
     row = check_target(target, raw.get("id"), today)
     reason = _text(raw.get("reason"), "reason", 300)
+    is_key = target == "ride" and bool(row.get("key_session"))
+    if is_key and raw.get("athlete_named_it") is not True:
+        raise ChangeError(f"'{_label(target, row)}' is a key workout the athlete marked to protect. Leave it "
+                          "where it is and change the sessions around it instead. Only change it when the "
+                          "athlete asked to change this workout by name, and then set athlete_named_it to true")
 
     new_date = None
     if raw.get("new_date") is not None:
@@ -151,7 +157,7 @@ def validate_change(raw: dict, today: date | None = None, workout_types: list | 
 
     return {"kind": "change", "target": target, "id": raw["id"], "action": action,
             "date": row["date"], "name": _label(target, row), "reason": reason,
-            "new_date": new_date, "fields": fields,
+            "new_date": new_date, "fields": fields, "key": is_key,
             "before": {"name": _label(target, row), "date": row["date"],
                        "workout_type": row.get("workout_type"), "tss_planned": row.get("tss_planned"),
                        "duration_minutes": row.get("duration_minutes")}}
@@ -171,6 +177,8 @@ def describe(change: dict) -> str:
     """One plain sentence for the card."""
     name = change["name"]
     what = "strength session" if change["target"] == "strength" else "workout"
+    if change.get("key"):
+        what = "key workout"
     if change["action"] == "remove":
         return f"Remove {what} {name} on {_day(change['date'])}"
     parts = []

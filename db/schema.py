@@ -168,6 +168,18 @@ CREATE TABLE IF NOT EXISTS activity_hr_peaks (
     PRIMARY KEY (activity_id, duration_s)
 );
 
+CREATE TABLE IF NOT EXISTS my_workouts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    workout_type TEXT,
+    description TEXT,
+    steps_json TEXT NOT NULL,
+    tss REAL,
+    purpose TEXT,
+    feel TEXT,
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS ai_conversations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp TEXT NOT NULL,
@@ -279,6 +291,8 @@ def run_migrations():
         "ALTER TABLE activities ADD COLUMN tss_source TEXT",
         "ALTER TABLE activities ADD COLUMN tp_json TEXT",
         "ALTER TABLE activities ADD COLUMN ref_json TEXT",
+        "ALTER TABLE workouts ADD COLUMN key_session INTEGER DEFAULT 0",
+        "ALTER TABLE workouts ADD COLUMN rpe INTEGER",
     ]:
         try:
             conn.execute(col_sql)

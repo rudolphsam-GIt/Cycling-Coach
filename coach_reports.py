@@ -54,7 +54,8 @@ def ride_review(ride: dict) -> tuple[str, str, str]:
 {facts_text}
 
 Look up what was planned for {ride['date']}, the training load in the days around it, and my
-sleep and recovery that morning. Then cover:
+sleep and recovery that morning. If the planned workout has an rpe, that is how hard I said it felt
+out of 10, so weigh it alongside the numbers. Then cover:
 ### How it went
 Compare it to the plan (or to what the day called for if nothing was planned). Judge the
 intensity from IF, normalized power and heart rate.
@@ -86,7 +87,9 @@ def weekly_checkin(week_start: date) -> tuple[str, str, str]:
     prompt = f"""It's my weekly check in for {week_start:%a %b %d} to {week_end:%a %b %d}.
 
 Look up that week's rides, the weekly summary for the last 4 weeks, my sleep and recovery,
-my daily check ins, my races, and what's already planned for {next_start} to {next_end}.
+my daily check ins, my races, and what's already planned for {next_start} to {next_end}. The planned
+workouts carry an rpe when I rated how hard a session felt out of 10, and key true on sessions I
+want kept in place.
 Then write:
 ### How the week went
 In plain words, what the week was meant to do, whether it did that, planned vs actual TSS, the

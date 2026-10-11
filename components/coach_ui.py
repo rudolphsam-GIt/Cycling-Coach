@@ -12,7 +12,7 @@ import streamlit as st
 import claude_client
 import coach_tools
 import plan_changes
-from db.queries import add_workout, add_strength_session, save_phase_notes
+from db.queries import add_workout, add_strength_session, save_phase_notes, add_my_workout
 
 # Jumping to the Plan page's calendar. The Plan page copies PLAN_JUMP_KEY into its
 # tab bar state before drawing the tabs and maps the value to its own tab label.
@@ -189,6 +189,9 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
                     note = next((i["phase_note"] for i in items if i.get("phase_note")), None)
                     if note:
                         st.markdown(f"**Focus.** {note['focus']}  \n{note['why']}")
+                kept = [i["name"] for i in items if i.get("save")]
+                if kept:
+                    st.caption(":material/bookmark: Also saved to My workouts: " + ", ".join(kept))
                 st.dataframe(_ride_frame(items), hide_index=True, width="stretch",
                              column_config={"Why": st.column_config.TextColumn(width="large"),
                                             "Feel": st.column_config.TextColumn(width="medium"),
@@ -209,9 +212,14 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
                  "Apply changes" if changes and not adding else "Add and apply changes")
         if c1.button(label, type="primary", width="stretch", key=f"{state_key}_add"):
             for w in rides:
+                if w.get("save"):
+                    add_my_workout({"name": w["name"], "workout_type": w["workout_type"],
+                                    "description": w["description"], "steps": w["steps"],
+                                    "tss": w["tss_planned"], "purpose": w.get("purpose"), "feel": w.get("feel")})
                 add_workout({
                     "date": w["date"], "name": w["name"], "workout_type": w["workout_type"],
-                    "description": w["description"], "structured_json": None,
+                    "description": w["description"],
+                    "structured_json": json.dumps(w["steps"]) if w.get("steps") else None,
                     "tss_planned": w["tss_planned"], "notes": "Planned by AI Coach",
                     "phase": w.get("phase"), "week_number": w.get("week_number"),
                     "purpose": w.get("purpose"), "feel": w.get("feel"),

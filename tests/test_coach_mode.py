@@ -33,6 +33,15 @@ class WeekdayPlacementTests(unittest.TestCase):
         long_days = {date.fromisoformat(w["date"]).weekday() for w in plan if w["workout_type"] == "Long Ride"}
         self.assertEqual(long_days, {6})
 
+    def test_without_chosen_days_a_mid_week_start_keeps_real_weekdays(self):
+        start = _monday() + timedelta(days=2)          # a Wednesday
+        plan = planning.generate_block(75, 90, start + timedelta(weeks=8), "Threshold", start)
+        build = [w for w in plan if w["phase"] != planning.TAPER_LABEL]
+        long_days = {date.fromisoformat(w["date"]).weekday() for w in build if w["workout_type"] == "Long Ride"}
+        self.assertEqual(long_days, {5})               # Saturday, as the template says
+        vo2_days = {date.fromisoformat(w["date"]).weekday() for w in build if w["workout_type"] == "VO2 Max"}
+        self.assertEqual(vo2_days, {3})                # Thursday
+
     def test_without_a_weekend_the_long_ride_goes_last(self):
         start = _monday()
         plan = planning.generate_block(40, 60, start + timedelta(days=28), "Endurance", start,

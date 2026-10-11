@@ -569,7 +569,7 @@ def get_daily_tss(start: str, end: str) -> dict:
 
 # ── Workouts ──────────────────────────────────────────────────────────────────
 
-WORKOUT_TYPES = ["Endurance", "Tempo", "Threshold", "VO2 Max", "Sprint/Anaerobic",
+WORKOUT_TYPES = ["Endurance", "Tempo", "Sweet Spot", "Threshold", "VO2 Max", "Sprint/Anaerobic",
                  "Recovery", "Long Ride", "Race", "Other"]
 
 
@@ -627,6 +627,32 @@ def update_workout(wid: int, data: dict):
         {**data, "purpose": data.get("purpose"), "feel": data.get("feel"), "id": wid},
     )
     _plan_changed(conn)
+    conn.commit()
+    conn.close()
+
+
+def set_key_session(wid: int, on: bool) -> None:
+    """Mark a planned workout as key, so the coach leaves it where it is unless asked by name."""
+    conn = get_conn()
+    conn.execute("UPDATE workouts SET key_session=? WHERE id=?", (1 if on else 0, wid))
+    conn.commit()
+    conn.close()
+
+
+def link_workout(wid: int, activity_id: int | None) -> None:
+    """Say which ride did a planned workout, or None to let the calendar choose again."""
+    conn = get_conn()
+    conn.execute("UPDATE workouts SET activity_id=? WHERE id=?", (activity_id, wid))
+    conn.commit()
+    conn.close()
+
+
+def set_rpe(wid: int, rpe: int | None) -> None:
+    """How hard the athlete says a workout felt, 1 to 10, or None to clear it."""
+    if rpe is not None and not 1 <= int(rpe) <= 10:
+        raise ValueError("RPE must be from 1 to 10")
+    conn = get_conn()
+    conn.execute("UPDATE workouts SET rpe=? WHERE id=?", (None if rpe is None else int(rpe), wid))
     conn.commit()
     conn.close()
 
@@ -1442,5 +1468,39 @@ def get_memories(active_only: bool = True) -> list:
 def forget_memory(mid: int) -> None:
     conn = get_conn()
     conn.execute("UPDATE coach_memory SET active=0 WHERE id=?", (mid,))
+    conn.commit()
+    conn.close()
+
+
+# ── My workouts (workouts the athlete built with the coach and kept) ─────────
+
+def add_my_workout(data: dict) -> int:
+    conn = get_conn()
+    wid = conn.execute(
+        """INSERT INTO my_workouts (name, workout_type, description, steps_json, tss, purpose, feel, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (data["name"], data.get("workout_type"), data.get("description"), json.dumps(data["steps"]),
+         data.get("tss"), data.get("purpose"), data.get("feel"), datetime.utcnow().isoformat()),
+    ).lastrowid
+    conn.commit()
+    conn.close()
+    return wid
+
+
+def get_my_workouts() -> list[dict]:
+    conn = get_conn()
+    rows = conn.execute("SELECT * FROM my_workouts ORDER BY name COLLATE NOCASE").fetchall()
+    conn.close()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["steps"] = json.loads(d.pop("steps_json") or "[]")
+        out.append(d)
+    return out
+
+
+def delete_my_workout(wid: int) -> None:
+    conn = get_conn()
+    conn.execute("DELETE FROM my_workouts WHERE id=?", (wid,))
     conn.commit()
     conn.close()

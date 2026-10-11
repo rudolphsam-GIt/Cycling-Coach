@@ -37,6 +37,8 @@ from metrics.tss import label as tss_label, mismatch as tss_mismatch
 
 # A ride that reaches less than this share of its planned TSS counts as short.
 SHORT_RATIO = 0.70
+# A ride that goes past this share of its planned TSS counts as well over plan.
+OVER_RATIO = 1.30
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
@@ -103,6 +105,8 @@ def derive_status(day: date, today: date, planned: list, rides: list,
             has_tss = any(_num(r.get("tss")) is not None for r in rides)
             if has_tss and planned_tss > 0 and actual_tss < SHORT_RATIO * planned_tss:
                 return "short"
+            if has_tss and planned_tss > 0 and actual_tss > OVER_RATIO * planned_tss:
+                return "over"
             return "done"
         return "missed" if day < today else "planned"
     return "extra" if rides else "rest"
@@ -121,25 +125,38 @@ def workout_state(workout: dict, ride: dict | None, day: date, today: date) -> s
     return "missed" if day < today else "planned"
 
 
+def is_over_plan(workout: dict, ride: dict | None) -> bool:
+    """True when the ride paired with a workout went well past its planned TSS."""
+    planned, ridden = _num(workout.get("tss_planned")), _num((ride or {}).get("tss"))
+    return bool(planned and ridden is not None and ridden > OVER_RATIO * planned)
+
+
 def pair_day(planned: list, rides: list, day: date, today: date) -> tuple[list, list]:
-    """Match one day's rides to its planned workouts. Workouts and rides are matched by
-    date (the app has no other link), so on a day with several of each the biggest ride
-    goes with the biggest workout, by TSS (or ride time when a ride has no TSS). Workouts
-    already marked done come first. Returns (pairs, unplanned rides), with pairs in the
-    order the workouts were given."""
-    w_order = sorted(range(len(planned)),
-                     key=lambda i: (not planned[i].get("completed"),
-                                    -(_num(planned[i].get("tss_planned")) or 0.0), i))
-    r_order = sorted(range(len(rides)), key=lambda i: (-_ride_size(rides[i]), i))
+    """Match one day's rides to its planned workouts. A workout linked to one of the day's rides
+    (its activity_id, set when the athlete picks the ride) gets that ride. The rest are matched
+    by size, so on a day with several of each the biggest ride goes with the biggest workout, by
+    TSS (or ride time when a ride has no TSS). Workouts already marked done come first. Returns
+    (pairs, unplanned rides), with pairs in the order the workouts were given."""
     ride_for = {}
     if day <= today:
+        index_of = {r.get("id"): i for i, r in enumerate(rides) if r.get("id") is not None}
+        for wi, w in enumerate(planned):
+            ri = index_of.get(w.get("activity_id"))
+            if ri is not None and ri not in ride_for.values():
+                ride_for[wi] = ri
+        w_order = sorted((i for i in range(len(planned)) if i not in ride_for),
+                         key=lambda i: (not planned[i].get("completed"),
+                                        -(_num(planned[i].get("tss_planned")) or 0.0), i))
+        r_order = sorted((i for i in range(len(rides)) if i not in ride_for.values()),
+                         key=lambda i: (-_ride_size(rides[i]), i))
         for wi, ri in zip(w_order, r_order):
             ride_for[wi] = ri
     used = set(ride_for.values())
     pairs = []
     for i, w in enumerate(planned):
         ride = rides[ride_for[i]] if i in ride_for else None
-        pairs.append({"workout": w, "ride": ride, "state": workout_state(w, ride, day, today)})
+        pairs.append({"workout": w, "ride": ride, "state": workout_state(w, ride, day, today),
+                      "over": is_over_plan(w, ride)})
     return pairs, [r for i, r in enumerate(rides) if i not in used]
 
 
@@ -261,7 +278,8 @@ def day_tooltip(day: DayData, unit: str = "km") -> str:
         pairs = day.pairs or [{"workout": w, "ride": None, "state": ""} for w in day.planned]
         for pair in pairs[:3]:
             w = pair["workout"]
-            head = STATE_MARK.get(pair["state"], "") + _short(w.get("name") or "Workout", 40)
+            head = (STATE_MARK.get(pair["state"], "") + (KEY_MARK if w.get("key_session") else "")
+                    + _short(w.get("name") or "Workout", 40))
             if w.get("workout_type"):
                 head += f" ({_short(w['workout_type'], 20)})"
             tss = _num(w.get("tss_planned"))
@@ -269,6 +287,10 @@ def day_tooltip(day: DayData, unit: str = "km") -> str:
                 head += f", {round(tss)} TSS"
             if pair["ride"] is not None:
                 head += f", done as {_short(pair['ride'].get('name') or 'a ride', 30)}"
+                if pair.get("over"):
+                    head += ", well over plan"
+            if w.get("rpe"):
+                head += f", felt {w['rpe']}/10"
             elif w.get("completed"):
                 head += ", marked done"
             elif pair["state"] == "missed":
@@ -339,6 +361,8 @@ def day_tooltip(day: DayData, unit: str = "km") -> str:
 MAX_CHIPS = 3
 # The mark in front of a planned workout. The grid draws these as boxes, the tooltip as text.
 STATE_MARK = {"done": "\u2713 ", "missed": "\u2717 ", "planned": ""}
+KEY_MARK = "\u2605 "    # a star on a key workout
+OVER_MARK = "\u25b2 "   # an up arrow on a ride well over its plan
 
 
 def _chips(day: DayData, today: date) -> list[dict]:
@@ -360,7 +384,8 @@ def _chips(day: DayData, today: date) -> list[dict]:
             tss = _num(w.get("tss_planned"))
         chips.append({
             "kind": "compare" if done else "ride", "id": w.get("id"),
-            "label": _short(w.get("name") or "Workout", 22),
+            "label": ((OVER_MARK if pair.get("over") else "") + (KEY_MARK if w.get("key_session") else "")
+                      + _short(w.get("name") or "Workout", 22)),
             "tss": round(tss) if tss else None, "done": done, "locked": done, "state": state,
             "color": theme.STATUS_COLORS["done" if done else state],
         })
@@ -509,7 +534,8 @@ def _legend_html() -> str:
              ("missed", theme.STATUS_COLORS["missed"], "Workout missed"),
              ("ride", theme.STATUS_COLORS["extra"], "Ride with no workout planned"),
              ("bar", theme.STRENGTH, "Strength"), ("bar", theme.RACE, "Race"),
-             ("bar", theme.STATUS_COLORS["short"], "Amber day, ridden but short of plan")]
+             ("bar", theme.STATUS_COLORS["short"], "Amber day, ridden but short of plan"),
+             ("bar", theme.STATUS_COLORS["over"], "Orange day, ridden well over plan")]
     html_items = "".join(
         f'<span style="display:inline-flex;align-items:center;gap:6px;margin:2px 14px 2px 0;'
         f'font-size:0.85rem;color:{theme.TEXT2}">{_legend_mark(kind, c)}{label}</span>'

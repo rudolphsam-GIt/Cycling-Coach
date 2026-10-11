@@ -30,6 +30,7 @@ ZONE_LABELS = ["Z1", "Z2", "Z3", "Z4", "Z5"]
 STATUS_COLORS = {
     "done": GOOD,
     "short": WARN,
+    "over": "#FB923C",
     "missed": BAD,
     "planned": ACCENT,
     "extra": "#2DD4BF",
@@ -38,6 +39,7 @@ STATUS_COLORS = {
 STATUS_LABELS = {
     "done": "Done",
     "short": "Short of plan",
+    "over": "Well over plan",
     "missed": "Missed",
     "planned": "Planned",
     "extra": "Unplanned ride",
