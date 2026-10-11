@@ -14,6 +14,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from metrics import explain
+import workout_recipes
 from metrics.training_load import CTL_ALPHA
 
 DAY_TEMPLATES = {
@@ -256,11 +257,16 @@ def plan_block(current_ctl: float, target_ctl: float, race_date: date,
             if recovery:
                 purpose = ("This is a lighter week on purpose. Your body gets stronger while it recovers, "
                            "so keep it easy. " + purpose)
+            description = f"{workout_recipes.AUTO_MARK} · {week_phase} · week {wk + 1}"
+            try:
+                description = workout_recipes.describe(workout_recipes.build(w_type, day_tss)) + "\n" + description
+            except (KeyError, workout_recipes.RecipeError):
+                pass
             workouts.append({
                 "date": w_date.isoformat(),
                 "name": f"{label}{name}",
                 "workout_type": w_type,
-                "description": f"Auto-generated · {week_phase} · week {wk + 1}",
+                "description": description,
                 "tss_planned": float(day_tss),
                 "phase": week_phase,
                 "week_number": wk + 1,

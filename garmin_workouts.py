@@ -13,6 +13,7 @@ import json
 from datetime import date, datetime
 
 import claude_client
+import workout_recipes
 from db.queries import get_setting, set_workout_garmin
 
 APP_TAG = "Sent from Cycling Coach"
@@ -122,8 +123,15 @@ def check_steps(steps: list) -> list:
 
 
 def build_steps(workout: dict) -> list:
-    """Ask Claude to turn a planned workout's text into checked steps."""
+    """Checked steps for a planned workout. A standard workout with no written detail uses a
+    fixed recipe sized to its planned TSS, so the steps match the plan. Anything else is turned
+    into steps by Claude from its text."""
     ftp = _ftp()
+    if workout_recipes.uses_recipe(workout):
+        try:
+            return check_steps(workout_recipes.build(workout["workout_type"], workout.get("tss_planned")))
+        except workout_recipes.RecipeError:
+            pass
     prompt = (f"FTP: {ftp:.0f} W\n"
               f"Workout name: {workout['name']}\n"
               f"Type: {workout.get('workout_type') or 'unknown'}\n"

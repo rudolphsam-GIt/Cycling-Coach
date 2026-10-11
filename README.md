@@ -240,7 +240,7 @@ After that, the program stays on the Coach tab with its PDF, and the coach knows
 
 Open Plan, then Manage. **Export your plan** at the top sends a whole range of rides at once: this week, the next 4 or 12 weeks, your current program, or dates you pick. The Export button on your program card opens it on the program's dates.
 
-The first time, press **Prepare steps**. The coach turns each written workout into steps (warm up, intervals with power targets from your FTP, cool down), a few at a time, and keeps them. After that, every route below is instant and free until you edit a workout. A workout that can't be converted is listed with the reason, never silently left out.
+The first time, press **Prepare steps**. The coach turns each written workout into steps (warm up, intervals with power targets from your FTP, cool down), a few at a time, and keeps them. Standard workouts with no written detail of their own (for example the ones Quick Generate makes) skip the coach and use a fixed recipe for their type, sized so the steps add up to the planned training stress within 10 percent. That is instant and free. Race and Other workouts, and anything with its own description, still go to the coach. After that, every route below is instant and free until you edit a workout. A workout that can't be converted is listed with the reason, never silently left out.
 
 | Route | What you get | Setup |
 |---|---|---|
