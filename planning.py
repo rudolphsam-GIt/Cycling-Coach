@@ -20,7 +20,7 @@ from metrics.training_load import CTL_ALPHA
 DAY_TEMPLATES = {
     "Endurance": [
         ("Mon", "Recovery",  0.45), ("Tue", "Endurance", 0.85),
-        ("Wed", "Tempo",     1.10), ("Thu", "Endurance", 0.80),
+        ("Wed", "Sweet Spot", 1.10), ("Thu", "Endurance", 0.80),
         ("Fri", None,        0.0),  ("Sat", "Long Ride", 1.75),
         ("Sun", "Recovery",  0.50),
     ],

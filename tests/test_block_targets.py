@@ -119,3 +119,12 @@ class CoachToolTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SweetSpotTemplateTests(unittest.TestCase):
+    def test_base_blocks_have_a_weekly_sweet_spot_with_recipe_steps(self):
+        plan = planning.generate_block(60, 70, START + timedelta(weeks=10), "Endurance", START)
+        ss = [w for w in plan if w["workout_type"] == "Sweet Spot"]
+        self.assertTrue(ss)
+        self.assertEqual({date.fromisoformat(w["date"]).weekday() for w in ss}, {2})     # Wednesdays
+        self.assertTrue(all("88 to 93% FTP" in w["description"] for w in ss if w["tss_planned"] >= 40))
