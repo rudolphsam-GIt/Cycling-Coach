@@ -46,6 +46,8 @@ class LibraryTests(unittest.TestCase):
             text = coach_context.system_blocks()[0]["text"]
         self.assertIn(core, text)
         self.assertIn("get_training_research", text)
+        self.assertIn("Agreeing the approach before you plan", text)
+        self.assertIn("Suggestion, not a rule", core)
 
 
 class ToolTests(unittest.TestCase):
