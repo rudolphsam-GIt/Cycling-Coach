@@ -33,6 +33,40 @@ SEED_COVER_DAYS = 42
 ESTIMATED_UNDER_DAYS = 28
 
 
+# How much ride history to ask a new rider for. Six weeks is one CTL time constant and the window
+# the FTP suggestion reads. Three months lets fitness settle and matches Garmin's first sync. A year
+# also covers max heart rate (read over 12 months) and season bests; older rides add little.
+HISTORY_MIN_DAYS = SEED_COVER_DAYS
+HISTORY_GOOD_DAYS = 90
+HISTORY_FULL_DAYS = 365
+HISTORY_ASK = ("Best is the last 3 months of rides, and at least 6 weeks. Up to a year also "
+               "brings in season bests and max heart rate. Rides older than a year add little.")
+
+
+def history_note(days: int) -> str:
+    """What a stretch of ride history is enough for, in words for the rider or coach."""
+    if days <= 0:
+        return ""
+    if days < HISTORY_MIN_DAYS:
+        return (f"Rides go back {_span(days)}. Fitness and the FTP suggestion need at least 6 weeks, "
+                "so add older rides if there are any.")
+    if days < HISTORY_GOOD_DAYS:
+        return (f"Rides go back {_span(days)}, enough for fitness and the FTP suggestion. "
+                "3 months makes fitness more accurate.")
+    if days < HISTORY_FULL_DAYS:
+        return (f"Rides go back {_span(days)}, enough for fitness and FTP. Up to a year also brings in "
+                "season bests and max heart rate.")
+    return "Rides go back a year or more, everything the app uses."
+
+
+def _span(days: int) -> str:
+    if days < 14:
+        return f"{days} day" + ("s" if days != 1 else "")
+    if days < 90:
+        return f"{days // 7} weeks"
+    return f"{round(days / 30.4)} months"
+
+
 def history_days(today: date | None = None) -> int:
     """Days of activity history up to today, 0 when there is none."""
     from db.queries import first_activity_date

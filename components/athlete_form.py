@@ -17,7 +17,7 @@ from db.queries import get_setting, set_setting
 from metrics.explain import (ACTIVITY_DETAILS, ACTIVITY_LEVEL, DEFAULT_ACTIVITY, DEFAULT_GENDER,
                              GENDER_LABELS, RIDER_TYPES, starting_ftp_range)
 from metrics.units import DISTANCE_UNITS, UNITS
-from metrics.training_load import rides_cover_seed
+from metrics.training_load import HISTORY_ASK, history_days, history_note, rides_cover_seed
 
 OPEN_KEY = "adding_athlete"
 
@@ -71,7 +71,8 @@ def save_athlete(answers: dict, fit_files=None) -> dict:
                 set_setting("ctl_start", 0)
                 set_setting("atl_start", 0)
                 seed_reset = True
-    return {**p, "imported": imported, "message": message, "seed_reset": seed_reset}
+        days = history_days() if imported else 0
+    return {**p, "imported": imported, "message": message, "seed_reset": seed_reset, "history_days": days}
 
 
 def _rides_note(result: dict) -> str:
@@ -82,6 +83,8 @@ def _rides_note(result: dict) -> str:
         note += " Their rides go back six weeks or more, so fitness is worked out from the rides alone."
     else:
         note += " Their fitness starts from an estimate until more rides are in."
+    if (more := history_note(result.get("history_days", 0))):
+        note += " " + more
     return note
 
 
@@ -172,11 +175,12 @@ def render_athlete_form() -> None:
         race_date = r2.date_input("Race date", value=None, min_value=date.today(), key="af_race_date")
 
         st.markdown("**Their rides (optional)**")
+        st.caption(HISTORY_ASK)
         fit_files = st.file_uploader(
             "Ride files", type=["fit"], accept_multiple_files=True, key="af_fit",
             label_visibility="collapsed",
-            help="Ask them to export rides from Garmin Connect or Strava as .fit files. Six weeks or "
-                 "more gives the app their real fitness. You can add more later in Settings.")
+            help="They can export rides from Garmin Connect or Strava as .fit files. "
+                 "You can add more later in Settings.")
 
         go, cancel = st.columns(2)
         submitted = go.button("Add athlete", type="primary", width="stretch", key="af_go")

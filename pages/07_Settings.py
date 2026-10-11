@@ -230,6 +230,8 @@ with tab_profile:
 
 
 def _import_files(label: str) -> None:
+    from metrics.training_load import HISTORY_ASK, history_days, history_note
+    st.caption(" ".join(t for t in (history_note(history_days()), HISTORY_ASK) if t))
     import_files = st.file_uploader(label, type=["fit", "csv"], accept_multiple_files=True,
                                     key="garmin_import")
     imperial = st.radio("Units in the file", ["Miles and feet", "Kilometers and meters"],
@@ -545,7 +547,7 @@ else:
                 "so nobody else's passwords are stored here. Add this athlete's rides from files "
                 "they send you.", icon=":material/lock:")
         st.subheader("Import rides")
-        st.caption("Ask them to export rides from Garmin Connect or Strava as .fit files. "
+        st.caption("They can export rides from Garmin Connect or Strava as .fit files. "
                    "Set their FTP and LTHR on the Profile tab first so each ride is scored right.")
         _import_files("Upload .fit or .csv files")
 

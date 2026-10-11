@@ -156,6 +156,9 @@ class AthleteFormSaveTests(_TempOwner):
     def test_six_weeks_of_rides_replace_the_seed(self):
         result, _ = self._save(ride_days_ago=[2, 20, 45])
         self.assertTrue(result["seed_reset"])
+        self.assertEqual(result["history_days"], 45)
+        from components.athlete_form import _rides_note
+        self.assertIn("Rides go back 6 weeks, enough for fitness", _rides_note(result))
         with schema.use(result["path"]):
             self.assertEqual(float(q.get_setting("ctl_start")), 0)
             self.assertEqual(float(q.get_setting("atl_start")), 0)
@@ -182,6 +185,18 @@ class SeedRuleTests(_TempOwner):
         self.assertFalse(rides_cover_seed())
         _add_ride(42)
         self.assertTrue(rides_cover_seed())
+
+
+class HistoryNoteTests(unittest.TestCase):
+    def test_each_range_says_what_it_is_enough_for(self):
+        from metrics.training_load import history_note
+        self.assertEqual(history_note(0), "")
+        self.assertIn("1 day.", history_note(1))
+        self.assertIn("4 weeks. Fitness and the FTP suggestion need at least 6 weeks", history_note(30))
+        self.assertIn("6 weeks, enough for fitness", history_note(42))
+        self.assertIn("3 months, enough for fitness and FTP. Up to a year", history_note(90))
+        self.assertIn("10 months", history_note(300))
+        self.assertEqual(history_note(365), "Rides go back a year or more, everything the app uses.")
 
 
 class CoachContextTests(_TempOwner):
