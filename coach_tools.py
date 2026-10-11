@@ -254,6 +254,7 @@ TOOLS = [
                             "id": {"type": "integer", "description": "From get_planned_workouts or get_planned_strength"},
                             "action": {"type": "string", "enum": ["move", "update", "remove"]},
                             "reason": {"type": "string", "description": "Why, in a plain sentence the athlete will read"},
+                            "athlete_named_it": {"type": "boolean", "description": "Only for a key workout. True when the athlete asked to change this workout by name"},
                             "new_date": {"type": "string", "description": "YYYY-MM-DD, for a move (or an update that also moves it)"},
                             "name": {"type": "string"},
                             "workout_type": {"type": "string", "enum": WORKOUT_TYPES},
@@ -510,9 +511,10 @@ def run_tool(name: str, args: dict, proposals: list[dict]) -> str:
         start = _iso_date(args.get("start_date"), "start_date")
         end = _iso_date(args.get("end_date"), "end_date")
         result = [
-            {k: w.get(k) for k in ("id", "date", "name", "workout_type", "description", "tss_planned",
-                                   "completed", "purpose", "feel", "phase")
-             if w.get(k) not in (None, "")}
+            {**{k: w.get(k) for k in ("id", "date", "name", "workout_type", "description", "tss_planned",
+                                      "completed", "purpose", "feel", "phase")
+                if w.get(k) not in (None, "")},
+             **({"key": True} if w.get("key_session") else {})}
             for w in get_workouts(start.isoformat(), end.isoformat())
         ]
     elif name == "get_planned_strength":

@@ -261,7 +261,8 @@ def day_tooltip(day: DayData, unit: str = "km") -> str:
         pairs = day.pairs or [{"workout": w, "ride": None, "state": ""} for w in day.planned]
         for pair in pairs[:3]:
             w = pair["workout"]
-            head = STATE_MARK.get(pair["state"], "") + _short(w.get("name") or "Workout", 40)
+            head = (STATE_MARK.get(pair["state"], "") + (KEY_MARK if w.get("key_session") else "")
+                    + _short(w.get("name") or "Workout", 40))
             if w.get("workout_type"):
                 head += f" ({_short(w['workout_type'], 20)})"
             tss = _num(w.get("tss_planned"))
@@ -339,6 +340,7 @@ def day_tooltip(day: DayData, unit: str = "km") -> str:
 MAX_CHIPS = 3
 # The mark in front of a planned workout. The grid draws these as boxes, the tooltip as text.
 STATE_MARK = {"done": "\u2713 ", "missed": "\u2717 ", "planned": ""}
+KEY_MARK = "\u2605 "    # a star on a key workout
 
 
 def _chips(day: DayData, today: date) -> list[dict]:
@@ -360,7 +362,7 @@ def _chips(day: DayData, today: date) -> list[dict]:
             tss = _num(w.get("tss_planned"))
         chips.append({
             "kind": "compare" if done else "ride", "id": w.get("id"),
-            "label": _short(w.get("name") or "Workout", 22),
+            "label": (KEY_MARK if w.get("key_session") else "") + _short(w.get("name") or "Workout", 22),
             "tss": round(tss) if tss else None, "done": done, "locked": done, "state": state,
             "color": theme.STATUS_COLORS["done" if done else state],
         })

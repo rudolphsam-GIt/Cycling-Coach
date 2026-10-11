@@ -631,6 +631,14 @@ def update_workout(wid: int, data: dict):
     conn.close()
 
 
+def set_key_session(wid: int, on: bool) -> None:
+    """Mark a planned workout as key, so the coach leaves it where it is unless asked by name."""
+    conn = get_conn()
+    conn.execute("UPDATE workouts SET key_session=? WHERE id=?", (1 if on else 0, wid))
+    conn.commit()
+    conn.close()
+
+
 def move_workout(wid: int, new_date: str) -> dict | None:
     """Move a planned workout to another day. The Garmin ids are cleared, since the
     copy on Garmin is scheduled for the old day. Returns the row as it was before

@@ -246,3 +246,35 @@ class MergeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KeyWorkoutTests(Base):
+    def test_the_coach_cannot_change_a_key_workout_unless_the_athlete_named_it(self):
+        wid = self.ride(D(3))
+        q.set_key_session(wid, True)
+        for change in ({"action": "move", "new_date": D(4)}, {"action": "update", "tss_planned": 60},
+                       {"action": "remove"}):
+            with self.assertRaises(coach_tools.ToolInputError) as e:
+                self.propose([{"target": "ride", "id": wid, "reason": "Busy", **change}])
+            self.assertIn("key workout", str(e.exception))
+        out = self.propose([{"target": "ride", "id": wid, "action": "move", "new_date": D(4),
+                             "reason": "You asked to move Thursday's intervals", "athlete_named_it": True}])
+        self.assertTrue(out[0]["key"])
+        self.assertTrue(pc.describe(out[0]).startswith("Move key workout"))
+
+    def test_other_workouts_still_change_and_the_coach_sees_the_flag(self):
+        key_id, other = self.ride(D(3)), self.ride(D(5), name="Endurance")
+        q.set_key_session(key_id, True)
+        self.assertEqual(len(self.propose([{"target": "ride", "id": other, "action": "move",
+                                            "new_date": D(6), "reason": "Travel"}])), 1)
+        rows = json.loads(coach_tools.run_tool("get_planned_workouts",
+                                               {"start_date": D(0), "end_date": D(7)}, []))
+        flags = {r["id"]: r.get("key") for r in rows}
+        self.assertEqual(flags, {key_id: True, other: None})
+
+    def test_unmarking_frees_it(self):
+        wid = self.ride(D(3))
+        q.set_key_session(wid, True)
+        q.set_key_session(wid, False)
+        self.assertEqual(len(self.propose([{"target": "ride", "id": wid, "action": "remove",
+                                            "reason": "Sick"}])), 1)

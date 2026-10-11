@@ -13,7 +13,7 @@ from components import ftp_help, plan_export, plan_impact_ui, ride_analysis, wor
 from db.queries import (get_workouts, add_workout, update_workout, delete_workout,
                          get_setting, get_races, WORKOUT_TYPES,
                          get_workout, get_strength_session, delete_strength_session, garmin_status, save_message, get_conversation_history, get_conversation_window,
-                         get_memories, forget_memory, save_phase_notes, get_phase_notes)
+                         get_memories, forget_memory, save_phase_notes, get_phase_notes, set_key_session)
 import auth.garmin as garmin_auth
 import exporters
 import garmin_workouts
@@ -431,6 +431,10 @@ def workout_dialog(kind: str, item_id, state: dict) -> None:
                 st.rerun()
         return
 
+    st.toggle("Key workout", value=bool(w.get("key_session")), key="dlg_key",
+              on_change=lambda: set_key_session(w["id"], st.session_state["dlg_key"]),
+              help="A key workout is one you want to protect. Your coach keeps it on its day and "
+                   "rearranges the sessions around it, unless you ask to change this one by name.")
     name = st.text_input("Workout name", value=w["name"], key="dlg_name")
     c1, c2 = st.columns(2)
     wtype = c1.selectbox("Type", WORKOUT_TYPES, key="dlg_type",
