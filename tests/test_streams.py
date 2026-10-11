@@ -112,6 +112,27 @@ class MathTests(unittest.TestCase):
         self.assertEqual((sm.elapsed_label(65), sm.elapsed_label(3725)), ("1:05", "1:02:05"))
 
 
+class CurveTests(unittest.TestCase):
+    STANDARD = (1, 5, 60, 300, 1200, 3600, 7200)
+
+    def test_the_curve_ends_at_the_length_of_the_ride(self):
+        power = [200] * 5400 + [None] * 600 + [150] * 600           # a pause is not riding
+        secs = sm.riding_seconds(power)
+        self.assertEqual(secs, 6000)
+        durations = sm.curve_durations(secs, self.STANDARD)
+        self.assertEqual(durations, [1, 5, 60, 300, 1200, 3600, 5400, 6000])
+        peaks = sm.ride_peaks(power, durations)
+        self.assertEqual(max(peaks), 6000)
+        self.assertAlmostEqual(peaks[6000], 195, delta=0.1)
+
+    def test_long_rides_keep_points_past_two_hours(self):
+        self.assertEqual(sm.curve_durations(18120, self.STANDARD)[-6:], [7200, 9000, 10800, 14400, 18000, 18120])
+
+    def test_short_and_empty_rides(self):
+        self.assertEqual(sm.curve_durations(45, self.STANDARD), [1, 5, 45])
+        self.assertEqual(sm.curve_durations(0, self.STANDARD), [])
+
+
 class SummaryTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

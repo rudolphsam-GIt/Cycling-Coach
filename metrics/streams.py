@@ -209,6 +209,21 @@ def decoupling(power: list, hr: list) -> float | None:
     return (first - second) / first * 100
 
 
+# Extra points for rides longer than two hours, so the curve keeps its shape out to the end.
+LONG_DURATIONS = (5400, 9000, 10800, 14400, 18000, 21600, 25200, 28800)
+
+
+def riding_seconds(power: list) -> int:
+    """Seconds with a power reading. Pauses are cut out, as they are in the peaks."""
+    return sum(v is not None for v in power)
+
+
+def curve_durations(riding_s: int, standard) -> list[int]:
+    """Durations for one ride's power curve: the standard ones that fit, a few longer ones
+    for long rides, and the whole ride, so the curve ends where the ride does."""
+    return sorted({d for d in (*standard, *LONG_DURATIONS) if d < riding_s} | ({riding_s} if riding_s else set()))
+
+
 def ride_peaks(power: list, durations) -> dict[int, float]:
     """This ride's best average power for each duration in seconds."""
     return mean_max([(i, v) for i, v in enumerate(power) if v is not None], durations)

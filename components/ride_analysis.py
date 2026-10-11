@@ -438,12 +438,13 @@ def _peaks(act: dict, streams: dict, part: bool = False) -> None:
     if not power:
         st.caption("This ride has no power data, so there is no power curve.")
         return
-    secs = len(power)
+    secs = sm.riding_seconds(power)
     durations = [d for d in an.PEAK_DURATIONS if d <= secs]
-    mine = sm.ride_peaks(power, durations)
+    mine = sm.ride_peaks(power, sm.curve_durations(secs, an.PEAK_DURATIONS))
     best = an.peak_curve(get_peaks_between("0000-01-01", "9999-12-31") + [
         {"activity_id": act["id"], "date": act["date"], "name": act.get("name"), "duration_s": d, "watts": w}
-        for d, w in mine.items()])
+        for d, w in mine.items() if d in durations])
+    best = {d: v for d, v in best.items() if d <= secs}         # the axis ends where this ride does
     fig = go.Figure()
     fig.add_scatter(x=list(best), y=[v["watts"] for v in best.values()], mode="lines", name="Best ever",
                     line=dict(color=theme.TEXT3, width=2, dash="dot"),
@@ -453,7 +454,8 @@ def _peaks(act: dict, streams: dict, part: bool = False) -> None:
                     line=dict(color=theme.FATIGUE, width=3), marker=dict(size=6),
                     customdata=[[an.duration_label(d)] for d in mine],
                     hovertemplate="%{customdata[0]}: %{y:.0f} W<extra>" + ("This part" if part else "This ride") + "</extra>")
-    ticks = [d for d in durations if d in mine]
+    end = max(mine, default=0)
+    ticks = [d for d in durations if d in mine and d * 1.4 < end] + ([end] if end else [])
     charts.apply_theme(fig, height=300, legend="top")
     fig.update_xaxes(type="log", tickvals=ticks, ticktext=[an.duration_label(d) for d in ticks])
     fig.update_yaxes(title_text="Watts")

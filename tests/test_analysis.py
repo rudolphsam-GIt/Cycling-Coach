@@ -109,6 +109,7 @@ class PeakTests(unittest.TestCase):
 
     def test_labels(self):
         self.assertEqual([an.duration_label(s) for s in (5, 60, 1200, 3600)], ["5 s", "1 min", "20 min", "1 h"])
+        self.assertEqual([an.duration_label(s) for s in (5400, 6023, 7200)], ["1 h 30 min", "1 h 40 min", "2 h"])
         self.assertEqual(an.ride_kind({"sport_type": "road_biking"}), "Road")
 
 

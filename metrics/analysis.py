@@ -35,7 +35,8 @@ def duration_label(secs: int) -> str:
         return f"{secs} s"
     if secs < 3600:
         return f"{secs // 60} min"
-    return f"{secs // 3600} h"
+    h, m = divmod(secs // 60, 60)
+    return f"{h} h {m} min" if m else f"{h} h"
 
 
 # ── Filters ───────────────────────────────────────────────────────────────────
