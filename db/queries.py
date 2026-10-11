@@ -639,6 +639,16 @@ def set_key_session(wid: int, on: bool) -> None:
     conn.close()
 
 
+def set_rpe(wid: int, rpe: int | None) -> None:
+    """How hard the athlete says a workout felt, 1 to 10, or None to clear it."""
+    if rpe is not None and not 1 <= int(rpe) <= 10:
+        raise ValueError("RPE must be from 1 to 10")
+    conn = get_conn()
+    conn.execute("UPDATE workouts SET rpe=? WHERE id=?", (None if rpe is None else int(rpe), wid))
+    conn.commit()
+    conn.close()
+
+
 def move_workout(wid: int, new_date: str) -> dict | None:
     """Move a planned workout to another day. The Garmin ids are cleared, since the
     copy on Garmin is scheduled for the old day. Returns the row as it was before

@@ -13,7 +13,8 @@ from components import ftp_help, plan_export, plan_impact_ui, ride_analysis, wor
 from db.queries import (get_workouts, add_workout, update_workout, delete_workout,
                          get_setting, get_races, WORKOUT_TYPES,
                          get_workout, get_strength_session, delete_strength_session, garmin_status, save_message, get_conversation_history, get_conversation_window,
-                         get_memories, forget_memory, save_phase_notes, get_phase_notes, set_key_session)
+                         get_memories, forget_memory, save_phase_notes, get_phase_notes, set_key_session,
+                         set_rpe)
 import auth.garmin as garmin_auth
 import exporters
 import garmin_workouts
@@ -418,6 +419,7 @@ def workout_dialog(kind: str, item_id, state: dict) -> None:
     if not editable:
         st.write(w.get("description") or "No description.")
         why_block(w)
+        rpe_picker(w, f"dlg_rpe_{w['id']}")
         st.caption("A workout marked done stays as it is. Undo done if you need to change it.")
         with st.container(horizontal=True):
             if w.get("completed"):
@@ -500,6 +502,35 @@ def open_item(kind: str, item_id) -> None:
 
 
 @st.dialog("Planned and ridden", width="large")
+def rpe_picker(w: dict, key: str) -> None:
+    """How hard the workout felt, 1 to 10, saved as soon as it is picked."""
+    def save():
+        set_rpe(w["id"], st.session_state.get(key))
+    st.pills("How hard did it feel? (1 easy, 10 all out)", list(range(1, 11)), key=key,
+             default=w.get("rpe"), on_change=save,
+             help="Your rating goes to your coach with the ride, so it can tell a hard day from a hard number.")
+
+
+def over_plan_review(w: dict, ride: dict) -> None:
+    """A ride well over its plan: say by how much and offer a coach review of the next 3 days."""
+    planned, ridden = float(w.get("tss_planned") or 0), float(ride.get("tss") or 0)
+    st.warning(f"This ride was {ridden:.0f} TSS against {planned:.0f} planned, "
+               f"{(ridden / planned - 1) * 100:.0f}% more than the plan asked for.",
+               icon=":material/trending_up:")
+    if not coach_available:
+        return
+    if st.button("Ask the coach to review the next 3 days", key="cmp_review", icon=":material/forum:"):
+        felt = f" It felt {w['rpe']} out of 10." if w.get("rpe") else ""
+        end = date.fromisoformat(w["date"]) + timedelta(days=3)
+        st.session_state["pending_message"] = (
+            f"My ride on {fmt_day(w['date'])} ({w['name']}) was harder than planned, {ridden:.0f} TSS "
+            f"against {planned:.0f}.{felt} Please check my fatigue and recovery and look at my plan "
+            f"up to {fmt_day(end.isoformat())}. Propose changes only if they are needed, keep my key "
+            f"workouts where they are, and don't overreact to one ride.")
+        st.session_state["plan_jump"] = "coach"
+        st.rerun()
+
+
 def compare_dialog(item_id) -> None:
     """A done workout: what was planned next to the ride that did it."""
     w = get_workout(int(item_id)) if item_id is not None else None
@@ -511,6 +542,9 @@ def compare_dialog(item_id) -> None:
     st.caption(f"{fmt_day(w['date'])} · " + workout_summary(w)
                + (f" · Ridden as {ride.get('name') or 'a ride'}" if ride else ""))
     workout_compare.render(w, ride, key=f"cmp_{w['id']}")
+    if ride and plan_cal.is_over_plan(w, ride):
+        over_plan_review(w, ride)
+    rpe_picker(w, f"cmp_rpe_{w['id']}")
     # A button inside a popup only reruns the popup, so each one reruns the whole page itself.
     with st.container(horizontal=True):
         if ride and st.button("Open the full ride analysis", key="cmp_ride", type="primary",

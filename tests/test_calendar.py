@@ -392,3 +392,17 @@ class PairingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OverPlanTests(unittest.TestCase):
+    def test_a_ride_well_over_plan_is_flagged(self):
+        from components import calendar as c
+        day, today = date(2026, 10, 5), date(2026, 10, 6)
+        w = {"id": 1, "date": day.isoformat(), "name": "Endurance", "tss_planned": 60}
+        for ridden, over in ((70, False), (78, False), (79, True), (120, True)):
+            r = {"id": 9, "date": day.isoformat(), "name": "Group ride", "tss": ridden}
+            pairs, _ = c.pair_day([w], [r], day, today)
+            self.assertEqual(pairs[0]["over"], over, ridden)
+            self.assertEqual(c.derive_status(day, today, [w], [r], 60, ridden), "over" if over else "done")
+        self.assertFalse(c.is_over_plan(w, None))
+        self.assertFalse(c.is_over_plan({"tss_planned": None}, {"tss": 200}))

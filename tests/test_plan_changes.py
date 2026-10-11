@@ -278,3 +278,17 @@ class KeyWorkoutTests(Base):
         q.set_key_session(wid, False)
         self.assertEqual(len(self.propose([{"target": "ride", "id": wid, "action": "remove",
                                             "reason": "Sick"}])), 1)
+
+
+class RpeTests(Base):
+    def test_rpe_is_saved_cleared_checked_and_shown_to_the_coach(self):
+        wid = self.ride(D(-1))
+        q.set_rpe(wid, 8)
+        self.assertEqual(q.get_workout(wid)["rpe"], 8)
+        rows = json.loads(coach_tools.run_tool("get_planned_workouts",
+                                               {"start_date": D(-2), "end_date": D(0)}, []))
+        self.assertEqual(rows[0]["rpe"], 8)
+        q.set_rpe(wid, None)
+        self.assertIsNone(q.get_workout(wid)["rpe"])
+        with self.assertRaises(ValueError):
+            q.set_rpe(wid, 11)

@@ -61,7 +61,9 @@ TOOLS = [
     {
         "name": "get_planned_workouts",
         "description": "Rides already on the athlete's Training Planner between two dates, each with "
-                       "its id (needed to change or remove it), purpose and feel.",
+                       "its id (needed to change or remove it), purpose and feel. key is true on a "
+                       "workout the athlete marked to protect, and rpe is how hard they said a done "
+                       "workout felt, 1 to 10.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -512,7 +514,7 @@ def run_tool(name: str, args: dict, proposals: list[dict]) -> str:
         end = _iso_date(args.get("end_date"), "end_date")
         result = [
             {**{k: w.get(k) for k in ("id", "date", "name", "workout_type", "description", "tss_planned",
-                                      "completed", "purpose", "feel", "phase")
+                                      "completed", "purpose", "feel", "phase", "rpe")
                 if w.get(k) not in (None, "")},
              **({"key": True} if w.get("key_session") else {})}
             for w in get_workouts(start.isoformat(), end.isoformat())

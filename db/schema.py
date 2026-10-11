@@ -280,6 +280,7 @@ def run_migrations():
         "ALTER TABLE activities ADD COLUMN tp_json TEXT",
         "ALTER TABLE activities ADD COLUMN ref_json TEXT",
         "ALTER TABLE workouts ADD COLUMN key_session INTEGER DEFAULT 0",
+        "ALTER TABLE workouts ADD COLUMN rpe INTEGER",
     ]:
         try:
             conn.execute(col_sql)
