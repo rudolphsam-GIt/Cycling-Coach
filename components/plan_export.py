@@ -12,6 +12,7 @@ route here, the Garmin send and the single .fit download.
 """
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 
 import streamlit as st
@@ -19,9 +20,10 @@ import streamlit as st
 import exporters
 import garmin_workouts
 import programs
+import workout_recipes
 from auth import intervals, trainingpeaks
 from db import schema
-from db.queries import get_setting, get_workouts
+from db.queries import get_setting, get_workouts, save_workout_steps
 from metrics.training_load import get_current_metrics
 
 RANGE_KEY = "export_range"
@@ -106,6 +108,15 @@ def render(today: date | None = None) -> None:
         start, end = date_range(choice, today, program, custom)
         rides = [w for w in get_workouts(start, end) if not w.get("completed")]
         missing = [w for w in rides if garmin_workouts.saved_steps(w) is None]
+        # Standard workouts take their recipe's steps straight away. Only the rest need the coach.
+        for w in [w for w in missing if workout_recipes.uses_recipe(w)]:
+            try:
+                steps = workout_recipes.steps_for(w)
+            except workout_recipes.RecipeError:
+                continue
+            save_workout_steps(w["id"], json.dumps(steps))
+            w["structured_json"] = json.dumps(steps)
+            missing.remove(w)
         span = programs.span_label(start, end)
         if not rides:
             st.caption(f"No planned rides from {span}.")
@@ -114,8 +125,9 @@ def render(today: date | None = None) -> None:
         st.caption(f"{len(rides)} planned ride{'s' if len(rides) != 1 else ''} from {span}.")
 
         if missing:
-            st.caption(f"{len(missing)} still need their steps worked out (warm up, intervals, cool down). "
-                       "Your coach does this once per workout, a few at a time, and the result is kept.")
+            st.caption(f"{len(missing)} written workout{'s' if len(missing) != 1 else ''} still need their steps "
+                       "worked out (warm up, intervals, cool down). Your coach does this once per workout, a few at "
+                       "a time, and the result is kept. Standard workouts use their recipe and need nothing.")
             if st.button(f"Prepare steps for {len(missing)} ride{'s' if len(missing) != 1 else ''}",
                          type="primary", icon=":material/build:", key="export_prepare"):
                 bar = st.progress(0.0, text="Working out the steps…")
