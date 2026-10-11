@@ -125,7 +125,7 @@ def render(today: date | None = None) -> None:
         st.caption(f"{len(rides)} planned ride{'s' if len(rides) != 1 else ''} from {span}.")
 
         if missing:
-            st.caption(f"{len(missing)} written workout{'s' if len(missing) != 1 else ''} still need their steps "
+            st.caption(f"{len(missing)} written workout{'s still need their' if len(missing) != 1 else ' still needs its'} steps "
                        "worked out (warm up, intervals, cool down). Your coach does this once per workout, a few at "
                        "a time, and the result is kept. Standard workouts use their recipe and need nothing.")
             if st.button(f"Prepare steps for {len(missing)} ride{'s' if len(missing) != 1 else ''}",
