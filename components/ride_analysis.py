@@ -205,8 +205,26 @@ def _edit_ride(act: dict) -> None:
             st.rerun(scope="fragment")
 
 
-def _planned_tab(planned: list[dict], n: dict) -> None:
-    for w in planned:
+def _planned_tab(planned: list[dict], n: dict, act: dict | None = None, streams: dict | None = None) -> None:
+    """What was planned that day. The workout this ride was paired with on the calendar
+    (components.calendar.pair_day) is shown planned against ridden, any other one briefly."""
+    others = planned
+    if act:
+        from datetime import date as _date
+        from components import workout_compare
+        from components.calendar import pair_day
+        from db.queries import get_activities_between, is_ride
+        day = str(act["date"])[:10]
+        rides = [a for a in get_activities_between(day, day) if is_ride(a)]
+        pairs, _ = pair_day(planned, rides, _date.fromisoformat(day), _date.today())
+        mine = [p["workout"] for p in pairs if p["ride"] is not None and p["ride"].get("id") == act.get("id")]
+        for w in mine:
+            st.markdown(f"**{w['name']}**")
+            workout_compare.render(w, act, streams=streams or {}, key=f"ra_cmp_{act.get('id')}_{w.get('id')}")
+        others = [w for w in planned if not any(w is m for m in mine)]
+        if mine and others:
+            st.markdown("**Also planned this day**")
+    for w in others:
         with st.container(border=True):
             plan = _n(w.get("tss_planned"))
             line = f"**{w['name']}**" + (f", {plan:.0f} TSS planned" if plan else "")
@@ -560,7 +578,7 @@ def render(act: dict) -> None:
         st.info(note, icon=":material/info:")
         if planned:
             st.markdown("**What was planned**")
-            _planned_tab(planned, whole)
+            _planned_tab(planned, whole, act)
         ride_detail.ride_detail(act, key=f"ra_fallback_{act['id']}")
         if st.button("Try again", key=f"ra_retry_{act['id']}", icon=":material/refresh:"):
             st.rerun(scope="fragment")
@@ -577,7 +595,7 @@ def render(act: dict) -> None:
         _peaks(act, view, bool(sel))
     if planned:
         with tabs["Plan"]:
-            _planned_tab(planned, whole)
+            _planned_tab(planned, whole, act, streams)
     with tabs["Coach"]:
         _coach(act)
 

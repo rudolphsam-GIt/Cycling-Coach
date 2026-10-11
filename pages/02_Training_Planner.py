@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from PIL import Image
 from components import page_header
 from components import calendar as plan_cal
-from components import ftp_help, plan_export, plan_impact_ui, ride_analysis
+from components import ftp_help, plan_export, plan_impact_ui, ride_analysis, workout_compare
 
 from db.queries import (get_workouts, add_workout, update_workout, delete_workout,
                          get_setting, get_races, WORKOUT_TYPES,
@@ -319,13 +319,17 @@ def workout_form(default_date: date) -> None:
 def planned_row(w: dict) -> None:
     """One planned workout in the selected day panel, with its actions."""
     wid = w["id"]
+    ride = _paired_ride(w)
     with st.container(border=True):
-        st.markdown(f"**{w['name']}**")
-        st.caption(workout_summary(w))
+        st.markdown((":green[:material/check_box:] " if ride or w.get("completed") else "") + f"**{w['name']}**")
+        st.caption(workout_summary(w) + (f" · :green[Ridden as {ride.get('name') or 'a ride'}]" if ride else ""))
         if w.get("description"):
             st.write(w["description"])
         why_block(w)
         with st.container(horizontal=True):
+            if ride or w.get("completed"):
+                st.button("Planned and ridden", key=f"cal_cmp_{wid}", icon=":material/compare_arrows:",
+                          on_click=open_item, args=("compare", wid))
             if w.get("completed"):
                 st.button("Undo", key=f"cal_undo_{wid}", icon=":material/undo:",
                           on_click=set_done, args=(w, False))
@@ -480,6 +484,49 @@ def workout_dialog(kind: str, item_id, state: dict) -> None:
         fit_button(w, st, "dlg_fit")
 
 
+def _paired_ride(w: dict) -> dict | None:
+    """The ride the calendar paired with this workout, or None."""
+    day = plan_cal.get_day(w["date"], st.session_state.get(plan_cal.MONTH_DAYS_KEY))
+    return next((p["ride"] for p in day.pairs if p["workout"].get("id") == w["id"]), None)
+
+
+def open_item(kind: str, item_id) -> None:
+    """Callback: open a calendar item once this dialog closes."""
+    st.session_state[plan_cal.OPEN_KEY] = {"kind": kind, "id": item_id}
+
+
+@st.dialog("Planned and ridden", width="large")
+def compare_dialog(item_id) -> None:
+    """A done workout: what was planned next to the ride that did it."""
+    w = get_workout(int(item_id)) if item_id is not None else None
+    if not w:
+        st.info("That workout no longer exists.")
+        return
+    ride = _paired_ride(w)
+    st.markdown(f"### :green[:material/check_box:] {w['name']}")
+    st.caption(f"{fmt_day(w['date'])} · " + workout_summary(w)
+               + (f" · Ridden as {ride.get('name') or 'a ride'}" if ride else ""))
+    workout_compare.render(w, ride, key=f"cmp_{w['id']}")
+    # A button inside a popup only reruns the popup, so each one reruns the whole page itself.
+    with st.container(horizontal=True):
+        if ride and st.button("Open the full ride analysis", key="cmp_ride", type="primary",
+                              icon=":material/monitoring:"):
+            open_item("done", ride["id"])
+            st.rerun()
+        if w.get("completed"):
+            if st.button("Undo done", key="cmp_undo", icon=":material/undo:"):
+                set_done(w, False)
+                st.rerun()
+        else:
+            if st.button("Mark done", key="cmp_done", icon=":material/check_circle:",
+                         help="It already counts as done because a ride is recorded on its day."):
+                set_done(w, True)
+                st.rerun()
+            if st.button("Edit workout", key="cmp_edit", icon=":material/edit:"):
+                open_item("ride", w["id"])
+                st.rerun()
+
+
 def remove_strength(sid: int) -> None:
     """Callback: remove a strength session from the plan or the log."""
     removed = delete_strength_session(sid)
@@ -543,6 +590,8 @@ def render_calendar_tab() -> None:
     if opened := st.session_state.pop(plan_cal.OPEN_KEY, None):
         if opened.get("kind") == "done":
             ride_analysis.open_analysis(opened.get("id"))     # a ride that was ridden
+        elif opened.get("kind") == "compare":
+            compare_dialog(opened.get("id"))                  # a done workout and its ride
         else:
             workout_dialog(opened.get("kind"), opened.get("id"), state)
     plan_impact_ui.render_impact_panel(state)
