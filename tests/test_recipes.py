@@ -10,7 +10,7 @@ import workout_recipes as wr
 
 # Sensible planned TSS for each type, from a short taper session up to a big day.
 RANGES = {"Recovery": range(15, 121, 5), "Endurance": range(25, 301, 5), "Long Ride": range(60, 351, 10),
-          "Tempo": range(40, 201, 5), "Threshold": range(40, 201, 5), "VO2 Max": range(35, 181, 5),
+          "Tempo": range(40, 201, 5), "Sweet Spot": range(40, 221, 5), "Threshold": range(40, 201, 5), "VO2 Max": range(35, 181, 5),
           "Sprint/Anaerobic": range(30, 151, 5)}
 
 
@@ -23,7 +23,7 @@ class RecipeTests(unittest.TestCase):
                     self.assertLessEqual(abs(wr.steps_tss(steps) / tss - 1), wr.TOLERANCE)
 
     def test_hard_sessions_keep_their_intervals(self):
-        for wtype in ("Tempo", "Threshold", "VO2 Max", "Sprint/Anaerobic"):
+        for wtype in ("Tempo", "Sweet Spot", "Threshold", "VO2 Max", "Sprint/Anaerobic"):
             steps = wr.build(wtype, 100)
             reps = [s for s in steps if s["kind"] == "repeat"]
             self.assertTrue(reps and reps[0]["repeat_count"] >= wr.RECIPES[wtype]["reps"][0], wtype)
@@ -73,3 +73,14 @@ class RecipeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SweetSpotTests(unittest.TestCase):
+    def test_sweet_spot_is_a_full_workout_type(self):
+        from db.queries import WORKOUT_TYPES
+        from metrics import explain
+        self.assertIn("Sweet Spot", WORKOUT_TYPES)
+        self.assertIn("88 to 93%", explain.PURPOSE["Sweet Spot"])
+        self.assertTrue(explain.feel_for("Sweet Spot").startswith("6 to 7"))
+        steps = wr.build("Sweet Spot", 110)
+        self.assertIn("at 88 to 93% FTP", wr.describe(steps))

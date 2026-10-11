@@ -569,7 +569,7 @@ def get_daily_tss(start: str, end: str) -> dict:
 
 # ── Workouts ──────────────────────────────────────────────────────────────────
 
-WORKOUT_TYPES = ["Endurance", "Tempo", "Threshold", "VO2 Max", "Sprint/Anaerobic",
+WORKOUT_TYPES = ["Endurance", "Tempo", "Sweet Spot", "Threshold", "VO2 Max", "Sprint/Anaerobic",
                  "Recovery", "Long Ride", "Race", "Other"]
 
 

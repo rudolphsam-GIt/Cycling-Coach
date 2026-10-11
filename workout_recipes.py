@@ -24,6 +24,7 @@ RECIPES = {
     "Endurance": {"steady": (65, 75)},
     "Long Ride": {"steady": (62, 72)},
     "Tempo": {"work": (15, 80, 87), "rest": (5, 55, 65), "reps": (2, 4), "steady": (65, 75)},
+    "Sweet Spot": {"work": (15, 88, 93), "rest": (5, 55, 65), "reps": (2, 4), "steady": (65, 75)},
     "Threshold": {"work": (10, 95, 100), "rest": (5, 50, 60), "reps": (2, 5), "steady": (65, 75)},
     "VO2 Max": {"work": (4, 110, 120), "rest": (4, 50, 60), "reps": (3, 6), "steady": (65, 75)},
     "Sprint/Anaerobic": {"work": (0.5, 150, 170), "rest": (4.5, 50, 60), "reps": (4, 10), "steady": (65, 75)},

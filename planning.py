@@ -121,7 +121,7 @@ TAPER_TEMPLATE = [
     ("Fri", None,        0.0), ("Sat", "Endurance", 1.10),
     ("Sun", "Recovery",  0.50),
 ]
-HARD_TYPES = {"Threshold", "VO2 Max", "Sprint/Anaerobic", "Race"}
+HARD_TYPES = {"Sweet Spot", "Threshold", "VO2 Max", "Sprint/Anaerobic", "Race"}
 FINAL_WEEK_HARD_MAX = 60  # TSS cap on a hard session in the last 7 days before the race
 OPENERS_MAX = 40          # the day before the race
 EASY_MAX = 35             # two days before the race

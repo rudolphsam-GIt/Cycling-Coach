@@ -437,6 +437,8 @@ FEEL = {
     "Long Ride": "3 to 4 out of 10 at the start and still controlled at the end. Chat in full sentences, "
                  "and eat and drink on a schedule.",
     "Tempo": "5 to 6 out of 10. Working but sustainable. You can talk in short sentences.",
+    "Sweet Spot": "6 to 7 out of 10. Firm and focused but controlled. You can say a short sentence, "
+                  "and you could hold it a good while longer if you had to.",
     "Threshold": "7 to 8 out of 10. Hard but even. You can say a few words at a time, no more.",
     "VO2 Max": "9 out of 10 in each interval. Very hard, one or two words at a time. "
                "The rest between intervals should feel like real recovery.",
@@ -460,6 +462,9 @@ PURPOSE = {
     "Long Ride": "Builds endurance and mental toughness, and practises eating and drinking on the bike.",
     "Tempo": "Teaches you to hold a firm, steady effort. It raises the pace you can sustain without "
              "costing as much recovery as threshold work.",
+    "Sweet Spot": "Long, steady efforts just under threshold, at 88 to 93% of FTP. They raise the power you "
+                  "can hold for a long time while costing less recovery than threshold work, so you can do "
+                  "more of it.",
     "Threshold": "Raises the power you can hold for a long time, which is the biggest single driver "
                  "of how fast you ride.",
     "VO2 Max": "Hard intervals that raise your top end, the ceiling for everything below it. "
