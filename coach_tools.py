@@ -390,7 +390,10 @@ TOOLS = [
                        "use it as a starting scaffold for a multi-week plan you're building with "
                        "the athlete in conversation, then adjust it based on what they tell you "
                        "before calling propose_workouts with the final version. When the athlete has "
-                       "set the weekdays they can ride, the rides land only on those days.",
+                       "set the weekdays they can ride, the rides land only on those days. The result has "
+                       "an outlook: the peak CTL before the taper, CTL on race day, the weekly ramp, and "
+                       "whether the target is reachable at a ramp of at most 5 CTL a week. If it isn't, "
+                       "tell the athlete the reachable peak plainly rather than presenting the target.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -769,7 +772,7 @@ def _propose_changes(args: dict, proposals: list[dict]) -> str:
             "yet. Tell the athlete what you are proposing and why, and to review and confirm below the chat.")
 
 
-def _generate_block(args: dict) -> list[dict]:
+def _generate_block(args: dict) -> dict:
     target_ctl = args.get("target_ctl")
     if not isinstance(target_ctl, (int, float)) or isinstance(target_ctl, bool) or not 10 <= target_ctl <= 200:
         raise ToolInputError("target_ctl must be a number from 10 to 200")
@@ -789,6 +792,6 @@ def _generate_block(args: dict) -> list[dict]:
         days = int(float(get_setting("days_per_week", 0) or 0)) or None
     except (TypeError, ValueError):
         days = None
-    return planning.generate_block(current_ctl, float(target_ctl), race_date, phase_focus, start,
-                                   days_per_week=days,
-                                   available_days=get_setting("available_days", "") or None)
+    return planning.plan_block(current_ctl, float(target_ctl), race_date, phase_focus, start,
+                               days_per_week=days,
+                               available_days=get_setting("available_days", "") or None)

@@ -14,6 +14,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from metrics import explain
+from metrics.training_load import CTL_ALPHA
 
 DAY_TEMPLATES = {
     "Endurance": [
@@ -103,58 +104,132 @@ def target_ctl_range(current_ctl: float) -> tuple[int, int, int]:
     return lo, hi, default
 
 
-def generate_block(current_ctl: float, target_ctl: float, race_date: date,
-                    phase_key: str, start_date: date | None = None,
-                    days_per_week: int | None = None,
-                    available_days: list[str] | str | None = None) -> list[dict]:
+# How the weekly load is worked out. Fitness (CTL) trails training load by weeks, so the load
+# is chosen week by week to land fitness where it should be, instead of ramping the load itself.
+MAX_RAMP = 5.0            # CTL points a week at most, the gentle ramp the coach also uses
+RECOVERY_FACTOR = 0.65    # a lighter week's load against the last normal week
+TAPER_FACTORS = {2: (0.6, 0.4), 1: (0.5,)}   # taper weeks' load against the last build week
+REACH_MARGIN = 2.0        # a peak this close to the target counts as reaching it
+_WEEK_DECAY = (1 - CTL_ALPHA) ** 7
+
+# The taper keeps a little intensity and drops volume. No race simulations, and the two days
+# before the race are only easy spinning and openers.
+TAPER_TEMPLATE = [
+    ("Mon", None,        0.0), ("Tue", "Threshold", 1.00),
+    ("Wed", "Recovery",  0.45), ("Thu", "VO2 Max",  0.80),
+    ("Fri", None,        0.0), ("Sat", "Endurance", 1.10),
+    ("Sun", "Recovery",  0.50),
+]
+HARD_TYPES = {"Threshold", "VO2 Max", "Sprint/Anaerobic", "Race"}
+FINAL_WEEK_HARD_MAX = 60  # TSS cap on a hard session in the last 7 days before the race
+OPENERS_MAX = 40          # the day before the race
+EASY_MAX = 35             # two days before the race
+OPENERS_PURPOSE = ("Short openers the day before your race. A few brief efforts wake your legs up "
+                   "without tiring them, so you start fresh and ready.")
+OPENERS_FEEL = ("Easy spinning, 2 to 3 out of 10, with three or four 30 second efforts at about "
+                "8 out of 10 and full rest between them. Stop while you feel good.")
+
+
+def _is_recovery_week(wk: int, build_weeks: int) -> bool:
+    """Every 4th week is lighter, except the last build week, since the taper follows it."""
+    return (wk + 1) % 4 == 0 and wk < build_weeks - 1
+
+
+def _build_loads(current_ctl: float, target_ctl: float, build_weeks: int, ramp: float) -> tuple[list, float]:
+    """Weekly TSS for the build weeks when fitness climbs by at most `ramp` a week and stops at
+    the target, plus the peak fitness it reaches. Assumes an even load across each week."""
+    ctl, peak, last_normal, loads = current_ctl, current_ctl, None, []
+    for wk in range(build_weeks):
+        if _is_recovery_week(wk, build_weeks):
+            load = (last_normal if last_normal is not None else ctl * 7) * RECOVERY_FACTOR
+        else:
+            # Up by at most `ramp`, and down by at most MAX_RAMP when the target is below today.
+            goal = min(ctl + ramp, target_ctl) if target_ctl >= ctl else max(ctl - MAX_RAMP, target_ctl)
+            load = max((goal - ctl * _WEEK_DECAY) / (1 - _WEEK_DECAY), 0.0) * 7
+            last_normal = load
+        ctl = load / 7 + (ctl - load / 7) * _WEEK_DECAY
+        peak = max(peak, ctl)
+        loads.append(load)
+    return loads, peak
+
+
+def _gentlest_ramp(current_ctl: float, target_ctl: float, build_weeks: int) -> float:
+    """The smallest weekly ramp, up to MAX_RAMP, that reaches the target by the end of the build.
+    Spreading the climb evenly is easier on the body than front loading it."""
+    if _build_loads(current_ctl, target_ctl, build_weeks, MAX_RAMP)[1] < target_ctl - 0.25:
+        return MAX_RAMP
+    lo, hi = 0.0, MAX_RAMP
+    for _ in range(30):
+        mid = (lo + hi) / 2
+        if _build_loads(current_ctl, target_ctl, build_weeks, mid)[1] >= target_ctl - 0.25:
+            hi = mid
+        else:
+            lo = mid
+    return hi
+
+
+def _taper_day(w_type: str, day_tss: float, days_to_race: int) -> tuple[str, str, float, str | None, str | None]:
+    """The taper session for a day, made easy in the last two days before the race and short in
+    the final week. Returns (workout_type, name, tss, purpose, feel); purpose and feel are None
+    when the usual wording for the type fits."""
+    if days_to_race == 1:
+        return "Recovery", "Openers", min(day_tss, OPENERS_MAX), OPENERS_PURPOSE, OPENERS_FEEL
+    if days_to_race == 2:
+        return "Recovery", "Recovery", min(day_tss, EASY_MAX), None, None
+    if days_to_race <= 7 and w_type in HARD_TYPES:
+        return w_type, f"Short {w_type}", min(day_tss, FINAL_WEEK_HARD_MAX), None, None
+    return w_type, w_type, day_tss, None, None
+
+
+def plan_block(current_ctl: float, target_ctl: float, race_date: date,
+               phase_key: str, start_date: date | None = None,
+               days_per_week: int | None = None,
+               available_days: list[str] | str | None = None) -> dict:
     """
-    Generate a periodized block of ride workouts from start_date (default
-    today) to race_date, ramping weekly TSS from current_ctl toward
-    target_ctl, with a 1-2 week taper worked into the end. Returns plain
-    workout dicts — date, name, workout_type, description, tss_planned, plus
-    phase/week_number for grouping a multi-week proposal in the UI. Nothing
-    is written to the database. `days_per_week` limits how many days a week get a ride.
-    `available_days` (weekday names) puts the rides on those weekdays instead, and wins
-    over `days_per_week` when both are given.
+    A periodized block of ride workouts from start_date (default today) to race_date, with
+    an outlook saying whether the target fitness is reachable.
+
+    The weekly load is chosen so fitness (CTL) climbs evenly toward target_ctl, by no more than
+    MAX_RAMP points a week, with every 4th week lighter and a 1 or 2 week taper at the end.
+    When the target can't be reached that way, the block builds as far as it safely can and the
+    outlook says so. Returns {"workouts": [...], "outlook": {...}}. Workouts are plain dicts
+    (date, name, workout_type, description, tss_planned, phase, week_number, purpose, feel,
+    phase_note). Nothing is written to the database. `days_per_week` limits how many days a
+    week get a ride. `available_days` (weekday names) puts the rides on those weekdays instead,
+    and wins over `days_per_week` when both are given.
     """
     today = start_date or date.today()
-    weeks_out = max(1, (race_date - today).days // 7)
+    # Count a part week before the race as a week, so the days just before it are planned too.
+    weeks_out = max(1, -(-(race_date - today).days // 7))
     taper_weeks = 2 if weeks_out >= 6 else 1
     build_weeks = max(1, weeks_out - taper_weeks)
 
-    current_weekly_tss = current_ctl * 7
-    target_weekly_tss = target_ctl * 7
+    ramp = _gentlest_ramp(current_ctl, target_ctl, build_weeks)
+    build_loads, _ = _build_loads(current_ctl, target_ctl, build_weeks, ramp)
+    last_build = next((build_loads[i] for i in reversed(range(build_weeks))
+                       if not _is_recovery_week(i, build_weeks)), current_ctl * 7)
+    taper_factors = TAPER_FACTORS[taper_weeks]
 
     if phase_key not in DAY_TEMPLATES:
         phase_key = "Endurance"
     phase_label = PHASE_LABELS[phase_key]
     days = parse_days(available_days)
 
-    def week_template(key: str) -> list:
+    def week_template(tmpl: list) -> list:
         if days:
-            return _place_on_days(DAY_TEMPLATES[key], days)
-        return _fit_to_days(DAY_TEMPLATES[key], days_per_week)
+            return _place_on_days(tmpl, days)
+        return _fit_to_days(tmpl, days_per_week)
 
     workouts: list[dict] = []
     for wk in range(weeks_out):
         is_taper = wk >= build_weeks
-        recovery = (not is_taper) and ((wk + 1) % 4 == 0)
-
+        recovery = (not is_taper) and _is_recovery_week(wk, build_weeks)
         if is_taper:
-            taper_phase = wk - build_weeks  # 0 or 1
-            multiplier = 0.6 if taper_phase == 0 else 0.4
-            week_tss = target_weekly_tss * multiplier
-            tmpl = week_template("Peak")
-        elif recovery:
-            progress = wk / max(build_weeks - 1, 1)
-            week_tss = (current_weekly_tss + progress *
-                        (target_weekly_tss - current_weekly_tss)) * 0.65
-            tmpl = week_template(phase_key)
+            week_tss = last_build * taper_factors[min(wk - build_weeks, len(taper_factors) - 1)]
+            tmpl = week_template(TAPER_TEMPLATE)
         else:
-            progress = wk / max(build_weeks - 1, 1)
-            week_tss = (current_weekly_tss +
-                        progress * (target_weekly_tss - current_weekly_tss))
-            tmpl = week_template(phase_key)
+            week_tss = build_loads[wk]
+            tmpl = week_template(DAY_TEMPLATES[phase_key])
 
         active_days = [(d, t, wt) for d, t, wt in tmpl if t and wt > 0]
         total_weight = sum(wt for _, _, wt in active_days)
@@ -162,36 +237,73 @@ def generate_block(current_ctl: float, target_ctl: float, race_date: date,
         week_start = today + timedelta(weeks=wk)
         for day_offset in range(7):
             w_date = week_start + timedelta(days=day_offset)
+            if w_date >= race_date:
+                break
             # Each date takes its own weekday's session, so the long ride stays on the weekend
             # whatever day the block starts on.
             _, w_type, weight_frac = tmpl[w_date.weekday()]
             if not w_type or weight_frac == 0:
                 continue
             day_tss = round(week_tss * (weight_frac / total_weight))
+            name, purpose, feel = w_type, None, None
+            if is_taper:
+                w_type, name, day_tss, purpose, feel = _taper_day(w_type, day_tss, (race_date - w_date).days)
             if day_tss < 10:
                 continue
-            if w_date >= race_date:
-                break
             label = "(Taper) " if is_taper else ("(Recovery) " if recovery else "")
             week_phase = TAPER_LABEL if is_taper else phase_label
-            purpose = explain.PURPOSE.get(w_type, explain.PURPOSE["Other"])
+            purpose = purpose or explain.PURPOSE.get(w_type, explain.PURPOSE["Other"])
             if recovery:
                 purpose = ("This is a lighter week on purpose. Your body gets stronger while it recovers, "
                            "so keep it easy. " + purpose)
             workouts.append({
                 "date": w_date.isoformat(),
-                "name": f"{label}{w_type}",
+                "name": f"{label}{name}",
                 "workout_type": w_type,
                 "description": f"Auto-generated · {week_phase} · week {wk + 1}",
                 "tss_planned": float(day_tss),
                 "phase": week_phase,
                 "week_number": wk + 1,
                 "purpose": purpose,
-                "feel": explain.feel_for(w_type),
+                "feel": feel or explain.feel_for(w_type),
                 "phase_note": PHASE_NOTES.get(week_phase),
             })
 
-    return workouts
+    return {"workouts": workouts,
+            "outlook": block_outlook(workouts, current_ctl, target_ctl, today, race_date, ramp)}
+
+
+def block_outlook(workouts: list[dict], current_ctl: float, target_ctl: float,
+                  start: date, race_date: date, ramp: float | None = None) -> dict:
+    """What a block does to fitness, day by day as written: the peak before the taper, the
+    fitness on race day, and whether that peak reaches the target."""
+    daily: dict[str, float] = {}
+    for w in workouts:
+        daily[w["date"]] = daily.get(w["date"], 0.0) + float(w["tss_planned"] or 0)
+    taper_start = min((w["date"] for w in workouts if w["phase"] == TAPER_LABEL), default=race_date.isoformat())
+    ctl, peak, day = float(current_ctl), float(current_ctl), start
+    while day < race_date:
+        ctl += (daily.get(day.isoformat(), 0.0) - ctl) * CTL_ALPHA
+        if day.isoformat() < taper_start:
+            peak = max(peak, ctl)
+        day += timedelta(days=1)
+    return {
+        "target_ctl": round(float(target_ctl), 1),
+        "peak_ctl": round(peak, 1),
+        "race_day_ctl": round(ctl, 1),
+        "reachable": peak >= target_ctl - REACH_MARGIN,
+        "ramp_per_week": round(ramp, 1) if ramp is not None else None,
+        "max_ramp_per_week": MAX_RAMP,
+    }
+
+
+def generate_block(current_ctl: float, target_ctl: float, race_date: date,
+                   phase_key: str, start_date: date | None = None,
+                   days_per_week: int | None = None,
+                   available_days: list[str] | str | None = None) -> list[dict]:
+    """Just the workouts of plan_block."""
+    return plan_block(current_ctl, target_ctl, race_date, phase_key, start_date,
+                      days_per_week, available_days)["workouts"]
 
 
 # ── Target plan (set when a coach adds an athlete) ────────────────────────────

@@ -120,7 +120,7 @@ The Plan page has three tabs.
 
 **Coach.** Chat with your AI coach. It can propose single workouts or a whole block of weeks, including strength sessions, and plan a multi month program such as the off season, which you review, download as a PDF and then add to your calendar. It also holds your coach memory and the weekly check in, which sits open at the top from Saturday to Monday until you run it. See "Chatting with the coach" below.
 
-**Manage.** Lists of this week's workouts and everything upcoming. From here you can send a whole week to Garmin or download a whole week as `.fit` files. Quick Generate is also here. It builds a training block toward a race from your current fitness and a target peak fitness, without any conversation. It adds workouts straight to your plan, and you can edit or remove them afterward.
+**Manage.** Lists of this week's workouts and everything upcoming. From here you can send a whole week to Garmin or download a whole week as `.fit` files. Quick Generate is also here. It builds a training block toward a race from your current fitness and a target peak fitness, without any conversation. Fitness climbs evenly by at most 5 points a week, with every fourth week lighter, and before you press Generate it shows the peak you will reach. If your target is out of reach by race day it says so and builds as far as it safely can. The taper keeps a little intensity, has no race simulations, and the last two days are an easy spin and short openers. It adds workouts straight to your plan, and you can edit or remove them afterward.
 
 ### Progress
 

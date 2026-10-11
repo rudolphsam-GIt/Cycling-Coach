@@ -880,12 +880,25 @@ def render_quick_generate() -> None:
         phase_label = st.selectbox("Phase focus", list(planning.PHASE_LABELS.values()))
         phase_key = next(k for k, v in planning.PHASE_LABELS.items() if v == phase_label)
 
+        block = planning.plan_block(
+            current_ctl, target_ctl, race_date, phase_key,
+            days_per_week=int(float(get_setting("days_per_week", 0) or 0)) or None,
+            available_days=get_setting("available_days", "") or None)
+        outlook = block["outlook"]
+        if chosen_race is not None:
+            if outlook["reachable"]:
+                st.caption(f"Fitness climbs about {outlook['ramp_per_week']:.1f} points a week to a peak of "
+                           f"**{outlook['peak_ctl']:.0f}** before the taper, and is about "
+                           f"{outlook['race_day_ctl']:.0f} on race day as the taper freshens you up.")
+            else:
+                st.warning(f"A target of {target_ctl} isn't reachable by race day while fitness climbs by at "
+                           f"most {outlook['max_ramp_per_week']:.0f} points a week. This block builds as far as "
+                           f"that allows and peaks at about **{outlook['peak_ctl']:.0f}**.",
+                           icon=":material/info:")
+
         if st.button("Generate training block", width="stretch", type="primary",
                      disabled=chosen_race is None):
-            drafted = planning.generate_block(
-                current_ctl, target_ctl, race_date, phase_key,
-                days_per_week=int(float(get_setting("days_per_week", 0) or 0)) or None,
-                available_days=get_setting("available_days", "") or None)
+            drafted = block["workouts"]
             new_ids = [add_workout({
                 "date": w["date"], "name": w["name"], "workout_type": w["workout_type"],
                 "description": w["description"], "structured_json": None,
@@ -901,7 +914,8 @@ def render_quick_generate() -> None:
                     new_ids.append(test_id)
             st.session_state["wizard_generated_ids"] = new_ids
             st.session_state["wizard_msg"] = (f"Generated {len(drafted)} workouts over {weeks_out} "
-                                              f"weeks, targeting CTL {target_ctl} before the taper.")
+                                              f"weeks. Fitness peaks at about CTL {outlook['peak_ctl']:.0f} "
+                                              f"before the taper.")
             st.rerun()
 
         if gen_ids := st.session_state.get("wizard_generated_ids"):
