@@ -174,7 +174,8 @@ def _taper_day(w_type: str, day_tss: float, days_to_race: int) -> tuple[str, str
     the final week. Returns (workout_type, name, tss, purpose, feel); purpose and feel are None
     when the usual wording for the type fits."""
     if days_to_race == 1:
-        return "Recovery", "Openers", min(day_tss, OPENERS_MAX), OPENERS_PURPOSE, OPENERS_FEEL
+        tss = round(workout_recipes.steps_tss(workout_recipes.OPENERS))
+        return "Recovery", workout_recipes.OPENERS_NAME, tss, OPENERS_PURPOSE, OPENERS_FEEL
     if days_to_race == 2:
         return "Recovery", "Recovery", min(day_tss, EASY_MAX), None, None
     if days_to_race <= 7 and w_type in HARD_TYPES:
@@ -259,7 +260,8 @@ def plan_block(current_ctl: float, target_ctl: float, race_date: date,
                            "so keep it easy. " + purpose)
             description = f"{workout_recipes.AUTO_MARK} · {week_phase} · week {wk + 1}"
             try:
-                description = workout_recipes.describe(workout_recipes.build(w_type, day_tss)) + "\n" + description
+                description = (workout_recipes.describe(workout_recipes.steps_for(
+                    {"name": name, "workout_type": w_type, "tss_planned": day_tss})) + "\n" + description)
             except (KeyError, workout_recipes.RecipeError):
                 pass
             workouts.append({

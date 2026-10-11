@@ -31,6 +31,16 @@ RECIPES = {
 }
 MAX_STEADY_MIN = 480
 
+# The day before a race: a short spin with a few sharp efforts, the same whatever the plan's TSS.
+OPENERS_NAME = "Openers"
+OPENERS = [
+    {"kind": "warmup", "minutes": 15, "low_pct": 50, "high_pct": 65},
+    {"kind": "repeat", "repeat_count": 4, "minutes": None, "low_pct": None, "high_pct": None,
+     "repeat_steps": [{"kind": "interval", "minutes": 0.5, "low_pct": 115, "high_pct": 125},
+                      {"kind": "recovery", "minutes": 2.5, "low_pct": 50, "high_pct": 60}]},
+    {"kind": "cooldown", "minutes": 10, "low_pct": 45, "high_pct": 60},
+]
+
 
 def has_recipe(workout_type: str | None) -> bool:
     return workout_type in RECIPES
@@ -43,6 +53,14 @@ def uses_recipe(workout: dict) -> bool:
         return False
     desc = (workout.get("description") or "").strip()
     return not desc or any(line.strip().startswith(AUTO_MARK) for line in desc.splitlines())
+
+
+def steps_for(workout: dict) -> list:
+    """The recipe steps for a workout that uses_recipe. Raises RecipeError when its TSS is out
+    of the recipe's reach."""
+    if OPENERS_NAME in (workout.get("name") or ""):
+        return [dict(s) for s in OPENERS]
+    return build(workout["workout_type"], workout.get("tss_planned"))
 
 
 def _leaves(steps: list):

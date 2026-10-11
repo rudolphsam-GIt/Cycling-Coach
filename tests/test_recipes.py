@@ -84,3 +84,19 @@ class SweetSpotTests(unittest.TestCase):
         self.assertTrue(explain.feel_for("Sweet Spot").startswith("6 to 7"))
         steps = wr.build("Sweet Spot", 110)
         self.assertIn("at 88 to 93% FTP", wr.describe(steps))
+
+
+class OpenersTests(unittest.TestCase):
+    def test_openers_are_short_with_a_few_efforts(self):
+        start = date(2026, 10, 12)
+        race = start + timedelta(weeks=8, days=6)
+        plan = planning.generate_block(75, 85, race, "Threshold", start)
+        eve = next(w for w in plan if w["date"] == (race - timedelta(days=1)).isoformat())
+        steps = wr.steps_for(eve)
+        self.assertEqual(steps, wr.OPENERS)
+        self.assertLessEqual(sum(s["minutes"] for s in wr._leaves(steps)), 40)
+        self.assertAlmostEqual(eve["tss_planned"], wr.steps_tss(steps), delta=1)
+        self.assertIn("4 x 30 s at 115 to 125% FTP", eve["description"])
+        with mock.patch.object(gw, "get_setting", return_value="300"), \
+                mock.patch.object(gw.claude_client, "structured", side_effect=AssertionError("no Claude")):
+            self.assertEqual(gw.build_steps(eve), wr.OPENERS)

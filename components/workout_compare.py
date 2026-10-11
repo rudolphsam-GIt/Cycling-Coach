@@ -226,7 +226,7 @@ def render(workout: dict, ride: dict | None, *, streams: dict | None = None, ste
         import workout_recipes          # a standard workout's recipe is known without building it
         if workout_recipes.uses_recipe(workout):
             try:
-                steps = workout_recipes.build(workout["workout_type"], workout.get("tss_planned"))
+                steps = workout_recipes.steps_for(workout)
             except workout_recipes.RecipeError:
                 steps = None
     if ftp is None:

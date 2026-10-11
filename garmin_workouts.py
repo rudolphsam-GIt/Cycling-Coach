@@ -129,7 +129,7 @@ def build_steps(workout: dict) -> list:
     ftp = _ftp()
     if workout_recipes.uses_recipe(workout):
         try:
-            return check_steps(workout_recipes.build(workout["workout_type"], workout.get("tss_planned")))
+            return check_steps(workout_recipes.steps_for(workout))
         except workout_recipes.RecipeError:
             pass
     prompt = (f"FTP: {ftp:.0f} W\n"
