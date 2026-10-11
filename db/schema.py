@@ -168,6 +168,18 @@ CREATE TABLE IF NOT EXISTS activity_hr_peaks (
     PRIMARY KEY (activity_id, duration_s)
 );
 
+CREATE TABLE IF NOT EXISTS my_workouts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    workout_type TEXT,
+    description TEXT,
+    steps_json TEXT NOT NULL,
+    tss REAL,
+    purpose TEXT,
+    feel TEXT,
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS ai_conversations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp TEXT NOT NULL,

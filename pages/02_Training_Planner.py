@@ -14,7 +14,7 @@ from db.queries import (get_workouts, add_workout, update_workout, delete_workou
                          get_setting, get_races, WORKOUT_TYPES,
                          get_workout, get_strength_session, delete_strength_session, garmin_status, save_message, get_conversation_history, get_conversation_window,
                          get_memories, forget_memory, save_phase_notes, get_phase_notes, set_key_session,
-                         set_rpe)
+                         set_rpe, get_my_workouts, delete_my_workout)
 import auth.garmin as garmin_auth
 import exporters
 import garmin_workouts
@@ -644,6 +644,7 @@ def render_calendar_tab() -> None:
 
 STARTER_FALLBACK = [
     "Help me build a training block",
+    "Help me build a workout of my own",
     "What should my focus be this week?",
     "Suggest a workout for today",
     "How is my training load looking, am I overdoing it?",
@@ -976,9 +977,40 @@ def render_quick_generate() -> None:
                 st.session_state.pop("wizard_msg", None)
 
 
+def add_my_workout_to_plan(mw: dict, day: date) -> None:
+    """Put a workout from My workouts on a day, with its saved steps."""
+    add_workout({"date": day.isoformat(), "name": mw["name"], "workout_type": mw.get("workout_type") or "Other",
+                 "description": mw.get("description") or "", "structured_json": json.dumps(mw["steps"]),
+                 "tss_planned": mw.get("tss"), "notes": "From My workouts",
+                 "purpose": mw.get("purpose"), "feel": mw.get("feel")})
+    st.toast(f"Added {mw['name']} on {fmt_day(day.isoformat())}")
+
+
+def render_my_workouts() -> None:
+    saved = get_my_workouts()
+    with st.expander(f"My workouts ({len(saved)})" if saved else "My workouts"):
+        if not saved:
+            st.caption("Workouts you build with your coach and choose to keep land here. In the Coach tab, "
+                       "try \"Help me build a workout of my own\".")
+            return
+        for mw in saved:
+            with st.container(border=True):
+                st.markdown(f"**{mw['name']}** · {mw.get('workout_type') or 'Other'} · {mw.get('tss') or 0:.0f} TSS")
+                st.caption(mw.get("description") or "")
+                if mw.get("purpose"):
+                    st.caption(f"Why. {mw['purpose']}")
+                with st.container(horizontal=True, vertical_alignment="bottom"):
+                    day = st.date_input("Day", value=today, min_value=today, key=f"mw_day_{mw['id']}")
+                    st.button("Add to plan", key=f"mw_add_{mw['id']}", icon=":material/add:",
+                              on_click=add_my_workout_to_plan, args=(mw, day))
+                    st.button("Remove", key=f"mw_del_{mw['id']}", icon=":material/delete:",
+                              on_click=delete_my_workout, args=(mw["id"],))
+
+
 def render_manage_tab() -> None:
     plan_export.render(today)
     render_quick_generate()
+    render_my_workouts()
 
     view = st.segmented_control("Show", ["This week", "All upcoming"], default="This week",
                                 required=True, key="manage_view", label_visibility="collapsed")

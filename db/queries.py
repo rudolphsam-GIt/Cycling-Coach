@@ -1462,3 +1462,37 @@ def forget_memory(mid: int) -> None:
     conn.execute("UPDATE coach_memory SET active=0 WHERE id=?", (mid,))
     conn.commit()
     conn.close()
+
+
+# ── My workouts (workouts the athlete built with the coach and kept) ─────────
+
+def add_my_workout(data: dict) -> int:
+    conn = get_conn()
+    wid = conn.execute(
+        """INSERT INTO my_workouts (name, workout_type, description, steps_json, tss, purpose, feel, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (data["name"], data.get("workout_type"), data.get("description"), json.dumps(data["steps"]),
+         data.get("tss"), data.get("purpose"), data.get("feel"), datetime.utcnow().isoformat()),
+    ).lastrowid
+    conn.commit()
+    conn.close()
+    return wid
+
+
+def get_my_workouts() -> list[dict]:
+    conn = get_conn()
+    rows = conn.execute("SELECT * FROM my_workouts ORDER BY name COLLATE NOCASE").fetchall()
+    conn.close()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["steps"] = json.loads(d.pop("steps_json") or "[]")
+        out.append(d)
+    return out
+
+
+def delete_my_workout(wid: int) -> None:
+    conn = get_conn()
+    conn.execute("DELETE FROM my_workouts WHERE id=?", (wid,))
+    conn.commit()
+    conn.close()

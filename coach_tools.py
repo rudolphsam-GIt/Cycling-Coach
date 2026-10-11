@@ -13,15 +13,27 @@ from datetime import date, timedelta
 
 from db.queries import (get_activities, get_workouts, get_races, get_wellness_range,
                         get_ftp_history, get_weekly_tss_summary, get_setting, get_recovery_range,
-                        add_memory,
+                        add_memory, get_my_workouts,
                         WORKOUT_TYPES)
 from metrics.training_load import compute_pmc, get_current_metrics
+import garmin_workouts
 import knowledge
 import planning
 import programs
+import workout_recipes
 
 
 MEMORY_CATEGORIES = ["health", "schedule", "preferences", "goals", "training_response", "other"]
+
+
+STEPS_PROP = {
+    "type": "array",
+    "description": "The workout as steps, in order. A step is warmup, interval, recovery or cooldown with "
+                   "minutes and a power range as percent of FTP (low_pct to high_pct, both null for no "
+                   "target). Use kind repeat with repeat_count and repeat_steps for repeated sets.",
+    "items": garmin_workouts.SCHEMA["properties"]["steps"]["items"],
+}
+STEPS_TSS_TOLERANCE = 0.10
 
 
 def _int_prop(description: str, minimum: int, maximum: int) -> dict:
@@ -166,6 +178,13 @@ TOOLS = [
                                                     "multi-week blocks, groups the proposal in the UI"},
                             "week_number": {"type": "integer",
                                            "description": "Optional — 1-based week within the block"},
+                            "steps": {**STEPS_PROP, "description": "Optional. The exact steps from "
+                                      "design_workout for a workout built with the athlete. They are "
+                                      "saved as is and sent to Garmin unchanged. tss_planned must match "
+                                      "the steps' TSS within 10%."},
+                            "save_to_my_workouts": {"type": "boolean", "description": "Optional, with "
+                                                    "steps. True when the athlete wants to keep this "
+                                                    "workout in My workouts to use again."},
                         },
                         "required": ["date", "name", "workout_type", "description", "tss_planned",
                                      "purpose", "feel"],
@@ -386,6 +405,21 @@ TOOLS = [
         },
     },
     {
+        "name": "design_workout",
+        "description": "Work out a workout the athlete is building with you, step by step. Give the "
+                       "steps and get back the total time, intensity factor, TSS and a plain one line "
+                       "description, checked the same way as workouts sent to Garmin. Nothing is saved. "
+                       "Show the athlete the result, change it with them, then propose it with "
+                       "propose_workouts passing the same steps.",
+        "input_schema": {"type": "object", "properties": {"steps": STEPS_PROP}, "required": ["steps"]},
+    },
+    {
+        "name": "get_my_workouts",
+        "description": "The workouts the athlete built and kept in My workouts, with their steps, TSS, "
+                       "purpose and feel. Use one when they ask for a saved workout by name.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "generate_training_block",
         "description": "Read the relevant get_training_research topics first. Generate a draft periodized block of rides from today (or a given start "
                        "date) to a race date, ramping weekly training load toward a target CTL "
@@ -442,6 +476,8 @@ STATUS_LABELS = {
     "propose_workouts": "Drafting workouts",
     "propose_strength_sessions": "Drafting strength sessions",
     "generate_training_block": "Sketching a training block",
+    "design_workout": "Working out the workout",
+    "get_my_workouts": "Checking My workouts",
     "propose_program": "Drafting your program",
     "get_training_research": "Reading the training research",
 }
@@ -559,6 +595,14 @@ def run_tool(name: str, args: dict, proposals: list[dict]) -> str:
         result = _propose_strength(args, proposals)
     elif name == "generate_training_block":
         result = _generate_block(args)
+    elif name == "design_workout":
+        steps = _steps(args.get("steps"), "steps")
+        result = {**workout_recipes.summary(steps), "description": workout_recipes.describe(steps)}
+    elif name == "get_my_workouts":
+        result = [{k: w.get(k) for k in ("name", "workout_type", "description", "tss", "purpose", "feel", "steps")}
+                  for w in get_my_workouts()]
+        if not result:
+            return "My workouts is empty."
     elif name == "propose_program":
         return _propose_program(args)
     elif name == "get_training_research":
@@ -646,6 +690,14 @@ def _phases(args: dict) -> dict:
     return out
 
 
+def _steps(value, where: str) -> list:
+    """Steps from the coach, checked the same way as the steps sent to Garmin."""
+    try:
+        return garmin_workouts.check_steps(value)
+    except (garmin_workouts.WorkoutError, KeyError, TypeError, AttributeError) as e:
+        raise ToolInputError(f"{where}: {e if isinstance(e, garmin_workouts.WorkoutError) else 'each step needs kind, minutes, low_pct and high_pct'}")
+
+
 def _propose(args: dict, proposals: list[dict]) -> str:
     workouts = args.get("workouts")
     if not isinstance(workouts, list) or not workouts:
@@ -675,8 +727,18 @@ def _propose(args: dict, proposals: list[dict]) -> str:
         if phase and phase not in phases:
             raise ToolInputError(f"{where} is in phase '{phase}', which is missing from phases. "
                                  "Describe every phase you use in phases.")
+        steps = None
+        if w.get("steps") is not None:
+            steps = _steps(w["steps"], f"{where} steps")
+            real = workout_recipes.steps_tss(steps)
+            if real and abs(tss / real - 1) > STEPS_TSS_TOLERANCE:
+                raise ToolInputError(f"{where} tss_planned is {tss:.0f} but its steps add up to {real:.0f} TSS. "
+                                     f"Use {real:.0f}, or change the steps")
+        elif w.get("save_to_my_workouts"):
+            raise ToolInputError(f"{where}: save_to_my_workouts needs the steps from design_workout")
         checked.append({"kind": "ride", "date": day.isoformat(), "name": name.strip(),
                         "workout_type": w["workout_type"], "description": desc.strip(),
+                        "steps": steps, "save": bool(steps and w.get("save_to_my_workouts")),
                         "tss_planned": float(tss), "phase": phase,
                         "week_number": _optional_int(w, "week_number", where),
                         "purpose": _text(w, "purpose", where, PURPOSE_MAX),

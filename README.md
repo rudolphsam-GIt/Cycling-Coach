@@ -219,7 +219,8 @@ The Coach tab is where most of the planning happens.
 6. Attach a screenshot. You can attach an image of a workout, a training plan or a chart with your message, and the coach will read it. The image is used for that message only and is not kept in the chat history.
 7. Tell the coach about injuries, your schedule or your preferences once. It saves a note in its memory. Open "What your coach remembers" to read the notes and delete any you do not want kept.
 8. Run the weekly check in. The coach looks over your week and drafts the next seven days for you to confirm. Past check ins are kept so you can look back.
-9. Clear the chat when you want a fresh start. This removes the saved conversation but keeps your plan, your memory notes and your ride data.
+9. Build your own workout. Press **Help me build a workout of my own** or just ask ("I want a 3 x 20 sweet spot session"). The coach asks one question at a time (what it is for, time, interval length, how hard, recovery), works out the exact steps, time and TSS, and changes it with you until it is right. When you confirm, it goes on your plan with exactly those steps, and if you asked to keep it, into **My workouts** on the Manage tab, where you can add it to any day again or remove it.
+10. Clear the chat when you want a fresh start. This removes the saved conversation but keeps your plan, your memory notes and your ride data.
 
 The coach can look up your full ride history, weekly totals, check ins and FTP history on its own when a question needs it, so you do not need to paste numbers in.
 

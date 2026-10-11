@@ -128,18 +128,44 @@ def _fmt_min(m: float) -> str:
     return f"{int(m * 60)} s" if m < 1 else f"{m:g} min"
 
 
+def _pct(s: dict) -> str:
+    lo, hi = s["low_pct"], s["high_pct"]
+    return f"{lo:g}%" if lo == hi else f"{lo:g} to {hi:g}%"
+
+
 def describe(steps: list) -> str:
     """The steps in one plain line, for the workout's description."""
+    def one(s: dict, steady: bool = False) -> str:
+        if s["kind"] == "warmup":
+            return f"{_fmt_min(s['minutes'])} warm up"
+        if s["kind"] == "cooldown":
+            return f"{_fmt_min(s['minutes'])} cool down"
+        if s.get("low_pct") is None:
+            return f"{_fmt_min(s['minutes'])} {'easy' if s['kind'] == 'recovery' else 'free riding'}"
+        if s["kind"] == "recovery":
+            return f"{_fmt_min(s['minutes'])} easy at {_pct(s)} FTP"
+        return f"{_fmt_min(s['minutes'])} {'steady ' if steady else ''}at {_pct(s)} FTP"
+
     parts = []
     for s in steps:
-        if s["kind"] == "repeat":
-            work, rest = s["repeat_steps"]
-            parts.append(f"{s['repeat_count']} x {_fmt_min(work['minutes'])} at {work['low_pct']:g} to "
-                         f"{work['high_pct']:g}% FTP with {_fmt_min(rest['minutes'])} easy")
-        elif s["kind"] == "warmup":
-            parts.append(f"{_fmt_min(s['minutes'])} warm up")
-        elif s["kind"] == "cooldown":
-            parts.append(f"{_fmt_min(s['minutes'])} cool down")
+        if s["kind"] != "repeat":
+            parts.append(one(s, steady=True))
+            continue
+        inner = s["repeat_steps"]
+        if (len(inner) == 2 and inner[0]["kind"] == "interval" and inner[1]["kind"] == "recovery"
+                and inner[0].get("low_pct") is not None):
+            work, rest = inner
+            parts.append(f"{s['repeat_count']} x {_fmt_min(work['minutes'])} at {_pct(work)} FTP "
+                         f"with {_fmt_min(rest['minutes'])} easy")
         else:
-            parts.append(f"{_fmt_min(s['minutes'])} steady at {s['low_pct']:g} to {s['high_pct']:g}% FTP")
+            parts.append(f"{s['repeat_count']} x ({', then '.join(one(x) for x in inner)})")
     return ", ".join(parts)
+
+
+def summary(steps: list) -> dict:
+    """Total minutes, intensity factor and TSS of a set of steps."""
+    minutes = sum(s["minutes"] for s in _leaves(steps))
+    tss = steps_tss(steps)
+    hours = sum(s["minutes"] for s in _leaves(steps) if s.get("low_pct") is not None) / 60
+    return {"minutes": round(minutes, 1), "tss": round(tss), "intensity_factor":
+            round((tss / 100 / hours) ** 0.5, 2) if hours else None}
