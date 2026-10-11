@@ -11,7 +11,8 @@ from __future__ import annotations
 import json
 import requests
 
-from db.queries import get_activity, get_streams, rescore_from_streams, save_streams
+from db.queries import (get_activities_between, get_activity, get_streams, has_peak, long_peaks,
+                        rescore_from_streams, save_peaks, save_streams)
 from metrics import streams as st
 
 STRAVA_API = "https://www.strava.com/api/v3"
@@ -95,3 +96,39 @@ def load_streams(activity_id: int) -> tuple[dict | None, str]:
         return None, "Couldn't load the detailed data right now. " + errors[0]
     return None, ("No second by second data for this ride. It comes from Garmin or Strava when "
                   "they are connected in Settings, or from a .fit file you import.")
+
+
+def backfill_long_peaks(progress=None) -> tuple[int, int]:
+    """Best power past 2 h for rides already in the app that are long enough to have it.
+    Uses the kept second by second data, or fetches it from Garmin or Strava without keeping
+    it, so no ride is rescored. `progress(done, total)` is called as it goes.
+    Returns (rides updated, rides checked)."""
+    from metrics.analysis import LONG_PEAK_DURATIONS
+    first = LONG_PEAK_DURATIONS[0]
+    rides = [a for a in get_activities_between("0000-01-01", "9999-12-31")
+             if (a.get("duration_seconds") or 0) >= first and a.get("avg_power_watts")
+             and not has_peak(a["id"], first)]
+    api, updated = None, 0
+    for i, act in enumerate(rides):
+        power = (get_streams(act["id"]) or {}).get("power")
+        if not power:
+            for fetch in (_from_strava, _from_garmin) if strava_id(act) else (_from_garmin, _from_strava):
+                try:
+                    if fetch is _from_garmin:
+                        import auth.garmin as garmin_auth
+                        if api is None and garmin_auth.is_connected():
+                            api = garmin_auth._client()
+                        data = fetch(act, api)
+                    else:
+                        data = fetch(act)
+                except Exception:               # network, login, parsing: try the next source
+                    continue
+                if data and data.get("power"):
+                    power = data["power"]
+                    break
+        if (peaks := long_peaks(power)):
+            save_peaks(act["id"], peaks)
+            updated += 1
+        if progress:
+            progress(i + 1, len(rides))
+    return updated, len(rides)

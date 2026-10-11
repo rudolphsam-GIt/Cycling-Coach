@@ -318,6 +318,25 @@ def save_streams(activity_id: int, streams: dict, source: str = "") -> None:
         (activity_id, data, source, datetime.utcnow().isoformat()))
     conn.commit()
     conn.close()
+    save_peaks(activity_id, long_peaks(streams.get("power")))
+
+
+def long_peaks(power: list | None) -> dict:
+    """Best power for the durations past 2 h, from a ride's per second power list.
+    Garmin's ride summary doesn't go that far."""
+    from metrics.analysis import LONG_PEAK_DURATIONS
+    from metrics.peaks import mean_max
+    if not power:
+        return {}
+    return mean_max([(i, v) for i, v in enumerate(power) if v is not None], LONG_PEAK_DURATIONS)
+
+
+def has_peak(activity_id: int, duration_s: int) -> bool:
+    conn = get_conn()
+    row = conn.execute("SELECT 1 FROM activity_peaks WHERE activity_id = ? AND duration_s = ?",
+                       (activity_id, duration_s)).fetchone()
+    conn.close()
+    return row is not None
 
 
 def rescore_from_streams(activity_id: int) -> bool:

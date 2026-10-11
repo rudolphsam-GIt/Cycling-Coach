@@ -152,7 +152,7 @@ TERMS: dict[str, dict] = {
     "peak_power": {
         "title": "Peak power curve",
         "what": "The best average power you have ever held for each length of time, from 1 second "
-                "up to 2 hours.",
+                "up to 6 hours.",
         "why": "It shows what kind of rider you are. High short bars point to sprinting, a high "
                "20 minute number to strong endurance and climbing. Watch how it changes block to block.",
     },

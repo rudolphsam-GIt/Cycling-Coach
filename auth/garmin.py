@@ -250,6 +250,19 @@ def _hr_peaks(api, activity_id, raw: bytes | None = None) -> dict:
         return {}
 
 
+def _save_long_peaks(activity_id: int, raw: bytes | None) -> None:
+    """Best power past 2 h from the ride's file, for rides long enough to have it."""
+    from metrics.analysis import LONG_PEAK_DURATIONS
+    from metrics.peaks import fit_from_download, fit_streams, mean_max
+    if not raw:
+        return
+    try:
+        _, power = fit_streams(fit_from_download(raw))
+    except Exception:
+        return
+    save_peaks(activity_id, mean_max(power, LONG_PEAK_DURATIONS))
+
+
 def _score_from_file(activity_id: int, raw: bytes | None) -> None:
     """Check the ride second by second. If power is missing for the whole ride or drops out
     while heart rate keeps recording, keep the data and rescore with hrTSS for those seconds.
@@ -303,6 +316,7 @@ def _sync_rides(api, days_back: int) -> int:
                 # One download serves both: heart rate peaks, and a check for power dropouts.
                 raw = _ride_file(api, act.get("activityId"))
                 save_hr_peaks(activity_id, _hr_peaks(api, act.get("activityId"), raw))
+                _save_long_peaks(activity_id, raw)
                 _score_from_file(activity_id, raw)
             elif activity_id and not get_streams(activity_id) and not act.get("normPower") \
                     and act.get("averageHR"):

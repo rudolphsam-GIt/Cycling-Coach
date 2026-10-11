@@ -11,7 +11,9 @@ from datetime import date, timedelta
 from metrics.units import num as _num
 
 # Durations shown on the peak power curve and in the key durations table, in seconds.
-PEAK_DURATIONS = (1, 2, 5, 10, 20, 30, 60, 120, 300, 600, 1200, 1800, 3600, 7200)
+# Garmin's ride summary stops at 2 h, so the longer ones come from each ride's second by second data.
+LONG_PEAK_DURATIONS = (10800, 14400, 18000, 21600)
+PEAK_DURATIONS = (1, 2, 5, 10, 20, 30, 60, 120, 300, 600, 1200, 1800, 3600, 7200) + LONG_PEAK_DURATIONS
 KEY_DURATIONS = (5, 60, 300, 1200, 3600)
 
 RIDE_KINDS = {

@@ -360,6 +360,22 @@ if schema.is_owner():
                         msg = garmin_auth.friendly_error(e)
                     st.session_state["garmin_sync_msg"] = msg
                     st.rerun()
+                if st.button("Load best power past 2 hours", icon=":material/timeline:", width="stretch",
+                             help="Garmin's ride summary stops at 2 h. This reads the second by second data "
+                                  "of your rides of 3 h or more to find your best 3, 4, 5 and 6 hour power. "
+                                  "New rides get it when they sync. The first run downloads each long ride "
+                                  "once, so it takes a few minutes."):
+                    from auth import ride_data
+                    bar = st.progress(0.0, text="Reading long rides…")
+                    try:
+                        updated, seen = ride_data.backfill_long_peaks(
+                            progress=lambda done, total: bar.progress(done / max(total, 1),
+                                                                      text=f"Ride {done} of {total}"))
+                        msg = f"Found best power past 2 hours for {updated} of {seen} long rides."
+                    except Exception as e:
+                        msg = garmin_auth.friendly_error(e)
+                    st.session_state["garmin_sync_msg"] = msg
+                    st.rerun()
                 if st.button("Disconnect Garmin", width="stretch"):
                     garmin_auth.disconnect()
                     st.rerun()

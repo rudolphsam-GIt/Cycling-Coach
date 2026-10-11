@@ -46,6 +46,48 @@ class PeakStoreTests(unittest.TestCase):
         q.save_peaks(None, {5: 1})                 # no ride, nothing stored, no error
 
 
+class LongPeakTests(unittest.TestCase):
+    """Best power past 2 h, which Garmin's ride summary doesn't give."""
+    setUp = PeakStoreTests.setUp
+    FOUR_HOURS = [220] * 3600 + [200] * 3 * 3600 + [None] * 900 + [180] * 600
+
+    def stored(self, aid):
+        return {r["duration_s"]: r["watts"] for r in q.get_peaks_between("0000-01-01", "9999-12-31")
+                if r["activity_id"] == aid}
+
+    def test_keeping_a_rides_data_stores_its_long_peaks(self):
+        aid = q.upsert_activity(ride("garmin", "garmin_1", duration_seconds=4 * 3600 + 1500))
+        q.save_streams(aid, {"power": self.FOUR_HOURS})
+        peaks = self.stored(aid)
+        self.assertEqual(sorted(peaks), [10800, 14400])               # the pause doesn't count
+        self.assertAlmostEqual(peaks[10800], 206.7, delta=0.1)
+        self.assertAlmostEqual(peaks[14400], 205, delta=0.1)
+
+    def test_short_rides_and_rides_without_power_store_nothing_long(self):
+        aid = q.upsert_activity(ride("garmin", "garmin_2"))
+        q.save_streams(aid, {"power": [200] * 3600})
+        q.save_streams(aid, {"heart_rate": [140] * 20000})
+        self.assertEqual(self.stored(aid), {})
+
+    def test_backfill_fetches_long_rides_once_without_keeping_or_rescoring(self):
+        from auth import ride_data
+        long_id = q.upsert_activity(ride("strava", "strava_7", duration_seconds=4 * 3600 + 1500))
+        q.upsert_activity(ride("strava", "strava_8", date="2026-09-05"))          # too short to check
+        fetched = []
+        def fake(act):
+            fetched.append(act["id"])
+            return {"power": self.FOUR_HOURS}
+        with mock.patch.object(ride_data, "_from_strava", fake), \
+                mock.patch.object(ride_data, "_from_garmin", lambda act, api=None: None), \
+                mock.patch.object(ride_data, "rescore_from_streams") as rescore:
+            self.assertEqual(ride_data.backfill_long_peaks(), (1, 1))
+            self.assertEqual(ride_data.backfill_long_peaks(), (0, 0))   # already done
+        self.assertEqual(fetched, [long_id])
+        self.assertIn(14400, self.stored(long_id))
+        self.assertIsNone(q.get_streams(long_id))
+        rescore.assert_not_called()
+
+
 class GarminPeakTests(unittest.TestCase):
     def test_reads_best_power_fields(self):
         from auth.garmin import peak_powers
