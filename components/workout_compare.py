@@ -18,8 +18,9 @@ from __future__ import annotations
 from metrics.units import num as _num
 from metrics.zones import POWER_ZONE_NAMES, POWER_ZONE_PCT
 
-# Below this share of the planned TSS a ride counts as short, the same rule the calendar uses.
-from components.calendar import SHORT_RATIO
+# Below SHORT_RATIO of the planned TSS a ride counts as short and above OVER_RATIO as well over,
+# the same rules the calendar uses for its amber and orange days.
+from components.calendar import OVER_RATIO, SHORT_RATIO
 
 ON_TARGET = (0.9, 1.1)          # within 10% of the plan reads as on target
 
@@ -150,7 +151,7 @@ def zone_rows(planned: dict, ridden: dict) -> list[dict]:
 
 
 def tss_verdict(planned_tss, ridden_tss) -> str | None:
-    """'on', 'under', 'short' or 'over' for the ridden share of the planned TSS."""
+    """'on', 'under', 'short', 'over' or 'well_over' for the ridden share of the planned TSS."""
     if not planned_tss or ridden_tss is None:
         return None
     share = ridden_tss / planned_tss
@@ -158,6 +159,8 @@ def tss_verdict(planned_tss, ridden_tss) -> str | None:
         return "short"
     if share < ON_TARGET[0]:
         return "under"
+    if share > OVER_RATIO:
+        return "well_over"
     if share > ON_TARGET[1]:
         return "over"
     return "on"
@@ -167,7 +170,8 @@ VERDICT_TEXT = {
     "on": "Right on plan.",
     "under": "A little under the plan.",
     "short": "Well short of the plan.",
-    "over": "More than the plan asked for.",
+    "over": "A little over the plan.",
+    "well_over": "Well over the plan.",
 }
 
 
@@ -240,7 +244,7 @@ def render(workout: dict, ride: dict | None, *, streams: dict | None = None, ste
     line = summary_line(planned, ridden, bool(ride))
     if verdict in ("on", "over") or (ride and verdict is None):
         st.success(line, icon=":material/check_circle:")
-    elif verdict in ("under", "short"):
+    elif verdict in ("under", "short", "well_over"):
         st.warning(line, icon=":material/check_circle:")
     else:
         st.info(line, icon=":material/check_circle:")
