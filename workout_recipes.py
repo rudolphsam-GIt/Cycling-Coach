@@ -12,6 +12,8 @@ recipe's limits), then the steady part fills the gap.
 """
 from __future__ import annotations
 
+import re
+
 AUTO_MARK = "Auto-generated"         # Quick Generate's descriptions start a line with this
 TOLERANCE = 0.10                     # steps land within 10% of the planned TSS
 
@@ -58,10 +60,18 @@ def uses_recipe(workout: dict) -> bool:
     return not desc or any(line.strip().startswith(AUTO_MARK) for line in desc.splitlines())
 
 
+def is_openers(workout: dict) -> bool:
+    """True for the planner's openers: named Openers (after a label like "(Taper) ") with a TSS
+    the openers steps still match. A renamed or resized workout gets its normal recipe."""
+    name = re.sub(r"^\(.*?\)\s*", "", (workout.get("name") or "").strip())
+    tss = workout.get("tss_planned")
+    return name == OPENERS_NAME and (not tss or abs(float(tss) / steps_tss(OPENERS) - 1) <= TOLERANCE)
+
+
 def steps_for(workout: dict) -> list:
     """The recipe steps for a workout that uses_recipe. Raises RecipeError when its TSS is out
     of the recipe's reach."""
-    if OPENERS_NAME in (workout.get("name") or ""):
+    if is_openers(workout):
         return [dict(s) for s in OPENERS]
     return build(workout["workout_type"], workout.get("tss_planned"))
 
