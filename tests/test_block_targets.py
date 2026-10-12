@@ -140,6 +140,15 @@ class TaperTests(unittest.TestCase):
                     self.assertGreaterEqual(date.fromisoformat(w["date"]), START)
 
 
+class WeekCountTests(unittest.TestCase):
+    def test_the_page_count_matches_the_block(self):
+        for days_out in (1, 6, 7, 8, 45, 70):
+            with self.subTest(days_out=days_out):
+                race = START + timedelta(days=days_out)
+                plan = planning.generate_block(60, 70, race, "Endurance", START)
+                self.assertEqual(planning.weeks_to_race(START, race), max(w["week_number"] for w in plan))
+
+
 class WeekdayTests(unittest.TestCase):
     def test_a_wednesday_start_keeps_the_long_ride_on_saturday(self):
         plan = planning.generate_block(75, 90, WEDNESDAY + timedelta(weeks=12), "Threshold", WEDNESDAY)

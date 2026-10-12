@@ -919,8 +919,8 @@ def render_quick_generate() -> None:
         if race_options:
             chosen_race = race_options[st.selectbox("Target race", list(race_options.keys()))]
             race_date = date.fromisoformat(chosen_race["date"])
-            weeks_out = max(1, (race_date - today).days // 7)
-            st.info(f"{weeks_out} weeks to race · Current CTL **{current_ctl:.0f}**")
+            weeks_out = planning.weeks_to_race(today, race_date)
+            st.info(f"{weeks_out} week{'s' if weeks_out != 1 else ''} to race · Current CTL **{current_ctl:.0f}**")
         else:
             st.warning("No upcoming races. Add one in Race Prep first.")
             chosen_race = None
@@ -969,7 +969,7 @@ def render_quick_generate() -> None:
                     new_ids.append(test_id)
             st.session_state["wizard_generated_ids"] = new_ids
             st.session_state["wizard_msg"] = (f"Generated {len(drafted)} workouts over {weeks_out} "
-                                              f"weeks. Fitness peaks at about CTL {outlook['peak_ctl']:.0f} "
+                                              f"week{'s' if weeks_out != 1 else ''}. Fitness peaks at about CTL {outlook['peak_ctl']:.0f} "
                                               f"before the taper.")
             st.rerun()
 
