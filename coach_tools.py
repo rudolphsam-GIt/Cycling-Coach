@@ -731,7 +731,7 @@ def _propose(args: dict, proposals: list[dict]) -> str:
         if w.get("steps") is not None:
             steps = _steps(w["steps"], f"{where} steps")
             real = workout_recipes.steps_tss(steps)
-            if real and abs(tss / real - 1) > STEPS_TSS_TOLERANCE:
+            if abs(tss - real) > STEPS_TSS_TOLERANCE * real:
                 raise ToolInputError(f"{where} tss_planned is {tss:.0f} but its steps add up to {real:.0f} TSS. "
                                      f"Use {real:.0f}, or change the steps")
         elif w.get("save_to_my_workouts"):
