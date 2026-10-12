@@ -289,12 +289,12 @@ def day_tooltip(day: DayData, unit: str = "km") -> str:
                 head += f", done as {_short(pair['ride'].get('name') or 'a ride', 30)}"
                 if pair.get("over"):
                     head += ", well over plan"
-            if w.get("rpe"):
-                head += f", felt {w['rpe']}/10"
             elif w.get("completed"):
                 head += ", marked done"
             elif pair["state"] == "missed":
                 head += ", missed"
+            if w.get("rpe"):
+                head += f", felt {w['rpe']}/10"
             parts.append(_esc(head))
             desc = _short(w.get("description"), 120)
             if desc:

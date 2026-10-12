@@ -204,7 +204,11 @@ def plan_block(current_ctl: float, target_ctl: float, race_date: date,
     # Count a part week before the race as a week, so the days just before it are planned too.
     weeks_out = max(1, -(-(race_date - today).days // 7))
     taper_weeks = 2 if weeks_out >= 6 else 1
-    build_weeks = max(1, weeks_out - taper_weeks)
+    # A race a week or less away is all taper.
+    build_weeks = weeks_out - taper_weeks
+    # Weeks are counted back from the race, so the taper is always the last 7 or 14 days before
+    # it. The first week may start before today, and its past days are skipped.
+    first_week = race_date - timedelta(weeks=weeks_out)
 
     ramp = _gentlest_ramp(current_ctl, target_ctl, build_weeks)
     build_loads, _ = _build_loads(current_ctl, target_ctl, build_weeks, ramp)
@@ -236,20 +240,26 @@ def plan_block(current_ctl: float, target_ctl: float, race_date: date,
         active_days = [(d, t, wt) for d, t, wt in tmpl if t and wt > 0]
         total_weight = sum(wt for _, _, wt in active_days)
 
-        week_start = today + timedelta(weeks=wk)
+        week_start = first_week + timedelta(weeks=wk)
         for day_offset in range(7):
             w_date = week_start + timedelta(days=day_offset)
+            if w_date < today:
+                continue
             if w_date >= race_date:
                 break
             # Each date takes its own weekday's session, so the long ride stays on the weekend
             # whatever day the block starts on.
             _, w_type, weight_frac = tmpl[w_date.weekday()]
-            if not w_type or weight_frac == 0:
+            days_to_race = (race_date - w_date).days
+            # Openers go on the day before the race even when the template rests that day, unless
+            # the athlete can't ride that weekday.
+            openers = is_taper and days_to_race == 1 and (not days or WEEKDAYS[w_date.weekday()] in days)
+            if not openers and (not w_type or weight_frac == 0):
                 continue
-            day_tss = round(week_tss * (weight_frac / total_weight))
+            day_tss = round(week_tss * (weight_frac / total_weight)) if total_weight else 0
             name, purpose, feel = w_type, None, None
             if is_taper:
-                w_type, name, day_tss, purpose, feel = _taper_day(w_type, day_tss, (race_date - w_date).days)
+                w_type, name, day_tss, purpose, feel = _taper_day(w_type, day_tss, days_to_race)
             if day_tss < 10:
                 continue
             label = "(Taper) " if is_taper else ("(Recovery) " if recovery else "")
@@ -276,6 +286,15 @@ def plan_block(current_ctl: float, target_ctl: float, race_date: date,
                 "feel": feel or explain.feel_for(w_type),
                 "phase_note": PHASE_NOTES.get(week_phase),
             })
+
+    # Openers added on a rest day can push race week past the riding days the athlete has. Keep
+    # the openers and drop the week's smallest other rides instead.
+    if not days and days_per_week:
+        last_week = [w for w in workouts if w["week_number"] == weeks_out]
+        extra = len(last_week) - int(days_per_week)
+        drop = sorted((w for w in last_week if workout_recipes.OPENERS_NAME not in w["name"]),
+                      key=lambda w: w["tss_planned"])[:max(extra, 0)]
+        workouts = [w for w in workouts if not any(w is d for d in drop)]
 
     return {"workouts": workouts,
             "outlook": block_outlook(workouts, current_ctl, target_ctl, today, race_date, ramp)}

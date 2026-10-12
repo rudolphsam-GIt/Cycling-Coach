@@ -219,6 +219,19 @@ class TooltipTests(unittest.TestCase):
                        "NP 215", "IF 0.82", "Planned 90 TSS, Actual 70 TSS (78%)"):
             self.assertIn(needle, tip)
 
+    def test_done_and_rated_workouts_read_once(self):
+        days = build(
+            workouts=[W("2026-10-05", name="Ridden", completed=1),
+                      W("2026-10-06", name="Ticked", completed=1, rpe=7),
+                      W("2026-10-07", name="Skipped", rpe=4)],
+            activities=[A("2026-10-05", name="Morning ride")],
+            today=date(2026, 10, 15))
+        tip = cal.day_tooltip(days["2026-10-05"])
+        self.assertIn("done as Morning ride", tip)
+        self.assertNotIn("marked done", tip)            # a ridden workout says so only once
+        self.assertIn("Ticked (Endurance), 60 TSS, marked done, felt 7/10", cal.day_tooltip(days["2026-10-06"]))
+        self.assertIn("missed, felt 4/10", cal.day_tooltip(days["2026-10-07"]))
+
     def test_long_description_truncated(self):
         tip = cal.day_tooltip(build(workouts=[W("2026-10-20", description="word " * 100)])["2026-10-20"])
         self.assertIn("…", tip)
