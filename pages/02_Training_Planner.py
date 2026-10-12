@@ -909,6 +909,15 @@ def manage_row(w: dict, prefix: str) -> None:
                 st.rerun()
 
 
+@st.cache_data(max_entries=20, show_spinner=False)
+def quick_block(current_ctl: float, target_ctl: int, race_date: date, phase_key: str, start: date,
+                days_per_week: int | None, available_days: str | None) -> dict:
+    """The Quick Generate block, kept until one of its inputs changes. It only depends on what is
+    passed in, so the athlete profile needs no part in the key."""
+    return planning.plan_block(current_ctl, target_ctl, race_date, phase_key, start,
+                               days_per_week=days_per_week, available_days=available_days)
+
+
 def render_quick_generate() -> None:
     with st.expander("Quick Generate (no conversation)"):
         st.caption("Builds a training block scaled to your current fitness. A fast fallback "
@@ -935,12 +944,12 @@ def render_quick_generate() -> None:
         phase_label = st.selectbox("Phase focus", list(planning.PHASE_LABELS.values()))
         phase_key = next(k for k, v in planning.PHASE_LABELS.items() if v == phase_label)
 
-        block = planning.plan_block(
-            current_ctl, target_ctl, race_date, phase_key,
-            days_per_week=int(float(get_setting("days_per_week", 0) or 0)) or None,
-            available_days=get_setting("available_days", "") or None)
-        outlook = block["outlook"]
+        block = outlook = None
         if chosen_race is not None:
+            block = quick_block(current_ctl, target_ctl, race_date, phase_key, today,
+                                int(float(get_setting("days_per_week", 0) or 0)) or None,
+                                get_setting("available_days", "") or None)
+            outlook = block["outlook"]
             if outlook["reachable"] and outlook["ramp_per_week"] < 0.1:
                 st.caption(f"This block holds your fitness at about **{outlook['peak_ctl']:.0f}** before the "
                            f"taper, and it is about {outlook['race_day_ctl']:.0f} on race day as the taper "
