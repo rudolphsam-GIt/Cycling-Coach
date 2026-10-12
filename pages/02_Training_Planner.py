@@ -941,7 +941,11 @@ def render_quick_generate() -> None:
             available_days=get_setting("available_days", "") or None)
         outlook = block["outlook"]
         if chosen_race is not None:
-            if outlook["reachable"]:
+            if outlook["reachable"] and outlook["ramp_per_week"] < 0.1:
+                st.caption(f"This block holds your fitness at about **{outlook['peak_ctl']:.0f}** before the "
+                           f"taper, and it is about {outlook['race_day_ctl']:.0f} on race day as the taper "
+                           f"freshens you up.")
+            elif outlook["reachable"]:
                 st.caption(f"Fitness climbs about {outlook['ramp_per_week']:.1f} points a week to a peak of "
                            f"**{outlook['peak_ctl']:.0f}** before the taper, and is about "
                            f"{outlook['race_day_ctl']:.0f} on race day as the taper freshens you up.")
