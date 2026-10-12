@@ -98,6 +98,48 @@ class TaperTests(unittest.TestCase):
         self.assertEqual(eve[0]["purpose"], planning.OPENERS_PURPOSE)
 
 
+    def test_a_saturday_race_gets_openers_on_the_rest_day_before(self):
+        race = START + timedelta(weeks=7, days=5)                # a Saturday race, Friday rests
+        plan = planning.generate_block(60, 70, race, "Endurance", START)
+        eve = [w for w in plan if w["date"] == (race - timedelta(days=1)).isoformat()]
+        self.assertEqual([w["name"] for w in eve], ["(Taper) Openers"])
+
+    def test_openers_respect_the_days_the_athlete_can_ride(self):
+        race = START + timedelta(weeks=7, days=5)                # Saturday, and Friday is not a riding day
+        plan = planning.generate_block(60, 70, race, "Endurance", START, available_days="Tue,Thu,Sat")
+        self.assertFalse([w for w in plan if w["date"] == (race - timedelta(days=1)).isoformat()])
+
+    def test_openers_keep_race_week_within_the_riding_days(self):
+        race = START + timedelta(weeks=7, days=5)
+        plan = planning.generate_block(60, 70, race, "Endurance", START, days_per_week=3)
+        last = [w for w in plan if w["week_number"] == max(w["week_number"] for w in plan)]
+        self.assertLessEqual(len(last), 3)
+        self.assertEqual(last[-1]["name"], "(Taper) Openers")
+
+    def test_a_race_this_week_is_all_taper(self):
+        for days_out in range(1, 8):
+            with self.subTest(days_out=days_out):
+                race = START + timedelta(days=days_out)
+                plan = planning.generate_block(60, 70, race, "Endurance", START)
+                self.assertTrue(all(w["phase"] == planning.TAPER_LABEL for w in plan))
+                for w in plan:
+                    if w["workout_type"] in planning.HARD_TYPES:
+                        self.assertLessEqual(w["tss_planned"], planning.FINAL_WEEK_HARD_MAX)
+                if days_out > 1:
+                    self.assertEqual(plan[-1]["name"], "(Taper) Openers")
+
+    def test_the_taper_is_the_last_days_before_the_race(self):
+        for days_out in (8, 10, 13, 30, 45, 60):
+            with self.subTest(days_out=days_out):
+                race = START + timedelta(days=days_out)
+                plan = planning.generate_block(60, 70, race, "Endurance", START)
+                taper_days = 14 if -(-days_out // 7) >= 6 else 7
+                for w in plan:
+                    to_race = (race - date.fromisoformat(w["date"])).days
+                    self.assertEqual(w["phase"] == planning.TAPER_LABEL, to_race <= taper_days, w)
+                    self.assertGreaterEqual(date.fromisoformat(w["date"]), START)
+
+
 class WeekdayTests(unittest.TestCase):
     def test_a_wednesday_start_keeps_the_long_ride_on_saturday(self):
         plan = planning.generate_block(75, 90, WEDNESDAY + timedelta(weeks=12), "Threshold", WEDNESDAY)
