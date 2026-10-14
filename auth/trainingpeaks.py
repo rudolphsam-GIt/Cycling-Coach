@@ -189,8 +189,10 @@ def payload(user_id: str, workout: dict, steps: list) -> dict:
 
 
 def fingerprint(workout: dict, steps: list) -> str:
+    # Everything the payload carries, so a description change (new FTP watts) is sent too.
     return hashlib.sha1(json.dumps([workout["date"], workout.get("name"), workout.get("tss_planned"),
-                                    workout.get("purpose"), workout.get("feel"), steps]).encode()).hexdigest()
+                                    workout.get("purpose"), workout.get("feel"), workout.get("description"),
+                                    steps]).encode()).hexdigest()
 
 
 def _planned_only(tp_workout: dict) -> bool:
