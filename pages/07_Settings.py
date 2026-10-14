@@ -16,7 +16,7 @@ import auth.garmin as garmin_auth
 import auth.intervals as intervals_auth
 import auth.trainingpeaks as tp_auth
 from auth import tp_login
-from components import ftp_help
+from components import ftp_help, ftp_review
 from components.units import distance_switch, unit_switch, weight_input
 from metrics.explain import (DEFAULT_GENDER, GENDER_LABELS, GENDER_PROFILE_TABLE,
                              age_from_birth_year)
@@ -233,6 +233,7 @@ with tab_profile:
         if ftp_note:
             st.info(ftp_note)
 
+    ftp_review.render("settings_ftp_review")
     resend = ftp_change.last_garmin_result()
     if ftp_change.is_resending():
         st.caption("Updating your upcoming workouts on Garmin for the new FTP…")

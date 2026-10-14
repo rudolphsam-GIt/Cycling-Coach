@@ -4,45 +4,28 @@ the same effects:
 
 - the new value is saved and logged in FTP history, dated today;
 - past rides keep the TSS they earned on the FTP they were ridden at;
-- upcoming workouts follow the new number. Their steps are stored as % of FTP so they are
-  already right, but watt figures in descriptions are rescaled, and workouts already on the
-  Garmin calendar are sent again in the background (their watts are fixed at send time).
+- upcoming workouts follow the new number by themselves: their steps and the watts in their words
+  are stored as % of FTP (see workout_watts);
+- nothing is sent anywhere yet. The change waits for the rider to review it and choose where to
+  send it (TrainingPeaks, intervals.icu, Garmin), and TrainingPeaks' automatic sync holds off
+  until they answer, so new watts never reach another service unasked.
 """
 from __future__ import annotations
 
 import json
-import re
 import threading
 from datetime import date, datetime
 
 from db import queries as q
+import workout_watts
 
 GARMIN_RESULT_SETTING = "garmin_ftp_resend_result"
-
-# "265 W", "250-270 W", "250 to 270 watts", but not "3.5 W/kg"
-_WATTS = re.compile(r"\b(\d{2,4})(?:(\s*(?:-|–|to)\s*)(\d{2,4}))?(\s?)(W|watts)\b(?!/)")
-
-
-def _round5(watts: float) -> int:
-    return int(5 * round(watts / 5))
-
-
-def rescale_watts(text: str | None, ratio: float) -> str | None:
-    """Scale every watt figure in the text by `ratio`, rounded to 5 W."""
-    if not text or ratio == 1:
-        return text
-
-    def scale(m: re.Match) -> str:
-        low = str(_round5(int(m.group(1)) * ratio))
-        high = (m.group(2) + str(_round5(int(m.group(3)) * ratio))) if m.group(3) else ""
-        return f"{low}{high}{m.group(4)}{m.group(5)}"
-
-    return _WATTS.sub(scale, text)
+PENDING_SETTING = "ftp_push_pending"        # {"old", "new", "at"} until the rider answers the review
 
 
 def apply_new_ftp(new_ftp: int, note: str = "") -> dict:
-    """Save a new FTP and bring the plan in line with it. Returns what changed:
-    {"descriptions": n, "garmin": n workouts being resent in the background}."""
+    """Save a new FTP. Returns {"workouts": n upcoming workouts whose watts changed}. When any did,
+    the change waits in pending() for the rider to review."""
     new_ftp = int(new_ftp)
     old_ftp = float(q.get_setting("ftp_watts", 0) or 0)
     today = date.today().isoformat()
@@ -53,28 +36,147 @@ def apply_new_ftp(new_ftp: int, note: str = "") -> dict:
                           day=min(q.first_activity_date() or today, today))
     q.set_setting("ftp_watts", new_ftp)
     q.log_ftp_history(new_ftp, note)
-    out = {"descriptions": 0, "garmin": 0}
+    out = {"workouts": 0}
     if new_ftp <= 0 or old_ftp <= 0 or new_ftp == old_ftp:
         return out
 
     # Rides from today on are scored on the new FTP; earlier rides keep theirs.
     q.recalculate_all_tss(since=today)
 
-    upcoming = q.get_upcoming_workouts(today)
-    ratio = new_ftp / old_ftp
-    updates = []
-    for w in upcoming:
-        text = rescale_watts(w.get("description"), ratio)
-        if text != w.get("description"):
-            updates.append((w["id"], text))
-    q.set_workout_descriptions(updates)    # also tells TrainingPeaks the plan changed
-    out["descriptions"] = len(updates)
-
-    to_resend = [w for w in upcoming if w.get("garmin_workout_id") and w.get("structured_json")]
-    if to_resend:
-        start_garmin_resend([w["id"] for w in to_resend])
-        out["garmin"] = len(to_resend)
+    # Measured from the FTP last sent out, so two changes before an answer are one review.
+    sent_ftp = (pending() or {}).get("old", old_ftp)
+    upcoming = q.get_upcoming_workouts(today, raw=True)
+    changed = [w for w in upcoming if _has_watts(w)]
+    out["workouts"] = len(changed)
+    on_garmin = any(w.get("garmin_workout_id") for w in upcoming)    # its watts are fixed at send
+    if int(sent_ftp) == new_ftp or not (changed or on_garmin):
+        clear_pending()
+    else:
+        q.set_setting(PENDING_SETTING, json.dumps({"old": int(sent_ftp), "new": new_ftp,
+                                                   "at": datetime.utcnow().isoformat()}))
     return out
+
+
+def _has_watts(w: dict) -> bool:
+    return any(workout_watts.has_tokens(w.get(f)) for f in workout_watts.FIELDS)
+
+
+def pending() -> dict | None:
+    """The FTP change waiting for the rider's review, or None."""
+    raw = q.get_setting(PENDING_SETTING, "")
+    try:
+        return json.loads(raw) if raw else None
+    except ValueError:
+        return None
+
+
+def clear_pending() -> None:
+    q.set_setting(PENDING_SETTING, "")
+
+
+def preview(limit: int = 3) -> dict:
+    """What the pending change does: {"old", "new", "count", "examples": [(name, before, after)]},
+    one example per kind of workout. Empty when nothing is pending."""
+    p = pending()
+    if not p:
+        return {}
+    rows = [w for w in q.get_upcoming_workouts(date.today().isoformat(), raw=True) if _has_watts(w)]
+    examples, names = [], set()
+    for w in rows:
+        name = (w.get("name") or "Workout").split(") ")[-1]
+        if name in names:
+            continue
+        lines = workout_watts.changed_lines(w.get("description"), p["old"], p["new"], limit=1)
+        if lines:
+            names.add(name)
+            examples.append((f"{w['date']} {name}", *lines[0]))
+        if len(examples) >= limit:
+            break
+    return {"old": p["old"], "new": p["new"], "count": len(rows), "examples": examples}
+
+
+def destinations() -> list[dict]:
+    """Connected places that hold copies of upcoming workouts, as {"key", "label", "count"}."""
+    from auth import intervals, trainingpeaks as tp
+    today = date.today().isoformat()
+    upcoming = q.get_upcoming_workouts(today, raw=True)
+    out = []
+    if tp.is_enabled() and not tp.needs_signin():
+        on = set(q.get_synced(tp.SERVICE))
+        out.append({"key": "trainingpeaks", "label": "TrainingPeaks",
+                    "count": sum(1 for w in upcoming if w["id"] in on)})
+    if intervals.is_connected():
+        on = set(q.get_synced(intervals.SERVICE))
+        n = sum(1 for w in upcoming if w["id"] in on)
+        if n:
+            out.append({"key": "intervals", "label": "intervals.icu", "count": n})
+    garmin = [w for w in upcoming if w.get("garmin_workout_id") and w.get("structured_json")]
+    if garmin:
+        out.append({"key": "garmin", "label": "Garmin", "count": len(garmin)})
+    return out
+
+
+def service_ftps() -> dict[str, int]:
+    """The FTP each connected service has set, where it can be read. Best effort: a service that
+    can't be reached is left out. Their workout targets are % of their own FTP."""
+    from auth import intervals, trainingpeaks as tp
+    out = {}
+    try:
+        if tp.is_enabled() and not tp.needs_signin():
+            ftp = tp.Client().thresholds().get("ftp")
+            if ftp:
+                out["TrainingPeaks"] = int(ftp)
+    except Exception:
+        pass
+    try:
+        if intervals.is_connected():
+            ftp = intervals.thresholds().get("ftp")
+            if ftp:
+                out["intervals.icu"] = int(ftp)
+    except Exception:
+        pass
+    return out
+
+
+def push(keys: list[str]) -> list[str]:
+    """Send the upcoming workouts, as they read now, to the chosen places and end the review.
+    TrainingPeaks and Garmin run in the background; intervals.icu is sent here. Returns one line
+    per place for the rider."""
+    from auth import intervals, trainingpeaks as tp
+    import garmin_workouts
+    clear_pending()
+    today = date.today().isoformat()
+    msgs = []
+    if "trainingpeaks" in keys:
+        tp.start_background_sync()
+        msgs.append("Sending to TrainingPeaks in the background.")
+    if "intervals" in keys:
+        on = q.get_synced(intervals.SERVICE)
+        ends = [r["date"] for r in on.values() if r["date"] >= today]
+        if ends:
+            end = max(ends)
+            rows = [(w, steps) for w in q.get_workouts(today, end)
+                    if w["id"] in on and (steps := garmin_workouts.saved_steps(w)) is not None]
+            try:
+                out = intervals.sync(rows, today, end)
+                msgs.append(f"Updated {out['sent']} rides on intervals.icu.")
+            except intervals.IntervalsError as e:
+                msgs.append(f"Couldn't update intervals.icu. {e}")
+    if "garmin" in keys:
+        ids = [w["id"] for w in q.get_upcoming_workouts(today)
+               if w.get("garmin_workout_id") and w.get("structured_json")]
+        if ids and start_garmin_resend(ids):
+            msgs.append(f"Sending {len(ids)} workout{'s' if len(ids) != 1 else ''} to your Garmin again.")
+    return msgs
+
+
+def keep_old_elsewhere() -> None:
+    """End the review without sending. TrainingPeaks keeps the copies it has: they are marked up to
+    date so its automatic sync doesn't send the new watts later on its own."""
+    from auth import trainingpeaks as tp
+    clear_pending()
+    if tp.is_enabled():
+        tp.accept_current()
 
 
 _resend_lock = threading.Lock()
@@ -138,15 +240,10 @@ def last_garmin_result() -> dict | None:
 
 def summary(out: dict) -> str:
     """One line for the rider about what followed the new FTP."""
-    parts = []
-    if out.get("descriptions"):
-        n = out["descriptions"]
-        parts.append(f"updated watts in {n} upcoming workout{'s' if n != 1 else ''}")
-    if out.get("garmin"):
-        n = out["garmin"]
-        parts.append(f"sending {n} workout{'s' if n != 1 else ''} to your Garmin again")
-    text = ("Also " + " and ".join(parts) + ". ") if parts else ""
-    from auth import trainingpeaks
-    if trainingpeaks.is_enabled():
-        text += "Set the same FTP in TrainingPeaks so its targets match."
-    return text.strip()
+    n = out.get("workouts") or 0
+    if not n:
+        return ""
+    text = f"{n} upcoming workout{'s' if n != 1 else ''} now show{'' if n != 1 else 's'} watts for the new FTP."
+    if pending() and destinations():
+        text += " Choose where to send them in the review."
+    return text

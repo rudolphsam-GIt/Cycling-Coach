@@ -1,6 +1,7 @@
 """Correctness fixes: taper load, one TSS rule, FTP history, a new FTP flowing into upcoming
 workouts, Strava errors and Claude errors. Run with venv/bin/python -m unittest tests.test_correctness -v"""
 import json
+import unittest
 from datetime import date, timedelta
 from unittest import mock
 
@@ -9,6 +10,7 @@ import requests
 
 import claude_client
 import ftp_change
+import workout_watts
 from auth import garmin as garmin_auth, strava
 from db import queries as q
 from db.schema import get_conn
@@ -106,40 +108,89 @@ class FtpHistoryTests(Base):
         self.assertEqual(q.ftp_on("2025-06-01", hist), 240)
 
 
-class NewFtpTests(Base):
-    def test_watts_in_text_scale_and_percentages_do_not(self):
-        self.assertEqual(ftp_change.rescale_watts("4x8 at 250 W, 90% FTP", 1.1), "4x8 at 275 W, 90% FTP")
-        self.assertEqual(ftp_change.rescale_watts("hold 240-260W", 1.1), "hold 265-285W")
-        self.assertEqual(ftp_change.rescale_watts("3.5 W/kg climb", 1.1), "3.5 W/kg climb")
+class WorkoutWattsTests(unittest.TestCase):
+    def test_watts_become_percent_and_back(self):
+        stored = workout_watts.to_pct("2x20 at 230 to 255W, then 10 min at about 250 W", 345)
+        self.assertEqual(stored, "2x20 at {66.7%FTP} to {73.9%FTP}W, then 10 min at about {72.5%FTP} W")
+        self.assertEqual(workout_watts.to_watts(stored, 345), "2x20 at 230 to 255W, then 10 min at about 250 W")
+        self.assertEqual(workout_watts.to_watts(stored, 300), "2x20 at 200 to 220W, then 10 min at about 220 W")
 
-    def test_upcoming_workouts_follow_the_new_ftp(self):
+    def test_percentages_wkg_and_tokens_are_left_alone(self):
+        for text in ("hold 90% FTP", "3.5 W/kg climb", "{66.7%FTP} to {75%FTP}W", "", None):
+            self.assertEqual(workout_watts.to_pct(text, 345), text)
+
+    def test_no_ftp_leaves_the_text_as_written(self):
+        self.assertEqual(workout_watts.to_pct("hold 250 W", 0), "hold 250 W")
+
+    def test_changed_lines_show_before_and_after(self):
+        stored = workout_watts.to_pct("Warm up. 60 min at 250 to 270W. Cool down.", 330)
+        self.assertEqual(workout_watts.changed_lines(stored, 330, 345), [("60 min at 250 to 270W.", "60 min at 260 to 280W.")])
+
+
+class NewFtpTests(Base):
+    def test_upcoming_workouts_follow_the_new_ftp_and_past_ones_do_not(self):
         future = _workout(TODAY + timedelta(days=3), "4x8 at 250 W")
         past = _workout(TODAY - timedelta(days=3), "4x8 at 250 W")
-        done = _workout(TODAY + timedelta(days=1), "4x8 at 250 W")
-        conn = get_conn()
-        conn.execute("UPDATE workouts SET completed=1 WHERE id=?", (done,))
-        conn.commit()
-        conn.close()
         with mock.patch.object(ftp_change, "start_garmin_resend") as resend:
             out = ftp_change.apply_new_ftp(275)
         by_id = {w["id"]: w for w in q.get_workouts("2000-01-01", "2100-01-01")}
         self.assertEqual(by_id[future]["description"], "4x8 at 275 W")
         self.assertEqual(by_id[past]["description"], "4x8 at 250 W")
-        self.assertEqual(by_id[done]["description"], "4x8 at 250 W")
-        self.assertEqual(out["descriptions"], 1)
-        resend.assert_not_called()                # nothing was on Garmin
+        self.assertEqual(out, {"workouts": 1})
+        resend.assert_not_called()                # nothing is sent until the rider says so
         self.assertEqual(q.get_setting("ftp_watts"), "275")
         self.assertEqual(q.get_ftp_history()[-1]["ftp_watts"], 275)
 
-    def test_workouts_on_garmin_are_sent_again_with_saved_steps(self):
-        steps = json.dumps([{"type": "steady", "minutes": 10, "low_pct": 90, "high_pct": 95}])
+    def test_a_change_waits_for_review_and_holds_trainingpeaks(self):
+        from auth import trainingpeaks as tp
+        _workout(TODAY + timedelta(days=3), "60 min at 250 W")
+        ftp_change.apply_new_ftp(275)
+        self.assertEqual({k: ftp_change.pending()[k] for k in ("old", "new")}, {"old": 250, "new": 275})
+        view = ftp_change.preview()
+        self.assertEqual((view["count"], view["examples"][0][1:]), (1, ("60 min at 250 W", "60 min at 275 W")))
+        with mock.patch.object(tp, "is_enabled", return_value=True), \
+                mock.patch.object(tp, "needs_signin", return_value=False):
+            self.assertFalse(tp.sync_due())
+            ftp_change.clear_pending()
+            self.assertTrue(tp.sync_due())
+
+    def test_two_changes_before_an_answer_are_one_review(self):
+        _workout(TODAY + timedelta(days=3), "60 min at 250 W")
+        ftp_change.apply_new_ftp(275)
+        ftp_change.apply_new_ftp(300)
+        self.assertEqual((ftp_change.pending()["old"], ftp_change.pending()["new"]), (250, 300))
+        ftp_change.apply_new_ftp(250)                # back where it was sent: nothing to review
+        self.assertIsNone(ftp_change.pending())
+
+    def test_same_ftp_changes_nothing(self):
+        _workout(TODAY + timedelta(days=3), "4x8 at 250 W")
+        self.assertEqual(ftp_change.apply_new_ftp(250), {"workouts": 0})
+        self.assertIsNone(ftp_change.pending())
+
+    def test_saving_a_workout_as_shown_keeps_its_exact_numbers(self):
+        steps = json.dumps([{"kind": "interval", "minutes": 10, "low_pct": 90, "high_pct": 95}])
+        wid = _workout(TODAY + timedelta(days=3), "hold 263 W", structured_json=steps)
+        ftp_change.apply_new_ftp(275)
+        w = q.get_workout(wid)
+        self.assertEqual(w["description"], "hold 290 W")
+        q.update_workout(wid, w)                     # opened and saved with no change
+        raw = q.get_upcoming_workouts(TODAY.isoformat(), raw=True)[0]
+        self.assertEqual(raw["description"], "hold {105.2%FTP} W")
+        self.assertEqual(raw["structured_json"], steps)
+
+    def test_garmin_copies_are_sent_again_only_when_asked(self):
+        steps = json.dumps([{"kind": "interval", "minutes": 10, "low_pct": 90, "high_pct": 95}])
         wid = _workout(TODAY + timedelta(days=2), "Threshold")
         q.set_workout_garmin(wid, "g1", "s1", steps, "2026-01-01")
         _workout(TODAY + timedelta(days=4), "Not sent")
-        with mock.patch.object(ftp_change, "start_garmin_resend") as resend:
-            out = ftp_change.apply_new_ftp(275)
+        with mock.patch.object(ftp_change, "start_garmin_resend", return_value=True) as resend:
+            ftp_change.apply_new_ftp(275)
+            resend.assert_not_called()
+            self.assertIsNotNone(ftp_change.pending())       # Garmin's watts are fixed at send
+            self.assertEqual([d["key"] for d in ftp_change.destinations()], ["garmin"])
+            ftp_change.push(["garmin"])
         resend.assert_called_once_with([wid])
-        self.assertEqual(out["garmin"], 1)
+        self.assertIsNone(ftp_change.pending())
 
         import garmin_workouts
         with mock.patch.object(garmin_workouts, "send") as send:
@@ -148,10 +199,18 @@ class NewFtpTests(Base):
         self.assertEqual(send.call_args.args[1], json.loads(steps))
         self.assertIn("Updated 1 workout", msg)
 
-    def test_same_ftp_changes_nothing(self):
-        _workout(TODAY + timedelta(days=3), "4x8 at 250 W")
-        out = ftp_change.apply_new_ftp(250)
-        self.assertEqual(out, {"descriptions": 0, "garmin": 0})
+    def test_old_databases_are_converted_once(self):
+        from db import schema
+        wid = _workout(TODAY + timedelta(days=3), "hold 250 W")
+        conn = get_conn()
+        conn.execute("UPDATE workouts SET description='hold 250 W' WHERE id=?", (wid,))
+        conn.execute("DELETE FROM athlete_settings WHERE key='workout_watts_pct'")
+        conn.commit()
+        conn.close()
+        schema.run_migrations()
+        schema.run_migrations()
+        raw = q.get_upcoming_workouts(TODAY.isoformat(), raw=True)[0]
+        self.assertEqual(raw["description"], "hold {100%FTP} W")
 
 
 class StravaErrorTests(Base):

@@ -3,6 +3,7 @@ import sqlite3
 import os
 import threading
 from contextlib import contextmanager
+from datetime import datetime
 from config import DB_PATH
 
 SCHEMA = """
@@ -260,6 +261,33 @@ def get_conn():
     return conn
 
 
+def _watts_to_pct(conn) -> None:
+    """Once per database: watt figures in workouts' words become % of FTP, on the FTP in effect
+    on each workout's date, so they follow later FTP changes (see workout_watts)."""
+    import workout_watts
+    done = conn.execute("SELECT value FROM athlete_settings WHERE key='workout_watts_pct'").fetchone()
+    if done:
+        return
+    history = [(d, float(f)) for d, f in conn.execute(
+        "SELECT date, ftp_watts FROM ftp_history WHERE ftp_watts > 0 ORDER BY date, id")]
+    setting = conn.execute("SELECT value FROM athlete_settings WHERE key='ftp_watts'").fetchone()
+    current = float(setting[0] or 0) if setting else 0.0
+
+    def ftp_on(day: str) -> float:
+        before = [f for d, f in history if d <= day]
+        return before[-1] if before else history[0][1] if history else current
+
+    for row in conn.execute(f"SELECT id, date, {', '.join(workout_watts.FIELDS)} FROM workouts").fetchall():
+        ftp = ftp_on(row[1])
+        new = [workout_watts.to_pct(t, ftp) for t in row[2:]]
+        if new != list(row[2:]):
+            conn.execute(f"UPDATE workouts SET {', '.join(f + '=?' for f in workout_watts.FIELDS)} WHERE id=?",
+                         (*new, row[0]))
+    now = datetime.utcnow().isoformat()
+    conn.execute("INSERT OR REPLACE INTO athlete_settings (key, value, updated_at) VALUES (?,?,?)",
+                 ("workout_watts_pct", now, now))
+
+
 def run_migrations():
     conn = get_conn()
     conn.executescript(SCHEMA)
@@ -310,6 +338,7 @@ def run_migrations():
         except (TypeError, ValueError, AttributeError):
             continue
         conn.execute("UPDATE activities SET ref_json=?, tp_json=NULL WHERE id=?", (json.dumps(ref), row[0]))
+    _watts_to_pct(conn)
     conn.commit()
     conn.executescript(INDEXES)
     conn.execute("PRAGMA journal_mode=WAL")
