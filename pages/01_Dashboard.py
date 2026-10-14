@@ -9,7 +9,7 @@ from db.queries import (get_activities, get_setting, get_workouts,
                         get_weekly_tss_summary, log_wellness, get_wellness,
                         get_recovery_range, is_ride)
 from metrics.training_load import get_current_metrics
-from components import charts, checklist, ftp_help, ride_analysis, ride_detail, theme
+from components import charts, checklist, ftp_help, ftp_review, ride_analysis, ride_detail, theme
 from components.explain import help_icon, tip
 from components.cards import metric_card, section_header, tsb_banner, page_header
 from components.theme import rgba as _rgba
@@ -185,6 +185,7 @@ with col5:
     metric_card("W / kg", f"{w_per_kg:.2f}", small_value=True, tone="var(--text-1)", tip=tip("wkg"))
 
 ftp_help.render("today_ftp")
+ftp_review.render("today_ftp_review")
 
 # ── Coach: latest ride review and weekly check in ────────────────────────────
 import coach_reports

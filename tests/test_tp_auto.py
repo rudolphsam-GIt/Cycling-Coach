@@ -180,6 +180,31 @@ class NoDuplicatesTests(Base):
         self.assertEqual(self.deletes(s), ["555"])                                  # replaced once
         self.assertEqual(len(self.posts(s)), 1)
 
+    def test_a_new_description_is_sent_again(self):
+        w = self.ride(D(2), name="A")
+        _steps_saved([w])
+        tp.sync_upcoming(TODAY, client=tp.Client("abc", session=tp_session()))    # sent as 555
+        q.set_workout_descriptions([(w["id"], "2x20 at 320 to 335W")])         # new FTP watts
+        s = tp_session(listing=[{"workoutId": 555, "title": "A"}], created={"workoutId": 556})
+        tp.sync_upcoming(TODAY, client=tp.Client("abc", session=s))
+        self.assertEqual(self.deletes(s), ["555"])
+        self.assertIn("320 to 335W", self.posts(s)[0]["json"]["description"])
+
+    def test_keeping_the_old_numbers_sends_nothing_later(self):
+        import ftp_change
+        q.set_setting("ftp_watts", "250")
+        w = self.ride(D(2), name="A")
+        q.set_workout_descriptions([(w["id"], "60 min at 250 W")])
+        _steps_saved([w])
+        tp.sync_upcoming(TODAY, client=tp.Client("abc", session=tp_session()))
+        with mock.patch.object(tp, "is_enabled", return_value=True):
+            ftp_change.apply_new_ftp(275)
+            ftp_change.keep_old_elsewhere()
+        self.assertIsNone(ftp_change.pending())
+        s = tp_session()
+        out = tp.sync_upcoming(TODAY, client=tp.Client("abc", session=s))
+        self.assertEqual((out["sent"], self.posts(s)), (0, []))
+
     def test_a_send_with_no_id_back_is_cleaned_up_next_time(self):
         w = self.ride(D(2), name="A")
         _steps_saved([w])

@@ -3,6 +3,7 @@ import sqlite3
 import json
 from datetime import datetime, date, timedelta
 from db.schema import get_conn
+import workout_watts
 
 
 # Every sport_type a ride can be stored as, lowercased: Strava names, Garmin type
@@ -581,7 +582,14 @@ def _plan_changed(conn) -> None:
     _settings_cache.clear()
 
 
+def _shown(rows) -> list[dict]:
+    """Workout rows with the watts in their words worked out on the FTP for each date."""
+    history = _ftp_history_rows()
+    return [workout_watts.show(dict(r), ftp_on(r["date"], history)) for r in rows]
+
+
 def _insert_workout(conn, data: dict) -> int:
+    data = workout_watts.store(data, ftp_on(data["date"]))
     return conn.execute(
         """INSERT INTO workouts (date, name, workout_type, description,
            structured_json, tss_planned, notes, phase, week_number, purpose, feel)
@@ -608,12 +616,15 @@ def get_workouts(start: str, end: str) -> list:
         (start, end),
     ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return _shown(rows)
 
 
 def update_workout(wid: int, data: dict):
     """Save edits. The date is not changed here, use move_workout for that."""
     conn = get_conn()
+    stored = conn.execute("SELECT * FROM workouts WHERE id=?", (wid,)).fetchone()
+    if stored:
+        data = workout_watts.store(data, ftp_on(stored["date"]), dict(stored))
     conn.execute(
         """UPDATE workouts SET name=:name, workout_type=:workout_type,
            description=:description, tss_planned=:tss_planned,
@@ -675,7 +686,7 @@ def move_workout(wid: int, new_date: str) -> dict | None:
     _plan_changed(conn)
     conn.commit()
     conn.close()
-    return dict(row)
+    return _shown([row])[0]
 
 
 # ── Why a block is built the way it is ────────────────────────────────────────
@@ -773,9 +784,9 @@ def apply_program_rows(pid: int, *, remove_workout_ids: list, remove_strength_id
         removed = []
         if remove_workout_ids:
             marks = ",".join("?" * len(remove_workout_ids))
-            removed = [dict(r) for r in conn.execute(
+            removed = _shown(conn.execute(
                 f"SELECT * FROM workouts WHERE id IN ({marks}) AND COALESCE(completed, 0) = 0",
-                remove_workout_ids)]
+                remove_workout_ids).fetchall())
             conn.executemany("DELETE FROM workouts WHERE id=?", [(r["id"],) for r in removed])
         strength_removed = 0
         if remove_strength_ids:
@@ -802,7 +813,7 @@ def get_workout(wid: int) -> dict | None:
     conn = get_conn()
     row = conn.execute("SELECT * FROM workouts WHERE id=?", (wid,)).fetchone()
     conn.close()
-    return dict(row) if row else None
+    return _shown([row])[0] if row else None
 
 
 def set_workout_garmin(wid: int, garmin_workout_id: str, garmin_schedule_id: str | None,
@@ -829,25 +840,29 @@ def add_race_notes(race_id: int, text: str) -> None:
     conn.close()
 
 
-def get_upcoming_workouts(since: str) -> list:
-    """Planned workouts on or after `since` that aren't done yet."""
+def get_upcoming_workouts(since: str, raw: bool = False) -> list:
+    """Planned workouts on or after `since` that aren't done yet. `raw` keeps the watts in their
+    words as stored, in % of FTP."""
     conn = get_conn()
     rows = conn.execute(
         "SELECT * FROM workouts WHERE date >= ? AND COALESCE(completed, 0) = 0 ORDER BY date",
         (since,),
     ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return [dict(r) for r in rows] if raw else _shown(rows)
 
 
 def set_workout_descriptions(updates: list[tuple[int, str]]) -> None:
-    """Rewrite descriptions without touching saved steps (used when only the watt numbers
-    follow a new FTP, since steps are stored as % of FTP)."""
+    """Rewrite descriptions without touching saved steps. Watts in them are stored in % of FTP."""
     if not updates:
         return
     conn = get_conn()
+    days = dict(conn.execute(f"SELECT id, date FROM workouts WHERE id IN ({','.join('?' * len(updates))})",
+                             [wid for wid, _ in updates]).fetchall())
+    history = _ftp_history_rows()
     conn.executemany("UPDATE workouts SET description=? WHERE id=?",
-                     [(text, wid) for wid, text in updates])
+                     [(workout_watts.to_pct(text, ftp_on(days.get(wid, ""), history)), wid)
+                      for wid, text in updates])
     _plan_changed(conn)
     conn.commit()
     conn.close()

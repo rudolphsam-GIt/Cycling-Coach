@@ -189,8 +189,10 @@ def payload(user_id: str, workout: dict, steps: list) -> dict:
 
 
 def fingerprint(workout: dict, steps: list) -> str:
+    # Everything the payload carries, so a description change (new FTP watts) is sent too.
     return hashlib.sha1(json.dumps([workout["date"], workout.get("name"), workout.get("tss_planned"),
-                                    workout.get("purpose"), workout.get("feel"), steps]).encode()).hexdigest()
+                                    workout.get("purpose"), workout.get("feel"), workout.get("description"),
+                                    steps]).encode()).hexdigest()
 
 
 def _planned_only(tp_workout: dict) -> bool:
@@ -335,8 +337,9 @@ def sync_range(today) -> tuple[str, str]:
 def sync_due(now=None) -> bool:
     """True when the plan changed since the last sync, or it has been a day."""
     from datetime import datetime, timedelta
-    if not is_enabled() or needs_signin():
-        return False
+    import ftp_change
+    if not is_enabled() or needs_signin() or ftp_change.pending():
+        return False        # a new FTP waits for the rider to choose where it goes
     last = q.get_setting(LAST_SYNC_SETTING, "")
     if not last:
         return True
@@ -426,6 +429,25 @@ BIKE_TYPES = (2, 8)          # TrainingPeaks' bike and mountain bike workout typ
 
 
 SCORED_BY = {1: "power", 4: "hr", 0: "manual"}   # TrainingPeaks' tssSource codes seen so far
+
+
+def accept_current(today=None) -> int:
+    """Mark the rides already on TrainingPeaks as up to date as they read now, without sending
+    anything, so watts the rider chose not to send don't go out on the next automatic sync.
+    Returns how many were marked."""
+    from datetime import date
+    import garmin_workouts
+    start, end = sync_range(today or date.today())
+    synced = q.get_synced(SERVICE)
+    rows = []
+    for w in q.get_workouts(start, end):
+        old = synced.get(w["id"])
+        steps = garmin_workouts.saved_steps(w)
+        if old and old.get("remote_id") and steps is not None:
+            rows.append({"workout_id": w["id"], "remote_id": old["remote_id"], "date": w["date"],
+                         "fingerprint": fingerprint(w, steps)})
+    q.save_synced(SERVICE, rows)
+    return len(rows)
 
 
 def normalize(w: dict) -> dict:

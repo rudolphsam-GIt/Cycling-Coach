@@ -55,6 +55,17 @@ class ProposeStepsTests(Base):
             coach_tools._propose({"workouts": [self.ride(tss_planned=40)]}, [])
         self.assertIn("steps add up to", str(e.exception))
 
+    def test_steps_without_targets_are_still_checked(self):
+        free = [{"kind": "interval", "minutes": 120, "low_pct": None, "high_pct": None}]
+        real = wr.steps_tss(free)
+        self.assertAlmostEqual(real, 2 * 0.55 ** 2 * 100, places=1)       # two hours of easy riding
+        with self.assertRaises(coach_tools.ToolInputError) as e:
+            coach_tools._propose({"workouts": [self.ride(name="Free ride", workout_type="Endurance",
+                                                         steps=free, tss_planned=150)]}, [])
+        self.assertIn("steps add up to", str(e.exception))
+        coach_tools._propose({"workouts": [self.ride(name="Free ride", workout_type="Endurance",
+                                                     steps=free, tss_planned=round(real))]}, [])
+
     def test_saving_needs_steps(self):
         w = self.ride(save_to_my_workouts=True)
         del w["steps"]

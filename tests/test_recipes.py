@@ -87,6 +87,17 @@ class SweetSpotTests(unittest.TestCase):
 
 
 class OpenersTests(unittest.TestCase):
+    def test_only_the_planners_openers_get_the_fixed_steps(self):
+        openers_tss = round(wr.steps_tss(wr.OPENERS))
+        base = {"workout_type": "Recovery", "description": wr.AUTO_MARK}
+        for name in ("Openers", "(Taper) Openers"):
+            self.assertEqual(wr.steps_for({**base, "name": name, "tss_planned": openers_tss}), wr.OPENERS)
+        renamed = wr.steps_for({**base, "name": "Openers + tempo", "workout_type": "Tempo", "tss_planned": 80})
+        self.assertLessEqual(abs(wr.steps_tss(renamed) / 80 - 1), wr.TOLERANCE)
+        resized = wr.steps_for({**base, "name": "(Taper) Openers", "tss_planned": 50})
+        self.assertNotEqual(resized, wr.OPENERS)
+        self.assertLessEqual(abs(wr.steps_tss(resized) / 50 - 1), wr.TOLERANCE)
+
     def test_openers_are_short_with_a_few_efforts(self):
         start = date(2026, 10, 12)
         race = start + timedelta(weeks=8, days=6)

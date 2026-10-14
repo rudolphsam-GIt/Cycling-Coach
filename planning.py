@@ -183,6 +183,11 @@ def _taper_day(w_type: str, day_tss: float, days_to_race: int) -> tuple[str, str
     return w_type, w_type, day_tss, None, None
 
 
+def weeks_to_race(today: date, race_date: date) -> int:
+    """Weeks in a block to race_date, counting a part week as a week."""
+    return max(1, -(-(race_date - today).days // 7))
+
+
 def plan_block(current_ctl: float, target_ctl: float, race_date: date,
                phase_key: str, start_date: date | None = None,
                days_per_week: int | None = None,
@@ -202,7 +207,7 @@ def plan_block(current_ctl: float, target_ctl: float, race_date: date,
     """
     today = start_date or date.today()
     # Count a part week before the race as a week, so the days just before it are planned too.
-    weeks_out = max(1, -(-(race_date - today).days // 7))
+    weeks_out = weeks_to_race(today, race_date)
     taper_weeks = 2 if weeks_out >= 6 else 1
     # A race a week or less away is all taper.
     build_weeks = weeks_out - taper_weeks

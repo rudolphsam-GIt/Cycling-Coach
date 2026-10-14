@@ -909,6 +909,15 @@ def manage_row(w: dict, prefix: str) -> None:
                 st.rerun()
 
 
+@st.cache_data(max_entries=20, show_spinner=False)
+def quick_block(current_ctl: float, target_ctl: int, race_date: date, phase_key: str, start: date,
+                days_per_week: int | None, available_days: str | None) -> dict:
+    """The Quick Generate block, kept until one of its inputs changes. It only depends on what is
+    passed in, so the athlete profile needs no part in the key."""
+    return planning.plan_block(current_ctl, target_ctl, race_date, phase_key, start,
+                               days_per_week=days_per_week, available_days=available_days)
+
+
 def render_quick_generate() -> None:
     with st.expander("Quick Generate (no conversation)"):
         st.caption("Builds a training block scaled to your current fitness. A fast fallback "
@@ -919,8 +928,8 @@ def render_quick_generate() -> None:
         if race_options:
             chosen_race = race_options[st.selectbox("Target race", list(race_options.keys()))]
             race_date = date.fromisoformat(chosen_race["date"])
-            weeks_out = max(1, (race_date - today).days // 7)
-            st.info(f"{weeks_out} weeks to race · Current CTL **{current_ctl:.0f}**")
+            weeks_out = planning.weeks_to_race(today, race_date)
+            st.info(f"{weeks_out} week{'s' if weeks_out != 1 else ''} to race · Current CTL **{current_ctl:.0f}**")
         else:
             st.warning("No upcoming races. Add one in Race Prep first.")
             chosen_race = None
@@ -935,13 +944,17 @@ def render_quick_generate() -> None:
         phase_label = st.selectbox("Phase focus", list(planning.PHASE_LABELS.values()))
         phase_key = next(k for k, v in planning.PHASE_LABELS.items() if v == phase_label)
 
-        block = planning.plan_block(
-            current_ctl, target_ctl, race_date, phase_key,
-            days_per_week=int(float(get_setting("days_per_week", 0) or 0)) or None,
-            available_days=get_setting("available_days", "") or None)
-        outlook = block["outlook"]
+        block = outlook = None
         if chosen_race is not None:
-            if outlook["reachable"]:
+            block = quick_block(current_ctl, target_ctl, race_date, phase_key, today,
+                                int(float(get_setting("days_per_week", 0) or 0)) or None,
+                                get_setting("available_days", "") or None)
+            outlook = block["outlook"]
+            if outlook["reachable"] and outlook["ramp_per_week"] < 0.1:
+                st.caption(f"This block holds your fitness at about **{outlook['peak_ctl']:.0f}** before the "
+                           f"taper, and it is about {outlook['race_day_ctl']:.0f} on race day as the taper "
+                           f"freshens you up.")
+            elif outlook["reachable"]:
                 st.caption(f"Fitness climbs about {outlook['ramp_per_week']:.1f} points a week to a peak of "
                            f"**{outlook['peak_ctl']:.0f}** before the taper, and is about "
                            f"{outlook['race_day_ctl']:.0f} on race day as the taper freshens you up.")
@@ -969,7 +982,7 @@ def render_quick_generate() -> None:
                     new_ids.append(test_id)
             st.session_state["wizard_generated_ids"] = new_ids
             st.session_state["wizard_msg"] = (f"Generated {len(drafted)} workouts over {weeks_out} "
-                                              f"weeks. Fitness peaks at about CTL {outlook['peak_ctl']:.0f} "
+                                              f"week{'s' if weeks_out != 1 else ''}. Fitness peaks at about CTL {outlook['peak_ctl']:.0f} "
                                               f"before the taper.")
             st.rerun()
 

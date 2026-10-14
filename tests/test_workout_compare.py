@@ -111,6 +111,8 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(wc.tss_verdict(100, 69), "short")
         self.assertEqual(wc.tss_verdict(100, 70), "under")       # the calendar's 70% line
         self.assertEqual(wc.tss_verdict(100, 120), "over")
+        self.assertEqual(wc.tss_verdict(100, 130), "over")       # the calendar's 130% line
+        self.assertEqual(wc.tss_verdict(100, 131), "well_over")
         self.assertIsNone(wc.tss_verdict(None, 50))
         self.assertIsNone(wc.tss_verdict(100, None))
 

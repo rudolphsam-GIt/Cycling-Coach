@@ -12,6 +12,8 @@ recipe's limits), then the steady part fills the gap.
 """
 from __future__ import annotations
 
+import re
+
 AUTO_MARK = "Auto-generated"         # Quick Generate's descriptions start a line with this
 TOLERANCE = 0.10                     # steps land within 10% of the planned TSS
 
@@ -30,6 +32,9 @@ RECIPES = {
     "Sprint/Anaerobic": {"work": (0.5, 150, 170), "rest": (4.5, 50, 60), "reps": (4, 10), "steady": (65, 75)},
 }
 MAX_STEADY_MIN = 480
+# A step with no power target is scored as easy riding at this % of FTP, so its time still counts
+# toward the workout's TSS.
+FREE_RIDE_PCT = 55
 
 # The day before a race: a short spin with a few sharp efforts, the same whatever the plan's TSS.
 OPENERS_NAME = "Openers"
@@ -55,10 +60,18 @@ def uses_recipe(workout: dict) -> bool:
     return not desc or any(line.strip().startswith(AUTO_MARK) for line in desc.splitlines())
 
 
+def is_openers(workout: dict) -> bool:
+    """True for the planner's openers: named Openers (after a label like "(Taper) ") with a TSS
+    the openers steps still match. A renamed or resized workout gets its normal recipe."""
+    name = re.sub(r"^\(.*?\)\s*", "", (workout.get("name") or "").strip())
+    tss = workout.get("tss_planned")
+    return name == OPENERS_NAME and (not tss or abs(float(tss) / steps_tss(OPENERS) - 1) <= TOLERANCE)
+
+
 def steps_for(workout: dict) -> list:
     """The recipe steps for a workout that uses_recipe. Raises RecipeError when its TSS is out
     of the recipe's reach."""
-    if OPENERS_NAME in (workout.get("name") or ""):
+    if is_openers(workout):
         return [dict(s) for s in OPENERS]
     return build(workout["workout_type"], workout.get("tss_planned"))
 
@@ -74,14 +87,14 @@ def _leaves(steps: list):
 
 def steps_tss(steps: list) -> float:
     """TSS of a set of steps, each ridden at the middle of its range: hours x IF squared x 100,
-    with IF from the fourth power average, as normalized power is."""
+    with IF from the fourth power average, as normalized power is. A step with no target counts
+    as easy riding at FREE_RIDE_PCT."""
     secs = sum4 = 0.0
     for s in _leaves(steps):
         t = s["minutes"] * 60
-        if s.get("low_pct") is None:
-            continue
+        pct = FREE_RIDE_PCT if s.get("low_pct") is None else (s["low_pct"] + s["high_pct"]) / 2
         secs += t
-        sum4 += t * ((s["low_pct"] + s["high_pct"]) / 200) ** 4
+        sum4 += t * (pct / 100) ** 4
     if not secs:
         return 0.0
     intensity = (sum4 / secs) ** 0.25
@@ -184,6 +197,6 @@ def summary(steps: list) -> dict:
     """Total minutes, intensity factor and TSS of a set of steps."""
     minutes = sum(s["minutes"] for s in _leaves(steps))
     tss = steps_tss(steps)
-    hours = sum(s["minutes"] for s in _leaves(steps) if s.get("low_pct") is not None) / 60
+    hours = minutes / 60
     return {"minutes": round(minutes, 1), "tss": round(tss), "intensity_factor":
             round((tss / 100 / hours) ** 0.5, 2) if hours else None}
