@@ -5,6 +5,7 @@ workouts the coach proposed with a confirm button.
 from __future__ import annotations
 
 import json
+import re
 
 import pandas as pd
 import streamlit as st
@@ -31,15 +32,63 @@ def local_time(utc_iso: str) -> str:
     return dt.strftime("%a %b %-d, %-I:%M %p")
 
 
+# A line that ends in a question mark, allowing for closing markdown or quotes after it.
+_QUESTION_LINE = re.compile(r"\?[\s*_)\"'”]*$")
+_LIST_LINE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
+ASK_HEADING = "**Waiting on your answer**"
+
+
+def _asks(paragraph: str) -> bool:
+    return any(_QUESTION_LINE.search(line) for line in paragraph.splitlines())
+
+
+def _is_list(paragraph: str) -> bool:
+    lines = [line for line in paragraph.splitlines() if line.strip()]
+    return bool(lines) and all(_LIST_LINE.match(line) for line in lines)
+
+
+def split_questions(reply: str) -> tuple[str, str]:
+    """
+    Split the questions the coach ends a reply with from the rest of it, so they can be shown
+    where the athlete (or their coach) sees that an answer is needed. Returns (body, questions),
+    with questions empty when the reply doesn't end by asking something.
+
+    The closing paragraphs that hold a line ending in a question mark count, along with a list
+    of options straight after the question ("Which of these would you change?" then a list).
+    """
+    paras = [p for p in re.split(r"\n\s*\n", (reply or "").strip()) if p.strip()]
+    end = len(paras)
+    while end > 0 and _is_list(paras[end - 1]) and not _asks(paras[end - 1]):
+        end -= 1                        # options listed after the question
+    start = end
+    while start > 0 and _asks(paras[start - 1]):
+        start -= 1
+    if start == end:
+        return (reply or "").strip(), ""
+    return "\n\n".join(paras[:start]), "\n\n".join(paras[start:])
+
+
+def show_reply(reply: str, *, ask: bool = False) -> None:
+    """Draw a coach reply. With `ask`, the questions it ends with go in a highlighted box."""
+    body, questions = split_questions(reply) if ask else ((reply or "").strip(), "")
+    if body:
+        st.markdown(body)
+    if questions:
+        st.info(f"{ASK_HEADING}\n\n{questions}", icon=":material/help:")
+
+
 def stream_reply(system: list[dict], messages: list[dict], effort: str,
-                 proposals: list[dict], model: str = claude_client.MODEL) -> tuple[str, str | None]:
+                 proposals: list[dict], model: str = claude_client.MODEL,
+                 ask: bool = False) -> tuple[str, str | None]:
     """
     Stream the coach's reply into the current container, running tools as needed.
-    Workouts the coach proposes are appended to `proposals`.
+    Workouts the coach proposes are appended to `proposals`. While the coach works, a
+    spinner says what it is doing, so a pause for a tool doesn't look like the end of
+    the reply. `ask` highlights the questions the reply ends with (the chat uses it).
     Returns (reply_text, error_message_or_None).
     """
     status = st.empty()
-    status.caption("Thinking…")
+    status.status("Thinking", state="running")
     body = st.empty()
     reply, error, looked_up = "", None, []
 
@@ -48,19 +97,25 @@ def stream_reply(system: list[dict], messages: list[dict], effort: str,
         lambda name, args: coach_tools.run_tool(name, args, proposals),
         effort=effort, model=model,
     )
+    writing = False
     for kind, value in events:
         if kind == "text":
             reply += value
             body.markdown(reply + "▌")
+            if not writing:
+                status.status("Writing the reply", state="running")
+                writing = True
         elif kind == "tool":
             label = coach_tools.STATUS_LABELS.get(value, value)
             if label not in looked_up:
                 looked_up.append(label)
-            status.caption(f"{label}…")
+            status.status(f"{label}, still working on the reply", state="running")
+            writing = False
         elif kind == "error":
             error = value
 
-    body.markdown(reply)
+    with body.container():
+        show_reply(reply, ask=ask)
     if looked_up:
         status.caption("Looked at: " + ", ".join(
             l.replace("Checking your ", "").replace("Saving a note about you", "saved a note")
