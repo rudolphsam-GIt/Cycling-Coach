@@ -110,6 +110,21 @@ class GoalTests(unittest.TestCase):
         self.assertEqual(infer_goal_keys("have fun outside"), ["general_fitness"])
         self.assertEqual(infer_goal_keys(""), ["general_fitness"])
 
+    def test_keeping_weight_is_not_weight_loss(self):
+        from components.onboarding import infer_goal_keys
+        self.assertEqual(infer_goal_keys("Maintain base during the off season; maintain weight and be ready "
+                                         "in the spring to start harder training"), ["endurance"])
+        self.assertNotIn("weight_loss", infer_goal_keys("Keep my weight steady over winter"))
+        self.assertNotIn("weight_loss", infer_goal_keys("Hold race weight at 160 lbs"))
+        self.assertIn("weight_loss", infer_goal_keys("Lose some weight before spring"))
+        self.assertIn("weight_loss", infer_goal_keys("Keep up with the group and lose weight"))
+
+    def test_goal_words_match_whole_words(self):
+        from components.onboarding import infer_goal_keys
+        self.assertEqual(infer_goal_keys("Close the gap to the front group"), ["general_fitness"])
+        self.assertEqual(infer_goal_keys("Less fatigue at work"), ["general_fitness"])
+        self.assertIn("race", infer_goal_keys("Win some crits"))
+
 
 class AgeTests(unittest.TestCase):
     def test_age_from_birth_year(self):
