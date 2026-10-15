@@ -849,7 +849,9 @@ def render_coach_tab(next_race) -> None:
                 if job and job["images"] and i == len(history) - 1 and msg["role"] == "user":
                     for img in job["images"]:
                         st.image(img, width=320)
-                st.markdown(msg["content"])
+                # Only the latest reply can still be waiting on an answer.
+                latest = i == len(history) - 1 and msg["role"] == "assistant" and not job
+                coach_ui.show_reply(msg["content"], ask=latest)
 
         if job:
             messages = build_messages(job["images"])
@@ -859,7 +861,7 @@ def render_coach_tab(next_race) -> None:
                     extra = (coach_context.program_rules(programs.load("draft"))
                              if program_ui.in_program_mode() else "")
                     reply, error = coach_ui.stream_reply(
-                        coach_context.system_blocks(extra), messages, "medium", proposals)
+                        coach_context.system_blocks(extra), messages, "medium", proposals, ask=True)
                 if error or not reply.strip():
                     st.session_state["chat_error"] = error or "The coach sent back an empty reply."
                     if not error:
