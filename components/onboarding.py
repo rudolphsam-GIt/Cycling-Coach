@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import streamlit as st
-from datetime import date
+from datetime import date, timedelta
 
 from components.units import distance_switch, unit_switch, weight_input
 import ftp_change
@@ -318,15 +318,59 @@ def first_block_button(key: str) -> None:
         _go_first_block()
 
 
-def render_onboarding_welcome_banner():
-    """Shown once on the Dashboard right after onboarding completes."""
+# The Build plan card shows when nothing is planned this far ahead.
+PLAN_LOOKAHEAD_DAYS = 14
+
+
+def next_planned_ride(today: date) -> dict | None:
+    """The next planned ride from today on that isn't done yet, or None."""
+    from db.queries import get_upcoming_workouts
+    upcoming = get_upcoming_workouts(today.isoformat(), raw=True)
+    return upcoming[0] if upcoming else None
+
+
+def needs_plan(today: date, next_ride: dict | None = None) -> bool:
+    """True when nothing is planned for the next two weeks and no program draft is waiting."""
+    import programs
+    if next_ride and date.fromisoformat(next_ride["date"]) <= today + timedelta(days=PLAN_LOOKAHEAD_DAYS):
+        return False
+    return not programs.load("draft")
+
+
+def _day(iso: str) -> str:
+    d = date.fromisoformat(iso)
+    return f"{d:%a %b} {d.day}"
+
+
+def plan_prompt_card(key: str, today: date | None = None) -> None:
+    """A lasting way into the coach's plan request, shown while nothing is planned for the next
+    two weeks, so it isn't only offered once right after setup."""
+    from db import schema
+    from db.queries import get_setting
+    today = today or date.today()
+    nxt = next_planned_ride(today)
+    if not needs_plan(today, nxt):
+        return
+    who = "you" if schema.is_owner() else (get_setting("athlete_name", "") or "this athlete")
+    head = (f"**Nothing is planned for {who} in the next two weeks.** The next ride is on {_day(nxt['date'])}."
+            if nxt else f"**Nothing is planned for {who} yet.**")
+    whose, they = ("your", "you") if schema.is_owner() else ("their", "they")
+    with st.container(border=True):
+        st.markdown(head)
+        st.caption(f"The coach builds it from {whose} goals and the hours {they} have. You review it "
+                   "before anything goes on the calendar.")
+        first_block_button(key)
+
+
+def render_onboarding_welcome_banner() -> bool:
+    """Shown once on the Dashboard right after onboarding completes. True when it was shown."""
     goal_key_list = st.session_state.pop("onboarding_just_finished", None)
     if not goal_key_list:
-        return
+        return False
     from db import schema
     if not schema.is_owner():
         _coached_welcome()
-        return
+        return True
     blurbs = [GOAL_BLURB[k] for k in goal_key_list if k in GOAL_BLURB]
     blurb_str = " ".join(blurbs)
     st.success(f"You're all set! {blurb_str} Head to **Settings** anytime to refine your FTP, LTHR, or goals.")
@@ -349,6 +393,7 @@ def render_onboarding_welcome_banner():
                     "block will start with an FTP test, so we know where to go from there.",
                     icon=":material/speed:")
     first_block_button("welcome_first_block")
+    return True
 
 
 def _coached_welcome() -> None:

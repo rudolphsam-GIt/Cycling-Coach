@@ -62,10 +62,11 @@ with _sync:
     else:
         st.page_link(SETTINGS_PAGE, label="Import rides", icon=":material/upload:")
 
-from components.onboarding import render_onboarding_welcome_banner
-render_onboarding_welcome_banner()
+from components.onboarding import plan_prompt_card, render_onboarding_welcome_banner
+_welcomed = render_onboarding_welcome_banner()
 
-checklist.render()
+if not checklist.render() and not _welcomed:
+    plan_prompt_card("today_build_plan")
 
 tsb_banner(tsb, ctl)
 
