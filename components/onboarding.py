@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import streamlit as st
 from datetime import date
 
@@ -66,16 +67,27 @@ _KEYWORDS = {
     "race": ("race", "racing", "crit", "criterium", "cat 3", "cat 4", "cat 5", "time trial", "omnium"),
     "speed": ("faster", "speed", "power", "ftp", "stronger", "climb", "keep up", "sprint"),
     "endurance": ("endurance", "century", "100 mile", "gran fondo", "granfondo", "long ride", "distance",
-                  "finish", "centuries", "stamina"),
-    "weight_loss": ("weight", "lose", "pounds", "lbs", "kilos", "slim", "fat"),
+                  "finish", "centuries", "stamina", "base", "aerobic"),
+    "weight_loss": ("weight", "lose", "losing", "pounds", "lbs", "kilos", "slim", "fat"),
 }
+
+# "Maintain weight" or "keep my weight steady" is not a weight loss goal, so these phrases are
+# taken out before matching, along with a number that follows ("hold race weight at 160 lbs").
+# Up to three words may sit between the verb and the weight word.
+_KEEP_WEIGHT = re.compile(r"\b(?:maintain|keep|hold|stay)\w*(?:\s+\w+){0,3}?\s+(?:weight|pounds|lbs|kilos|kg)\b"
+                          r"(?:\s+(?:at|of|around|about)?\s*\d+(?:\.\d+)?\s*(?:pounds|lbs|kilos|kg)\b)?")
+
+
+def _has_word(text: str, word: str) -> bool:
+    """Whole words only (a plural is fine), so "lose" doesn't match "close" or "fat" match "fatigue"."""
+    return re.search(rf"\b{re.escape(word)}(?:s|es)?\b", text) is not None
 
 
 def infer_goal_keys(text: str) -> list[str]:
     """Rough goal categories from a rider's own words, so the coach's built in
     guidance still applies. The words themselves are always sent to the coach too."""
-    t = (text or "").lower()
-    keys = [k for k, words in _KEYWORDS.items() if any(w in t for w in words)]
+    t = _KEEP_WEIGHT.sub(" ", (text or "").lower())
+    keys = [k for k, words in _KEYWORDS.items() if any(_has_word(t, w) for w in words)]
     return keys or ["general_fitness"]
 
 
