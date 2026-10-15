@@ -85,6 +85,20 @@ def share_package(rows: list, folder_program: dict | None) -> bytes:
     return exporters.share_package_zip(rows, get_setting("athlete_name", "") or "", ftp, folder_program, ctl)
 
 
+def empty_range(span: str, today: date) -> None:
+    """Nothing to export in the chosen range. Say where the next ride is, or how to get a plan."""
+    from components.onboarding import first_block_button, next_planned_ride
+    nxt = next_planned_ride(today)
+    if nxt:
+        d = date.fromisoformat(nxt["date"])
+        st.caption(f"No planned rides from {span}. The next one is on {d:%a %b} {d.day}, so pick a longer "
+                   "range above to export it.")
+        return
+    st.caption("Nothing is planned yet, so there is nothing to export. Build a plan with the coach on the "
+               "Coach tab, review it there, and it can be exported here once it is on the calendar.")
+    first_block_button("export_build_plan")
+
+
 def _show_message() -> None:
     msg = st.session_state.pop(MSG_KEY, None)
     if msg:
@@ -119,7 +133,7 @@ def render(today: date | None = None) -> None:
             missing.remove(w)
         span = programs.span_label(start, end)
         if not rides:
-            st.caption(f"No planned rides from {span}.")
+            empty_range(span, today)
             _show_message()
             return
         st.caption(f"{len(rides)} planned ride{'s' if len(rides) != 1 else ''} from {span}.")

@@ -40,12 +40,14 @@ def _go_settings() -> None:
     st.switch_page(PAGE_SETTINGS)
 
 
-def render() -> None:
-    """Draw the checklist when it applies. Nothing for experienced riders or once dismissed."""
+def render() -> bool:
+    """Draw the checklist when it applies. Nothing for experienced riders or once dismissed.
+    True when it drew its own Build first block button."""
     if get_setting("checklist_dismissed", "") == "1":
-        return
+        return False
     if get_setting("experience_level", "") not in SHOWN_FOR:
-        return
+        return False
+    build_shown = False
     steps = explain.checklist(current_state())
     done = sum(s["done"] for s in steps)
     with st.container(border=True):
@@ -66,5 +68,7 @@ def render() -> None:
                         _go_settings()
                 elif step["key"] == "block":
                     first_block_button("check_first_block")
+                    build_shown = True
         if done == len(steps):
             st.success("You have done the basics. Keep riding, and use Progress to watch your fitness build.")
+    return build_shown
