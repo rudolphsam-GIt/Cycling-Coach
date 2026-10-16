@@ -143,7 +143,7 @@ with tab_profile:
         pl1, pl2 = st.columns([3, 2])
         plan_start = pl1.date_input(
             "Plan start date", value=_plan["start"] if _plan else None, key="settings_plan_start",
-            placeholder="Not set", help="The day their first plan week starts. The coach drafts plans from it.")
+            help="The day their first plan week starts. The coach drafts plans from it. Empty means not set.")
         plan_weeks = pl2.number_input(
             "Plan length (weeks)", min_value=planning.PLAN_WEEKS_MIN, max_value=planning.PLAN_WEEKS_MAX,
             value=_plan["weeks"] if _plan else None, step=1, placeholder="Not set", key="settings_plan_weeks")
