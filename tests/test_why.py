@@ -101,8 +101,8 @@ class QuickGenerateTests(unittest.TestCase):
         self.assertTrue(recovery and all("lighter week on purpose" in w["purpose"] for w in recovery))
 
     def test_days_per_week_limits_riding_days_and_keeps_the_weekly_load(self):
-        race = date.today() + timedelta(days=28)
         start = date.today() - timedelta(days=date.today().weekday())     # a Monday
+        race = start + timedelta(days=28)    # whole weeks, so week 1 isn't cut short on any weekday
         full = planning.generate_block(40, 60, race, "Threshold", start)
         four = planning.generate_block(40, 60, race, "Threshold", start, days_per_week=4)
         by_week = lambda plan: {w["week_number"] for w in plan}
