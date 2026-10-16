@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 from components import theme
+import strength_text
 from components.theme import rgba as _rgba
 from db.queries import is_ride
 from metrics.units import fmt_climb, fmt_distance, num as _num
@@ -72,13 +73,14 @@ def _strength_row(row: dict) -> dict:
     name = notes.split(" | ")[0].strip()
     if not name or name.startswith("Planned by AI Coach"):
         name = "Strength session"
-    exercises = []
+    exercises, items = [], []
     try:
         data = json.loads(row.get("exercises_json") or "[]")
         for ex in data if isinstance(data, list) else []:
             nm = ex.get("name") if isinstance(ex, dict) else ex
             if nm:
                 exercises.append(str(nm))
+                items.append(ex if isinstance(ex, dict) else {"name": str(nm)})
     except (TypeError, ValueError):
         pass
     return {
@@ -86,7 +88,8 @@ def _strength_row(row: dict) -> dict:
         "name": name,
         "planned": (not row.get("completed")) and "Planned by AI Coach" in notes,
         "duration_minutes": row.get("duration_minutes"),
-        "exercises": exercises,
+        "exercises": exercises,       # names only
+        "items": items,               # the full exercises, for strength_text
         "purpose": row.get("purpose"),
     }
 
@@ -330,10 +333,11 @@ def day_tooltip(day: DayData, unit: str = "km") -> str:
         label = "Strength planned" if s["planned"] else "Strength done"
         parts.append(f"<b>{label}</b>")
         parts.append(_esc(_short(s["name"], 40)))
-        if s["exercises"]:
-            more = len(s["exercises"]) - 4
-            names = ", ".join(_short(x, 24) for x in s["exercises"][:4])
-            parts.append(_esc(names + (f" and {more} more" if more > 0 else "")))
+        items = s.get("items") or [{"name": x} for x in s["exercises"]]
+        for x in items[:4]:
+            parts.append(_esc(_short(strength_text.short(x), 48)))
+        if len(items) > 4:
+            parts.append(_esc(f"and {len(items) - 4} more"))
         if s.get("purpose"):
             parts.append("<b>Why.</b> " + _wrap(_short(s["purpose"], 170)))
 

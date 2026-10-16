@@ -7,6 +7,7 @@ from datetime import date, timedelta
 from components import section_header, page_header, theme, charts
 from components.units import weight_input, weight_unit
 from metrics.units import from_kg
+import strength_text
 
 from db.queries import (add_strength_session, get_strength_sessions,
                          mark_strength_complete, get_setting, delete_strength_session)
@@ -137,11 +138,10 @@ if planned:
                                               int(ps.get("duration_minutes") or 45))
                 ps_weights = {}
                 for i, ex in enumerate(ps_exercises):
-                    st.markdown(f"**{ex['name']}** · {ex['sets']} × {ex.get('reps', '')} · "
-                                f"{ex.get('intensity', '')}")
-                    if ex.get("notes"):
-                        st.caption(ex["notes"])
-                    if "bodyweight" not in (ex.get("intensity") or "").lower():
+                    st.markdown(f"**{strength_text.line(ex, unit)}**")
+                    if tip := strength_text.note(ex):
+                        st.caption(tip)
+                    if not strength_text.bodyweight_only(ex):
                         ps_weights[i] = weight_input(
                             "Weight used", 0.0, key=f"pw_{ps['id']}_{i}", unit=unit,
                             min_kg=0.0, max_kg=300.0, step_lb=5.0, step_kg=2.5)

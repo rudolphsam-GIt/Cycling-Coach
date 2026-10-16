@@ -20,6 +20,7 @@ import garmin_workouts
 import knowledge
 import planning
 import programs
+import strength_text
 import workout_recipes
 
 
@@ -39,6 +40,24 @@ STEPS_TSS_TOLERANCE = 0.10
 def _int_prop(description: str, minimum: int, maximum: int) -> dict:
     return {"type": "integer", "description": description, "minimum": minimum, "maximum": maximum}
 
+
+# One strength exercise, the same for propose_strength_sessions and a program's strength days.
+EXERCISE_PROPERTIES = {
+    "name": {"type": "string"},
+    "sets": {"type": "integer"},
+    "reps": {"type": "string", "description": "e.g. '8', '10 to 12', '30 sec each side'"},
+    "intensity": {"type": "string", "description": "Effort, e.g. 'RPE 7, 2 to 3 reps left in reserve'"},
+    "load": {"type": "string",
+             "description": "What to lift, in the athlete's weight unit, e.g. '135 lb', '60 kg', "
+                            "'bodyweight', '2 x 20 lb dumbbells'. Base it on the weights they logged "
+                            "(get_planned_strength shows them). With nothing logged, say how to find it "
+                            "instead, e.g. 'work up to a weight you could lift 3 more times, note it'. "
+                            "Never a made up number."},
+    "notes": {"type": "string", "description": "Optional technique cue or substitution"},
+    "progression": {"type": "string",
+                    "description": "Optional, how to move the load on, e.g. 'add 5 lb a week while it "
+                                   "stays at RPE 7'"},
+}
 
 TOOLS = [
     {
@@ -88,7 +107,8 @@ TOOLS = [
     {
         "name": "get_planned_strength",
         "description": "Strength sessions on the athlete's calendar between two dates, each with its id "
-                       "(needed to change or remove it), whether it is done, and its exercises.",
+                       "(needed to change or remove it), whether it is done, and its exercises. A done "
+                       "session shows the weight lifted (\"used ...\"), the basis for the next loads.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -229,14 +249,8 @@ TOOLS = [
                                 "type": "array",
                                 "items": {
                                     "type": "object",
-                                    "properties": {
-                                        "name": {"type": "string"},
-                                        "sets": {"type": "integer"},
-                                        "reps": {"type": "string"},
-                                        "intensity": {"type": "string"},
-                                        "notes": {"type": "string"},
-                                    },
-                                    "required": ["name", "sets", "reps", "intensity"],
+                                    "properties": EXERCISE_PROPERTIES,
+                                    "required": ["name", "sets", "reps", "intensity", "load"],
                                 },
                             },
                             "duration_minutes": {"type": "integer"},
@@ -288,12 +302,8 @@ TOOLS = [
                                 "type": "array", "description": "Strength sessions only. Replaces the whole list.",
                                 "items": {
                                     "type": "object",
-                                    "properties": {
-                                        "name": {"type": "string"}, "sets": {"type": "integer"},
-                                        "reps": {"type": "string"}, "intensity": {"type": "string"},
-                                        "notes": {"type": "string"},
-                                    },
-                                    "required": ["name", "sets", "reps", "intensity"],
+                                    "properties": EXERCISE_PROPERTIES,
+                                    "required": ["name", "sets", "reps", "intensity", "load"],
                                 },
                             },
                         },
@@ -371,9 +381,8 @@ TOOLS = [
                                         "type": "array",
                                         "items": {
                                             "type": "object",
-                                            "properties": {"name": {"type": "string"}, "sets": {"type": "integer"},
-                                                           "reps": {"type": "string"}, "intensity": {"type": "string"}},
-                                            "required": ["name", "sets", "reps", "intensity"],
+                                            "properties": EXERCISE_PROPERTIES,
+                                            "required": ["name", "sets", "reps", "intensity", "load"],
                                         },
                                     },
                                 },
@@ -775,8 +784,9 @@ def _propose_strength(args: dict, proposals: list[dict]) -> str:
             if (not isinstance(ex, dict) or not isinstance(ex.get("name"), str) or not ex["name"].strip()
                     or not isinstance(ex.get("sets"), int) or isinstance(ex.get("sets"), bool)
                     or not isinstance(ex.get("reps"), str) or not ex["reps"].strip()
-                    or not isinstance(ex.get("intensity"), str) or not ex["intensity"].strip()):
-                raise ToolInputError(f"{where} exercise {j} needs a name, integer sets, reps and intensity")
+                    or not isinstance(ex.get("intensity"), str) or not ex["intensity"].strip()
+                    or not isinstance(ex.get("load"), str) or not ex["load"].strip()):
+                raise ToolInputError(f"{where} exercise {j} needs a name, integer sets, reps, intensity and load")
         duration = s.get("duration_minutes")
         if not isinstance(duration, int) or isinstance(duration, bool) or not 5 <= duration <= 180:
             raise ToolInputError(f"{where} duration_minutes must be a whole number from 5 to 180")
@@ -796,6 +806,7 @@ def _strength_rows(start: str, end: str) -> list[dict]:
     from db.queries import get_strength_sessions
     from components.calendar import _strength_row
     days_back = max((date.today() - date.fromisoformat(start)).days + 1, 1)
+    unit = get_setting("weight_unit", "") or "kg"       # logged weights read in the athlete's unit
     rows = []
     for r in get_strength_sessions(days_back=days_back):
         if not start <= r["date"] <= end:
@@ -804,7 +815,8 @@ def _strength_rows(start: str, end: str) -> list[dict]:
         exercises = []
         try:
             for e in json.loads(r.get("exercises_json") or "[]"):
-                exercises.append(f"{e.get('name')} {e.get('sets')}x{e.get('reps')} {e.get('intensity', '')}".strip())
+                if isinstance(e, dict):
+                    exercises.append(strength_text.line(e, unit))
         except (TypeError, ValueError):
             pass
         row = {"id": r["id"], "date": r["date"], "name": info["name"],

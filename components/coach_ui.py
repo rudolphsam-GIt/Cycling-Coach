@@ -13,7 +13,8 @@ import streamlit as st
 import claude_client
 import coach_tools
 import plan_changes
-from db.queries import add_workout, add_strength_session, save_phase_notes, add_my_workout
+import strength_text
+from db.queries import add_workout, add_strength_session, save_phase_notes, add_my_workout, get_setting
 
 # Jumping to the Plan page's calendar. The Plan page copies PLAN_JUMP_KEY into its
 # tab bar state before drawing the tabs and maps the value to its own tab label.
@@ -254,10 +255,23 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
 
         if strength:
             st.markdown(f"**Strength · {len(strength)} session{'s' if len(strength) > 1 else ''}**")
+            unit = get_setting("weight_unit", "") or "kg"
+            # Sessions that repeat (same name and exercises) show their prescription once.
+            groups: list[list[dict]] = []
             for s in strength:
-                ex_names = ", ".join(e["name"] for e in s.get("exercises", [])[:4])
-                more = f" +{len(s['exercises']) - 4} more" if len(s.get("exercises", [])) > 4 else ""
-                st.caption(f"{s['date']} · **{s['name']}** · {ex_names}{more}")
+                if groups and strength_text.same_session(groups[-1][0], s):
+                    groups[-1].append(s)
+                else:
+                    groups.append([s])
+            for group in groups:
+                s = group[0]
+                when = (s["date"] if len(group) == 1 else
+                        f"{len(group)} sessions, {group[0]['date']} to {group[-1]['date']}")
+                st.markdown(f"**{s['name']}** · {when}"
+                            + (f" · about {s['duration_minutes']} min" if s.get("duration_minutes") else ""))
+                for ex in s.get("exercises", []):
+                    tip = strength_text.note(ex)
+                    st.markdown(f"- {strength_text.line(ex, unit)}" + (f"  \n  _{tip}_" if tip else ""))
                 if s.get("purpose"):
                     st.caption(f"Why. {s['purpose']}")
 

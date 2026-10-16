@@ -126,7 +126,7 @@ class ValidationTests(Base):
         self.assertEqual((rides[0]["id"], rides[0]["purpose"]), (wid, "Raise threshold"))
         sessions = json.loads(coach_tools.run_tool("get_planned_strength", {"start_date": D(0), "end_date": D(10)}, []))
         self.assertEqual((sessions[0]["id"], sessions[0]["name"], sessions[0]["done"]), (sid, "Upper", False))
-        self.assertIn("Squat 3x6 RPE 7", sessions[0]["exercises"])
+        self.assertIn("Squat · 3 × 6 · RPE 7", sessions[0]["exercises"])
         out = []
         msg = coach_tools.run_tool("propose_plan_changes", {"changes": [
             {"target": "ride", "id": wid, "action": "remove", "reason": "x"}]}, out)
