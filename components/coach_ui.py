@@ -171,6 +171,81 @@ def _ride_frame(items: list) -> pd.DataFrame:
     return df[cols]
 
 
+# ── Comments on a drafted plan ────────────────────────────────────────────────
+# The athlete (or their coach) writes comments next to the drafted rows, and one button sends
+# them all to the coach as a single chat message, instead of remembering them and typing them out.
+
+COMMENT = "Your comment"
+
+
+def comments_message(lines: list[str], general: str = "", *, what: str = "the proposed plan") -> str:
+    """The chat message that carries the comments. Empty when there are none."""
+    general = (general or "").strip()
+    if not lines and not general:
+        return ""
+    items = list(lines) + ([f"Overall → {general}"] if general else [])
+    return (f"I have comments on {what}. Please revise it with these in mind and show me the new version."
+            "\n\n" + "\n".join(f"- {item}" for item in items))
+
+
+def comment_key(state_key: str, data) -> str:
+    """A widget key prefix that changes when the draft changes or comments are sent, so old
+    comments never sit next to rows they weren't written for."""
+    import zlib
+    version = st.session_state.get(f"{state_key}_cv", 0)
+    digest = zlib.crc32(json.dumps(data, sort_keys=True, default=str).encode())
+    return f"{state_key}_c{version}_{digest}"
+
+
+def comment_table(df: pd.DataFrame, key: str, label, *, after: str, column_config: dict | None = None) -> list[str]:
+    """Show `df` with an editable comment column placed after the `after` column. Returns one
+    line per comment, "<label of the row> → <comment>", where `label(row)` names the row."""
+    df = df.copy()
+    df[COMMENT] = ""
+    order = list(df.columns[:-1])
+    order.insert(order.index(after) + 1 if after in order else len(order), COMMENT)
+    edited = st.data_editor(
+        df, key=key, hide_index=True, width="stretch", column_order=order,
+        disabled=[c for c in df.columns if c != COMMENT],
+        column_config={**(column_config or {}),
+                       COMMENT: st.column_config.TextColumn(
+                           COMMENT, width="medium",
+                           help="Click a cell and type what you would change, then press Enter. Comments "
+                                "go to the coach together when you press Send.")})
+    return [f"{label(row)} → {str(row[COMMENT]).strip()}" for _, row in edited.iterrows()
+            if str(row[COMMENT] or "").strip()]
+
+
+def comment_footer(state_key: str, key: str, lines: list[str], *, what: str, on_plan_page: bool) -> None:
+    """An overall comment box and the Send comments button."""
+    general = st.text_input("Anything else about the whole draft?", key=f"{key}_general",
+                            placeholder="Optional, e.g. keep Fridays free")
+    message = comments_message(lines, general, what=what)
+    n = len(lines) + (1 if general.strip() else 0)
+    label = f"Send {n} comment{'s' if n != 1 else ''} to the coach" if n else "Send comments to the coach"
+    if st.button(label, key=f"{key}_send", icon=":material/rate_review:", disabled=not message,
+                 width="stretch",
+                 help="Write comments in the Your comment column first. They go to the coach as one message."):
+        st.session_state["pending_message"] = message
+        st.session_state[f"{state_key}_cv"] = st.session_state.get(f"{state_key}_cv", 0) + 1
+        st.session_state[PLAN_JUMP_KEY] = "coach"
+        if on_plan_page:
+            st.rerun()
+        else:
+            st.switch_page(PLAN_PAGE)
+
+
+def _ride_label(row) -> str:
+    """How a proposed ride is named in a comment, e.g. "Tue Oct 20, VO2 max 5x3 min"."""
+    from datetime import date
+    try:
+        d = date.fromisoformat(str(row["Date"]))
+        day = f"{d:%a %b} {d.day}"
+    except (KeyError, ValueError):
+        day = str(row.get("Date", ""))
+    return f"{day}, {row.get('Workout', 'ride')}"
+
+
 def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
     """
     Show workouts and/or strength sessions proposed by the coach, stored in
@@ -218,6 +293,8 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
     strength = [p for p in proposed if p.get("kind") == "strength"]
     changes = [p for p in proposed if p.get("kind") == "change"]
 
+    ckey = comment_key(state_key, proposed)
+    comments: list[str] = []
     with st.container(border=True):
         st.markdown("**Proposed changes** · review before they touch your calendar" if changes and not
                     (rides or strength) else "**Proposed plan** · review before adding to your calendar")
@@ -248,10 +325,11 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
                 kept = [i["name"] for i in items if i.get("save")]
                 if kept:
                     st.caption(":material/bookmark: Also saved to My workouts: " + ", ".join(kept))
-                st.dataframe(_ride_frame(items), hide_index=True, width="stretch",
-                             column_config={"Why": st.column_config.TextColumn(width="large"),
-                                            "Feel": st.column_config.TextColumn(width="medium"),
-                                            "Details": st.column_config.TextColumn(width="medium")})
+                comments += comment_table(
+                    _ride_frame(items), f"{ckey}_{phase_name}", _ride_label, after="Workout",
+                    column_config={"Why": st.column_config.TextColumn(width="large"),
+                                   "Feel": st.column_config.TextColumn(width="medium"),
+                                   "Details": st.column_config.TextColumn(width="medium")})
 
         if strength:
             st.markdown(f"**Strength · {len(strength)} session{'s' if len(strength) > 1 else ''}**")
@@ -274,6 +352,15 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
                     st.markdown(f"- {strength_text.line(ex, unit)}" + (f"  \n  _{tip}_" if tip else ""))
                 if s.get("purpose"):
                     st.caption(f"Why. {s['purpose']}")
+                note = st.text_input(f"Your comment on {s['name']}", key=f"{ckey}_s{groups.index(group)}",
+                                     placeholder="Your comment on these sessions (optional)", label_visibility="collapsed")
+                if note.strip():
+                    comments.append(f"Strength, {s['name']} ({when}) → {note.strip()}")
+
+        if rides or strength:
+            st.caption("Want changes? Write them in the Your comment column or boxes, then send them "
+                       "to the coach in one go.")
+            comment_footer(state_key, ckey, comments, what="the proposed plan", on_plan_page=on_plan_page)
 
         c1, c2 = st.columns(2)
         adding = bool(rides or strength)
