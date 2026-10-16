@@ -445,6 +445,10 @@ FEEL = {
     "Sprint/Anaerobic": "10 out of 10 for the short bursts, then fully easy in between.",
     "Race": "Whatever the race asks for. Start controlled and save your hardest efforts for the key moments.",
     "Other": "Follow the description. If you are unsure, ride it by effort and keep it conversational.",
+    "Nordic Ski": "Mostly 3 to 4 out of 10, steady enough to talk, with climbs a little harder. Ski by heart "
+                  "rate against your ski threshold, not your bike one.",
+    "Backcountry Ski": "Steady climbing at 3 to 5 out of 10, a pace you could hold for hours. The descents "
+                       "are rest for your heart and lungs but still work your legs.",
 }
 
 
@@ -472,6 +476,10 @@ PURPOSE = {
     "Sprint/Anaerobic": "Short, all out efforts that build sprint power and your ability to handle surges.",
     "Race": "A chance to practise racing, or a hard effort that tests your fitness.",
     "Other": "A session set by you or your coach.",
+    "Nordic Ski": "A ski day in place of a ride. It keeps your aerobic base growing through winter with "
+                  "arms and legs sharing the work.",
+    "Backcountry Ski": "A long ski tour in place of the long ride. Hours of steady climbing build endurance "
+                       "much like a long ride does.",
 }
 
 PHASE_NOTES = {

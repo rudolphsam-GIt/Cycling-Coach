@@ -161,8 +161,12 @@ def ensure_steps(workouts: list[dict], progress=None, max_workers: int = 4) -> d
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from db.queries import save_workout_steps
 
+    import sports
     out, todo = {}, []
     for w in workouts:
+        if sports.is_ski_workout(w):
+            out[w["id"]] = "A ski day has no bike steps, so it can't go to a bike computer or Zwift."
+            continue
         steps = saved_steps(w)
         if steps is None:
             todo.append(w)

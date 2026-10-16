@@ -11,6 +11,7 @@ refreshes its tokens automatically. You connect once from Settings (with your
 """
 
 import json
+import sports
 import os
 from datetime import datetime, timedelta, date
 
@@ -278,7 +279,7 @@ def _score_from_file(activity_id: int, raw: bytes | None) -> None:
     act = get_activity(activity_id)
     if not streams or not act:
         return
-    lthr = float(get_setting("lthr", 0) or 0)
+    lthr = sports.threshold_for(act.get("sport_type"), float(get_setting("lthr", 0) or 0), sports.ski_lthr())
     profile = hr_profile()
     seconds = tss_duration(act.get("duration_seconds"), act.get("elapsed_seconds"), act.get("timer_seconds"),
                            time_rule(profile))
@@ -301,7 +302,8 @@ def _sync_rides(api, days_back: int) -> int:
         if row is None:
             # Strength, hikes and skiing count toward fitness too, but aren't rides. Their heart
             # rate is scored second by second from the file, fetched once.
-            other = other_activity_row(act, lthr, profile)
+            kind = ((act.get("activityType") or {}).get("typeKey", "") or "").lower()
+            other = other_activity_row(act, sports.threshold_for(kind, lthr, sports.ski_lthr()), profile)
             if other and other["date"]:
                 other_id = upsert_activity(other)
                 if other_id and not get_streams(other_id):

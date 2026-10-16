@@ -20,6 +20,7 @@ import garmin_workouts
 import knowledge
 import planning
 import programs
+import sports
 import strength_text
 import workout_recipes
 
@@ -183,8 +184,9 @@ TOOLS = [
                             "name": {"type": "string"},
                             "workout_type": {"type": "string", "enum": WORKOUT_TYPES},
                             "description": {"type": "string",
-                                            "description": "Structure with durations and power targets"},
-                            "tss_planned": {"type": "number"},
+                                            "description": "Structure with durations and power targets "
+                                                           "(heart rate targets from the ski threshold for a ski day)"},
+                            "tss_planned": {"type": "number", "description": "TSS, or an hrTSS target for a ski day"},
                             "purpose": {"type": "string",
                                         "description": "One or two plain sentences. What this workout "
                                                        "trains and how it serves this athlete's goal. "
@@ -737,6 +739,9 @@ def _propose(args: dict, proposals: list[dict]) -> str:
             raise ToolInputError(f"{where} is in phase '{phase}', which is missing from phases. "
                                  "Describe every phase you use in phases.")
         steps = None
+        if w.get("steps") is not None and w["workout_type"] in sports.SKI_TYPES:
+            raise ToolInputError(f"{where} is a ski day, which has no bike steps. Leave steps out and give "
+                                 "tss_planned as an hrTSS target")
         if w.get("steps") is not None:
             steps = _steps(w["steps"], f"{where} steps")
             real = workout_recipes.steps_tss(steps)

@@ -19,6 +19,7 @@ from db.queries import (get_setting, set_setting, upsert_activity, get_daily_tss
 from metrics.tss import ride_tss, time_rule, tss_duration
 from metrics.zones import estimate_zone_seconds
 import json
+import sports
 
 STRAVA_AUTH_URL = "https://www.strava.com/oauth/authorize"
 STRAVA_TOKEN_URL = "https://www.strava.com/oauth/token"
@@ -138,6 +139,7 @@ def sync_activities(client_id: str, client_secret: str, days_back: int = 60) -> 
     history = ftp_history_rows()
     profile = hr_profile()
     lthr = float(get_setting("lthr", 0) or 0)
+    ski_lthr = sports.ski_lthr()
     since_ts = int((datetime.utcnow() - timedelta(days=days_back)).timestamp())
 
     headers = {"Authorization": f"Bearer {token}"}
@@ -168,7 +170,8 @@ def sync_activities(client_id: str, client_secret: str, days_back: int = 60) -> 
 
             duration_s = tss_duration(moving_s, elapsed_s, rule=time_rule(profile))
             ride_ftp = ftp_on(act["start_date_local"][:10], history)
-            tss, if_value, tss_source = ride_tss(duration_s, np, avg_hr, max_hr, ride_ftp, lthr,
+            act_lthr = sports.threshold_for(act.get("sport_type", act.get("type", "")), lthr, ski_lthr)
+            tss, if_value, tss_source = ride_tss(duration_s, np, avg_hr, max_hr, ride_ftp, act_lthr,
                                                  act.get("perceived_exertion"), profile)
 
             zones = estimate_zone_seconds(

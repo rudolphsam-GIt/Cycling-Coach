@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import threading
 import json
+import sports
 
 import requests
 
@@ -181,6 +182,11 @@ def payload(user_id: str, workout: dict, steps: list) -> dict:
     from garmin_workouts import total_minutes
     about = " ".join(x for x in (workout.get("purpose"), workout.get("feel") and f"Feel. {workout['feel']}",
                                  workout.get("description")) if x)
+    if sports.is_ski_workout(workout):
+        # A ski day has no power steps: it goes as an XC ski workout with its hrTSS target and text.
+        return {"athleteId": user_id, "workoutDay": workout["date"], "workoutTypeValueId": sports.TP_XC_SKI,
+                "title": workout.get("name") or "Ski day", "description": about,
+                "tssPlanned": round(workout.get("tss_planned") or 0)}
     return {"athleteId": user_id, "workoutDay": workout["date"], "workoutTypeValueId": BIKE,
             "title": workout.get("name") or "Workout", "description": about,
             "totalTimePlanned": round(total_minutes(steps) / 60, 3),
@@ -392,7 +398,7 @@ def sync_upcoming(today=None, client: Client | None = None, build_steps=None) ->
     start, end = sync_range(today)
     started = datetime.utcnow().isoformat()
     rides = [w for w in q.get_workouts(start, end) if not w.get("completed")]
-    missing = [w for w in rides if garmin_workouts.saved_steps(w) is None]
+    missing = [w for w in rides if garmin_workouts.saved_steps(w) is None and not sports.is_ski_workout(w)]
     skipped = 0
     if missing:
         try:
@@ -402,7 +408,7 @@ def sync_upcoming(today=None, client: Client | None = None, build_steps=None) ->
         rides = [w for w in q.get_workouts(start, end) if not w.get("completed")]
     rows = []
     for w in rides:
-        steps = garmin_workouts.saved_steps(w)
+        steps = [] if sports.is_ski_workout(w) else garmin_workouts.saved_steps(w)
         if steps is None:
             skipped += 1
         else:
