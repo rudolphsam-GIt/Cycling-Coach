@@ -1,6 +1,6 @@
 import unittest
 
-from components.coach_ui import split_questions
+from components.coach_ui import split_questions, split_reply, streaming_view
 
 
 class SplitQuestionsTests(unittest.TestCase):
@@ -38,6 +38,35 @@ class SplitQuestionsTests(unittest.TestCase):
 
     def test_empty_reply(self):
         self.assertEqual(split_questions(""), ("", ""))
+
+
+class SplitReplyTests(unittest.TestCase):
+    def test_answer_questions_and_details(self):
+        reply = ("Ride easy tomorrow.\n\n[QUESTIONS]\nCan you ride Friday?\n\n"
+                 "[DETAILS]\nYour form is -18.\n\n- Tuesday rest")
+        self.assertEqual(split_reply(reply),
+                         ("Ride easy tomorrow.", "Can you ride Friday?", "Your form is -18.\n\n- Tuesday rest"))
+
+    def test_details_without_questions(self):
+        self.assertEqual(split_reply("Yes.\n\n[DETAILS]\nWhy it works."), ("Yes.", "", "Why it works."))
+
+    def test_markers_in_bold_or_with_a_colon(self):
+        reply = "Yes.\n**[QUESTIONS]**\nWhich day?\n[details]:\nMore."
+        self.assertEqual(split_reply(reply), ("Yes.", "Which day?", "More."))
+
+    def test_a_marker_inside_a_sentence_is_left_alone(self):
+        reply = "I put [DETAILS] in the notes."
+        self.assertEqual(split_reply(reply), (reply, "", ""))
+
+    def test_old_reply_without_markers_falls_back(self):
+        self.assertEqual(split_reply("Here is week one.\n\nWhich would you change?"),
+                         ("Here is week one.", "Which would you change?", ""))
+
+    def test_streaming_view_hides_the_markers(self):
+        view = streaming_view("Yes.\n[QUESTIONS]\nWhich day?\n[DETAILS]\nMore.")
+        self.assertNotIn("[", view)
+        self.assertIn("**Questions for you**", view)
+        self.assertIn("**More detail**", view)
 
 
 if __name__ == "__main__":

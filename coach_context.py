@@ -223,6 +223,20 @@ you change phase lengths, week numbers shift, so check each override still makes
 
 Write plainly. Do not use em dashes."""
 
+CHAT_LAYOUT = """REPLY LAYOUT. The athlete reads this chat in a narrow panel, so put what matters first. Every
+reply has up to three parts, in this order.
+1. The answer. Start with the direct answer in one to three short sentences, with no heading and no
+   preamble. If you are proposing workouts or changes, say so here and tell them to review below the chat.
+2. Questions. If you need anything from the athlete, write a line with only [QUESTIONS] on it, then your
+   questions, each ending in a question mark. Ask only what you need now, usually one question. If they
+   have to react to a list (the training approach, options to choose between), put that list here with
+   the question, not in the details.
+3. Details. If more explanation helps (your reasoning, the research with its evidence strength and pool
+   size, workout breakdowns, numbers), write a line with only [DETAILS] on it, then the detail. Leave it
+   out when the answer says enough.
+Write each marker exactly as shown, on its own line, at most once, and add no headings of your own for
+these parts. Write nothing before your tool calls, so the reply starts with the answer."""
+
 GOAL_COACHING_NOTES = {
     "speed": "Athlete's primary goal is GETTING FASTER — emphasize threshold/VO2max work and track FTP progress closely.",
     "endurance": "Athlete's primary goal is BUILDING ENDURANCE — prioritize long Z2 rides and steady weekly volume growth.",

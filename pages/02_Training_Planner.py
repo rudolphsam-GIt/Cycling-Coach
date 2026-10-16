@@ -868,8 +868,9 @@ def render_coach_tab(next_race) -> None:
             if messages:
                 proposals: list[dict] = []
                 with st.chat_message("assistant"):
-                    extra = (coach_context.program_rules(programs.load("draft"))
-                             if program_ui.in_program_mode() else "")
+                    extra = coach_context.CHAT_LAYOUT
+                    if program_ui.in_program_mode():
+                        extra += "\n\n" + coach_context.program_rules(programs.load("draft"))
                     reply, error = coach_ui.stream_reply(
                         coach_context.system_blocks(extra), messages, "medium", proposals, ask=True)
                 if error or not reply.strip():

@@ -69,13 +69,51 @@ def split_questions(reply: str) -> tuple[str, str]:
     return "\n\n".join(paras[:start]), "\n\n".join(paras[start:])
 
 
+# The chat coach marks its reply as answer, then [QUESTIONS], then [DETAILS]
+# (coach_context.CHAT_LAYOUT). A marker line may come wrapped in bold or with a colon.
+_MARKER = re.compile(r"^[ \t]*[*_]*\[(QUESTIONS|DETAILS)\][*_]*:?[ \t]*$", re.IGNORECASE | re.MULTILINE)
+DETAILS_LABEL = "More detail"
+
+
+def split_reply(reply: str) -> tuple[str, str, str]:
+    """
+    Split a chat reply into (answer, questions, details). Replies without the markers,
+    such as older saved messages, fall back to split_questions with no details.
+    """
+    text = (reply or "").strip()
+    parts = _MARKER.split(text)
+    if len(parts) == 1:
+        body, questions = split_questions(text)
+        return body, questions, ""
+    sections = {"QUESTIONS": [], "DETAILS": []}
+    for name, chunk in zip(parts[1::2], parts[2::2]):
+        if chunk.strip():
+            sections[name.upper()].append(chunk.strip())
+    return parts[0].strip(), "\n\n".join(sections["QUESTIONS"]), "\n\n".join(sections["DETAILS"])
+
+
+def streaming_view(reply: str) -> str:
+    """The reply as it streams in, with the markers turned into plain headings."""
+    return _MARKER.sub(lambda m: "**Questions for you**" if m.group(1).upper() == "QUESTIONS"
+                       else f"**{DETAILS_LABEL}**", reply)
+
+
 def show_reply(reply: str, *, ask: bool = False) -> None:
-    """Draw a coach reply. With `ask`, the questions it ends with go in a highlighted box."""
-    body, questions = split_questions(reply) if ask else ((reply or "").strip(), "")
-    if body:
-        st.markdown(body)
+    """
+    Draw a coach reply: the answer, then the coach's questions, then any details folded
+    away. With `ask` (the latest chat reply) the questions go in a highlighted box.
+    """
+    answer, questions, details = split_reply(reply)
+    if answer:
+        st.markdown(answer)
     if questions:
-        st.info(f"{ASK_HEADING}\n\n{questions}", icon=":material/help:")
+        if ask:
+            st.info(f"{ASK_HEADING}\n\n{questions}", icon=":material/help:")
+        else:
+            st.markdown(questions)
+    if details:
+        with st.expander(DETAILS_LABEL, icon=":material/notes:"):
+            st.markdown(details)
 
 
 def stream_reply(system: list[dict], messages: list[dict], effort: str,
@@ -102,7 +140,7 @@ def stream_reply(system: list[dict], messages: list[dict], effort: str,
     for kind, value in events:
         if kind == "text":
             reply += value
-            body.markdown(reply + "▌")
+            body.markdown(streaming_view(reply) + "▌")
             if not writing:
                 status.status("Writing the reply", state="running")
                 writing = True
