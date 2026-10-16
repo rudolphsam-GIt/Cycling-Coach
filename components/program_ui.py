@@ -26,6 +26,7 @@ from metrics.training_load import get_current_metrics
 
 MODE_KEY = "program_mode"
 ADDED_KEY = "program_added"
+DRAFT_COMMENTS = "program_draft_comments"     # session key prefix for comments on the draft
 
 STARTERS = [
     ("Let's discuss the off season", ":material/ac_unit:",
@@ -122,19 +123,27 @@ def _chart(program: dict, ctl_by_week: dict, key: str) -> None:
     charts.show(fig, key=key, zoom=None)
 
 
-def _phase_view(p: dict) -> None:
+def _phase_view(p: dict, comments: list | None = None, key: str = "") -> None:
+    """One phase of a program. With a `comments` list (the draft), each row of the typical week
+    and the strength days take a comment, and the comments are added to that list."""
+    from components import coach_ui
     st.markdown(f"**{p['focus']}**")
     st.markdown(p["why"])
     if p["week_template"]:
         mid = (p["weekly_tss_start"] + p["weekly_tss_end"]) / 2
         total = sum(d["share"] for d in p["week_template"]) or 1.0
-        st.dataframe(pd.DataFrame([{
+        df = pd.DataFrame([{
             "Day": d["day"], "Session": d["name"], "Details": d["description"], "Why": d["purpose"],
-            "Feel": d["feel"], "TSS": round(mid * d["share"] / total)} for d in p["week_template"]]),
-            hide_index=True, width="stretch",
-            column_config={"Why": st.column_config.TextColumn(width="large"),
-                           "Details": st.column_config.TextColumn(width="medium"),
-                           "Feel": st.column_config.TextColumn(width="medium")})
+            "Feel": d["feel"], "TSS": round(mid * d["share"] / total)} for d in p["week_template"]])
+        config = {"Why": st.column_config.TextColumn(width="large"),
+                  "Details": st.column_config.TextColumn(width="medium"),
+                  "Feel": st.column_config.TextColumn(width="medium")}
+        if comments is None:
+            st.dataframe(df, hide_index=True, width="stretch", column_config=config)
+        else:
+            comments += coach_ui.comment_table(
+                df, f"{key}_week", lambda row: f"{p['name']}, {row['Day']} {row['Session']}",
+                after="Session", column_config=config)
         if p["recovery_every"]:
             st.caption(f"Every {p['recovery_every']}th week is lighter on purpose, at about 60 percent of the load.")
     else:
@@ -147,6 +156,12 @@ def _phase_view(p: dict) -> None:
         for e in s["exercises"]:
             tip = strength_text.note(e)
             st.markdown(f"- {strength_text.line(e, unit)}" + (f"  \n  _{tip}_" if tip else ""))
+        if comments is not None:
+            note = st.text_input(f"Your comment on the {p['name']} strength sessions", key=f"{key}_strength",
+                                 placeholder="Your comment on these sessions (optional)",
+                                 label_visibility="collapsed")
+            if note.strip():
+                comments.append(f"{p['name']}, strength ({s['name']}) → {note.strip()}")
     for label, items in (("Key sessions", p["key_workouts"]), ("Signs it is working", p["success_markers"])):
         if items:
             st.markdown(f"**{label}**")
@@ -154,9 +169,10 @@ def _phase_view(p: dict) -> None:
                 st.markdown(f"- {item}")
 
 
-def details(program: dict, key: str, m: dict) -> dict:
+def details(program: dict, key: str, m: dict, comments: list | None = None) -> dict:
     """The body of a program card: numbers, chart, phases, checkpoints. `m` is
-    get_current_metrics(). Returns the projected CTL by week."""
+    get_current_metrics(). Returns the projected CTL by week. A `comments` list turns on the
+    comment boxes in each phase (for the draft) and collects what is written."""
     days = programs.projected_fitness(program, m["ctl"], m["atl"])
     ctl_by_week = programs.weekly_ctl(program, days)
     weeks = programs.week_plan(program)
@@ -185,7 +201,7 @@ def details(program: dict, key: str, m: dict) -> dict:
         n += p["weeks"]
         span = f"week {first['week']}" if p["weeks"] == 1 else f"weeks {first['week']} to {last['week']}"
         with st.expander(f"{p['name']} · {span} · {p['focus']}"):
-            _phase_view(p)
+            _phase_view(p, comments, f"{key}_p{n}")
     if program["checkpoints"]:
         st.markdown("**Checkpoints**")
         by_week = {w["week"]: w for w in weeks}
@@ -263,8 +279,14 @@ def draft_card(*, on_plan_page: bool = True) -> None:
         st.markdown(f"**Draft program** · version {draft['version']} · not on your calendar yet")
         st.subheader(draft["title"], anchor=False)
         m = get_current_metrics()
-        details(draft, f"prog_draft_{draft['id']}_{draft['version']}", m)
+        ckey = coach_ui.comment_key(DRAFT_COMMENTS, [draft["id"], draft["version"]])
+        comments: list[str] = []
+        details(draft, ckey, m, comments)
         _load_editor(draft)
+        st.caption("Want changes? Open a phase and write in the Your comment column or boxes, then send "
+                   "them to the coach in one go.")
+        coach_ui.comment_footer(DRAFT_COMMENTS, ckey, comments, what="the draft program",
+                                on_plan_page=on_plan_page)
 
         if draft["start_date"] < date.today().isoformat():
             st.warning("The start date has passed. Days before today are skipped when you add it. "
