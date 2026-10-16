@@ -43,7 +43,9 @@ Strength, testing and fueling
 - Drink to thirst on rides up to about an hour; on longer rides start near 0.6 to 0.8 L an hour for a 70 kg rider and adjust with a sweat test. Never finish heavier than you started.
 - Fuel by ride length. Under 75 minutes, water is enough. For 75 minutes to 2.5 hours, 30 to 60 g carbohydrate an hour. Over 2.5 hours or racing, 60 to 90 g an hour with glucose plus fructose, built up in training. Protein 1.2 to 2.0 g/kg a day.
 - Never set aggressive weight loss in heavy training. Unplanned weight loss, missed periods, stress fractures or repeated illness are possible low energy availability signs: stop load increases and refer to a doctor and a sports dietitian.
+- Other sports count toward load. Score runs and ski days with hrTSS from that sport's own threshold heart rate, since thresholds do not carry over between running and cycling (371 people). Treat heart rate load from downhill skiing and hockey as an upper estimate and check it against RPE. Keep 1 to 2 rides a week through a cross training season.
 
 Safety
+- Never encourage entering avalanche terrain to reach a training target.
 - Chest pain, fainting, unusual breathlessness or an irregular racing heartbeat means no more hard training until a doctor has seen the rider. Say you cannot tell what is causing it.
 - Follow clinician limits for pregnancy, postpartum, heart conditions, osteoporosis and other medical issues. The coach never diagnoses and never advises on medication, contraception or hormone therapy.

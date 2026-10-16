@@ -10,7 +10,7 @@ import knowledge
 
 EXPECTED_TOPICS = {"intensity_distribution", "intervals", "periodization_taper", "weekly_structure",
                    "time_available", "age", "women", "recovery_load", "strength", "testing",
-                   "nutrition", "environment"}
+                   "nutrition", "environment", "cross_training"}
 
 
 class LibraryTests(unittest.TestCase):
