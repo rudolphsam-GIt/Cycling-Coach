@@ -22,6 +22,7 @@ import exporters
 import garmin_workouts
 import sync
 import planning
+import strength_text
 from metrics.training_load import get_current_metrics
 from metrics import plan_impact
 from metrics import explain
@@ -609,8 +610,11 @@ def strength_dialog(item_id) -> None:
     info = plan_cal._strength_row(row)
     st.markdown(f"**{info['name']}**")
     st.caption(fmt_day(row["date"]) + (f" · {row['duration_minutes']} min" if row.get("duration_minutes") else ""))
-    for ex in info["exercises"]:
-        st.markdown(f"- {ex}")
+    unit = get_setting("weight_unit", "") or "kg"
+    for ex in info["items"]:
+        st.markdown(f"- **{strength_text.line(ex, unit)}**")
+        if tip := strength_text.note(ex):
+            st.caption(tip)
     if row.get("purpose"):
         st.markdown(f"**Why.** {row['purpose']}")
     st.caption("Strength isn't counted in training load. Log the session itself on the Strength page.")

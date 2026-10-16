@@ -71,10 +71,16 @@ def _exercises(value, where: str) -> list[dict]:
     for j, e in enumerate(value):
         if not isinstance(e, dict):
             raise ProgramError(f"{where} exercise {j} must be an object")
-        out.append({"name": _text(e.get("name"), f"{where} exercise {j} name", 80),
-                    "sets": _whole(e.get("sets"), f"{where} exercise {j} sets", 1, 10),
-                    "reps": _text(e.get("reps"), f"{where} exercise {j} reps", 40),
-                    "intensity": _text(e.get("intensity"), f"{where} exercise {j} intensity", 80)})
+        ex = {"name": _text(e.get("name"), f"{where} exercise {j} name", 80),
+              "sets": _whole(e.get("sets"), f"{where} exercise {j} sets", 1, 10),
+              "reps": _text(e.get("reps"), f"{where} exercise {j} reps", 40),
+              "intensity": _text(e.get("intensity"), f"{where} exercise {j} intensity", 80)}
+        # Load, notes and progression are kept when given. Drafts saved before load was asked for
+        # have none, so they stay optional here.
+        for key, limit in (("load", 80), ("notes", 200), ("progression", 200)):
+            if e.get(key) not in (None, ""):
+                ex[key] = _text(e.get(key), f"{where} exercise {j} {key}", limit)
+        out.append(ex)
     return out
 
 

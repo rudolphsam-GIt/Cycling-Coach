@@ -19,6 +19,7 @@ import streamlit as st
 
 import program_pdf
 import programs
+import strength_text
 from components import charts, theme
 from db import queries as q
 from metrics.training_load import get_current_metrics
@@ -142,7 +143,10 @@ def _phase_view(p: dict) -> None:
     if s:
         st.markdown(f"**Strength** · {', '.join(s['days'])} · about {s['duration_minutes']} minutes · {s['name']}")
         st.caption(s["purpose"])
-        st.caption(", ".join(f"{e['name']} {e['sets']}x{e['reps']}" for e in s["exercises"]))
+        unit = q.get_setting("weight_unit", "") or "kg"
+        for e in s["exercises"]:
+            tip = strength_text.note(e)
+            st.markdown(f"- {strength_text.line(e, unit)}" + (f"  \n  _{tip}_" if tip else ""))
     for label, items in (("Key sessions", p["key_workouts"]), ("Signs it is working", p["success_markers"])):
         if items:
             st.markdown(f"**{label}**")

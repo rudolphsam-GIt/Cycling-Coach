@@ -80,7 +80,7 @@ class ProposeTests(unittest.TestCase):
 
     def test_strength_needs_a_purpose(self):
         base = {"date": SOON, "name": "Lower", "duration_minutes": 40,
-                "exercises": [{"name": "Squat", "sets": 3, "reps": "6", "intensity": "RPE 7"}]}
+                "exercises": [{"name": "Squat", "sets": 3, "reps": "6", "intensity": "RPE 7", "load": "60 kg"}]}
         out = []
         coach_tools._propose_strength({"sessions": [{**base, "purpose": "Leg strength for climbing."}]}, out)
         self.assertEqual(out[0]["purpose"], "Leg strength for climbing.")

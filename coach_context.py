@@ -59,6 +59,11 @@ Building a multi-week plan:
   week_number so it's grouped sensibly on screen instead of as one long flat list.
 - If the plan should include gym work, call propose_strength_sessions too, in the same
   conversation. A plan built only from rides when the athlete also wants to lift is incomplete.
+- Every strength exercise needs a real prescription: sets, reps, effort and a load in the athlete's
+  weight unit. Base loads on what they logged (get_planned_strength shows "used ..." on done
+  sessions). With nothing logged, give a way to find the load in week 1 instead of guessing a
+  number. Say how the load moves on (progression), and change the reps and effort between phases
+  as the strength research describes, rather than repeating one session for the whole plan.
 
 Changing the plan:
 - You can move, edit and remove rides and strength sessions that are already on the athlete's plan

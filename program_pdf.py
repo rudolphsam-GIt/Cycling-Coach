@@ -22,6 +22,7 @@ from reportlab.platypus import (BaseDocTemplate, Frame, KeepTogether, PageBreak,
                                 Paragraph, Spacer, Table, TableStyle)
 
 import programs
+import strength_text
 from exporters import guide_sections, step_lines
 from metrics import explain
 
@@ -294,11 +295,11 @@ def build_pdf(program: dict, ctl_by_week: dict | None = None, subtitle: str | No
                       _table(rows, [0.45 * inch, 2.15 * inch, width - 3.2 * inch, 0.6 * inch], st)]
         if p["strength"]:
             s = p["strength"]
-            ex = ", ".join(f"{e['name']} {e['sets']}x{e['reps']}" for e in s["exercises"])
             story += [Paragraph("Strength", st["label"]),
                       Paragraph(_t(f"{s['name']}, {', '.join(s['days'])}, about {s['duration_minutes']} minutes. {s['purpose']}"),
-                                st["base"]),
-                      Paragraph(_t(ex), st["small"])]
+                                st["base"])]
+            story += _bullets([strength_text.line(e) + (f" ({strength_text.note(e)})" if strength_text.note(e) else "")
+                               for e in s["exercises"]], st)
         if p["key_workouts"]:
             story += [Paragraph("Key sessions to focus on", st["label"])] + _bullets(p["key_workouts"], st)
         if p["success_markers"]:
