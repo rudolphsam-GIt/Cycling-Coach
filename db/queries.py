@@ -1130,7 +1130,10 @@ def recalculate_all_tss(only_id: int | None = None, since: str | None = None):
         np = row["normalized_power"]
         avg_hr = row["avg_hr"]
         max_hr = row["max_hr"]
-        ftp = ftp_on(row["date"], history)
+        # Only rides are scored on the cycling FTP; anything else is scored from heart rate.
+        ftp = ftp_on(row["date"], history) if is_ride(dict(row)) else None
+        if ftp is None:
+            np = None
         lthr = sports.threshold_for(row["sport_type"], bike_lthr, ski_lthr)   # ski days on the ski threshold
 
         tss, if_value, source = ride_tss(duration_s, np, avg_hr, max_hr, ftp, lthr, profile=profile)

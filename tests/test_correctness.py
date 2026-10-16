@@ -230,6 +230,49 @@ class StravaErrorTests(Base):
             strava.sync_activities("id", "secret")
 
 
+class NonBikePowerTests(Base):
+    """A run with a power meter is scored from heart rate, never on the cycling FTP."""
+
+    def _strava(self, *acts):
+        q.set_setting("strava_access_token", "x")
+        q.set_setting("strava_refresh_token", "y")
+        q.set_setting("strava_token_expires_at", str(2**31))
+        pages = [mock.Mock(json=mock.Mock(return_value=list(acts))), mock.Mock(json=mock.Mock(return_value=[]))]
+        with mock.patch.object(strava.requests, "get", side_effect=pages):
+            strava.sync_activities("id", "secret")
+
+    def _act(self, sid, sport):
+        return {"id": sid, "name": sport, "sport_type": sport,
+                "start_date_local": (TODAY - timedelta(days=2)).isoformat() + "T08:00:00Z",
+                "moving_time": 3600, "elapsed_time": 3600, "distance": 10000, "total_elevation_gain": 50,
+                "weighted_average_watts": 280, "average_watts": 270, "average_heartrate": 150,
+                "max_heartrate": 175}
+
+    def _row(self, sid):
+        conn = get_conn()
+        row = conn.execute("SELECT * FROM activities WHERE external_id=?", (f"strava_{sid}",)).fetchone()
+        conn.close()
+        return dict(row)
+
+    def test_strava_run_with_power_is_scored_from_heart_rate(self):
+        self._strava(self._act(1, "Run"), self._act(2, "Ride"))
+        run, bike = self._row(1), self._row(2)
+        self.assertEqual(run["tss_source"], "hr")
+        self.assertIsNone(run["if_value"])
+        self.assertEqual(run["normalized_power"], 280)          # the run's numbers are still kept
+        self.assertEqual(bike["tss_source"], "power")
+        self.assertAlmostEqual(bike["tss"], (280 / 250) ** 2 * 100, delta=0.1)
+
+    def test_recalculation_keeps_a_run_on_heart_rate(self):
+        run = q.upsert_activity(ride("run1", sport_type="Run", normalized_power=280, tss=None))
+        bike = q.upsert_activity(ride("bike1", normalized_power=280, tss=None,
+                                      date=(TODAY - timedelta(days=3)).isoformat()))
+        q.recalculate_all_tss()
+        self.assertEqual(q.get_activity(run)["tss_source"], "hr")
+        self.assertIsNone(q.get_activity(run)["if_value"])
+        self.assertEqual(q.get_activity(bike)["tss_source"], "power")
+
+
 class ClaudeErrorTests(Base):
     def test_ask_raises_instead_of_returning_the_error_as_text(self):
         err = anthropic.APIConnectionError(request=mock.Mock())
