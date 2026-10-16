@@ -179,3 +179,56 @@ class SweetSpotTemplateTests(unittest.TestCase):
         self.assertTrue(ss)
         self.assertEqual({date.fromisoformat(w["date"]).weekday() for w in ss}, {2})     # Wednesdays
         self.assertTrue(all("88 to 93% FTP" in w["description"] for w in ss if w["tss_planned"] >= 40))
+
+
+def weekly_tss(workouts):
+    out = {}
+    for w in workouts:
+        out[w["week_number"]] = out.get(w["week_number"], 0) + w["tss_planned"]
+    return [out[k] for k in sorted(out)]
+
+
+class NoRaceBlockTests(unittest.TestCase):
+    """Quick Generate with no race: no taper, and fitness ends where the athlete asked."""
+
+    def block(self, cur, tgt, weeks, days="Mon,Tue,Wed,Thu,Fri,Sat,Sun", start=START):
+        end = start + timedelta(weeks=weeks)
+        return planning.plan_block(cur, tgt, end, "Endurance", start, available_days=days, taper=False), end
+
+    def test_no_taper_and_no_openers(self):
+        out, end = self.block(82, 82, 8)
+        self.assertTrue(out["workouts"])
+        self.assertFalse(any(w["phase"] == planning.TAPER_LABEL for w in out["workouts"]))
+        self.assertFalse(any("(Taper)" in w["name"] or planning.workout_recipes.OPENERS_NAME in w["name"]
+                             for w in out["workouts"]))
+        self.assertTrue(all(START.isoformat() <= w["date"] < end.isoformat() for w in out["workouts"]))
+        self.assertEqual(max(w["week_number"] for w in out["workouts"]), 8)
+
+    def test_holding_fitness_ends_at_todays_fitness(self):
+        for cur, weeks in ((82, 8), (82, 12), (40, 8)):
+            out, _ = self.block(cur, cur, weeks)
+            self.assertAlmostEqual(out["outlook"]["race_day_ctl"], cur, delta=planning.REACH_MARGIN)
+
+    def test_building_and_easing_land_on_the_target(self):
+        for cur, tgt in ((82, 90), (40, 55), (82, 70), (82, 60)):
+            out, _ = self.block(cur, tgt, 8)
+            self.assertAlmostEqual(out["outlook"]["race_day_ctl"], tgt, delta=planning.REACH_MARGIN, msg=(cur, tgt))
+
+    def test_lighter_weeks_but_not_when_easing_down(self):
+        held = weekly_tss(self.block(82, 82, 8)[0]["workouts"])
+        self.assertLess(held[3], 0.75 * held[2])                 # week 4 is lighter
+        eased = self.block(82, 70, 8)[0]["workouts"]
+        self.assertFalse(any("(Recovery)" in w["name"] for w in eased))
+
+    def test_climb_back_after_a_lighter_week_is_spread_out(self):
+        for cur, tgt in ((82, 82), (40, 40), (82, 90)):
+            weeks = weekly_tss(self.block(cur, tgt, 12)[0]["workouts"])
+            for prev, wk in ((2, 4), (6, 8)):                    # the week after a lighter week, against the last normal one
+                self.assertLessEqual(weeks[wk], weeks[prev] * planning.BOUNCE_BACK_MAX + 15, msg=(cur, tgt, weeks))
+
+    def test_target_range_holds_fitness_by_default_with_no_race(self):
+        lo, hi, default = planning.target_ctl_range(82, race=False)
+        self.assertEqual(default, 82)
+        self.assertLess(lo, 82)
+        self.assertGreater(hi, 82)
+        self.assertEqual(planning.target_ctl_range(0, race=False)[2], 20)

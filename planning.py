@@ -95,9 +95,16 @@ def _place_on_days(template: list, days: list[str]) -> list:
     return out
 
 
-def target_ctl_range(current_ctl: float) -> tuple[int, int, int]:
+def target_ctl_range(current_ctl: float, race: bool = True) -> tuple[int, int, int]:
     """Slider bounds and a default for the target peak CTL. Someone with little or no ride
-    history still gets a useful range rather than one capped near zero."""
+    history still gets a useful range rather than one capped near zero. With no race
+    (`race` off) the default holds today's fitness, and the range also goes a little below it
+    for an easier off season block."""
+    if not race:
+        cur = max(round(current_ctl or 0), 0)       # holds the fitness shown, so round rather than cut
+        lo = max(int(cur * 0.8), 20)
+        hi = max(min(max(cur + 40, 60), 150), lo + 1)
+        return lo, hi, min(max(cur, lo), hi)
     cur = max(int(current_ctl or 0), 0)
     lo = max(cur, 20)
     hi = max(min(max(cur + 40, 60), 150), lo + 1)
@@ -111,6 +118,7 @@ MAX_RAMP = 5.0            # CTL points a week at most, the gentle ramp the coach
 RECOVERY_FACTOR = 0.65    # a lighter week's load against the last normal week
 TAPER_FACTORS = {2: (0.6, 0.4), 1: (0.5,)}   # taper weeks' load against the last build week
 REACH_MARGIN = 2.0        # a peak this close to the target counts as reaching it
+BOUNCE_BACK_MAX = 1.10    # a normal week's load at most 10% above the last normal week (coaching convention)
 _WEEK_DECAY = (1 - CTL_ALPHA) ** 7
 
 # The taper keeps a little intensity and drops volume. No race simulations, and the two days
@@ -131,23 +139,40 @@ OPENERS_FEEL = ("Easy spinning, 2 to 3 out of 10, with three or four 30 second e
                 "8 out of 10 and full rest between them. Stop while you feel good.")
 
 
-def _is_recovery_week(wk: int, build_weeks: int) -> bool:
-    """Every 4th week is lighter, except the last build week, since the taper follows it."""
-    return (wk + 1) % 4 == 0 and wk < build_weeks - 1
+def _is_recovery_week(wk: int, build_weeks: int, easing: bool = False) -> bool:
+    """Every 4th week is lighter, except the last build week, since the taper follows it. A block
+    that eases fitness down (`easing`) is light already, so it has no extra lighter weeks."""
+    return not easing and (wk + 1) % 4 == 0 and wk < build_weeks - 1
+
+
+def _easing(current_ctl: float, target_ctl: float) -> bool:
+    """True when the target is clearly below today's fitness, as in an off season block."""
+    return target_ctl < current_ctl - REACH_MARGIN
 
 
 def _build_loads(current_ctl: float, target_ctl: float, build_weeks: int, ramp: float) -> tuple[list, float]:
     """Weekly TSS for the build weeks when fitness climbs by at most `ramp` a week and stops at
     the target, plus the peak fitness it reaches. Assumes an even load across each week."""
     ctl, peak, last_normal, loads = current_ctl, current_ctl, None, []
+    level = current_ctl     # the fitness the last normal week reached, to climb back to after a lighter week
+    easing = _easing(current_ctl, target_ctl)
     for wk in range(build_weeks):
-        if _is_recovery_week(wk, build_weeks):
+        if _is_recovery_week(wk, build_weeks, easing):
             load = (last_normal if last_normal is not None else ctl * 7) * RECOVERY_FACTOR
         else:
             # Up by at most `ramp`, and down by at most MAX_RAMP when the target is below today.
-            goal = min(ctl + ramp, target_ctl) if target_ctl >= ctl else max(ctl - MAX_RAMP, target_ctl)
+            # After a lighter week it may also climb back to where it was, by at most MAX_RAMP,
+            # so a gentle or zero ramp doesn't leave fitness stuck at the lighter week's dip.
+            if target_ctl >= ctl:
+                goal = min(max(ctl + ramp, min(level, ctl + MAX_RAMP)), target_ctl)
+            else:
+                goal = max(ctl - MAX_RAMP, target_ctl)
             load = max((goal - ctl * _WEEK_DECAY) / (1 - _WEEK_DECAY), 0.0) * 7
+            if last_normal is not None:
+                # Spread a climb back over a few weeks, but never below the load that holds `goal`.
+                load = min(load, max(last_normal * BOUNCE_BACK_MAX, goal * 7))
             last_normal = load
+            level = max(goal, level) if target_ctl >= current_ctl else goal
         ctl = load / 7 + (ctl - load / 7) * _WEEK_DECAY
         peak = max(peak, ctl)
         loads.append(load)
@@ -191,10 +216,15 @@ def weeks_to_race(today: date, race_date: date) -> int:
 def plan_block(current_ctl: float, target_ctl: float, race_date: date,
                phase_key: str, start_date: date | None = None,
                days_per_week: int | None = None,
-               available_days: list[str] | str | None = None) -> dict:
+               available_days: list[str] | str | None = None,
+               taper: bool = True) -> dict:
     """
     A periodized block of ride workouts from start_date (default today) to race_date, with
     an outlook saying whether the target fitness is reachable.
+
+    With `taper` off there is no race: race_date is just the day after the block ends, every
+    week is a build (or lighter) week and nothing is tapered, for the off season or a block
+    that only holds fitness.
 
     The weekly load is chosen so fitness (CTL) climbs evenly toward target_ctl, by no more than
     MAX_RAMP points a week, with every 4th week lighter and a 1 or 2 week taper at the end.
@@ -208,7 +238,7 @@ def plan_block(current_ctl: float, target_ctl: float, race_date: date,
     today = start_date or date.today()
     # Count a part week before the race as a week, so the days just before it are planned too.
     weeks_out = weeks_to_race(today, race_date)
-    taper_weeks = 2 if weeks_out >= 6 else 1
+    taper_weeks = (2 if weeks_out >= 6 else 1) if taper else 0
     # A race a week or less away is all taper.
     build_weeks = weeks_out - taper_weeks
     # Weeks are counted back from the race, so the taper is always the last 7 or 14 days before
@@ -217,9 +247,10 @@ def plan_block(current_ctl: float, target_ctl: float, race_date: date,
 
     ramp = _gentlest_ramp(current_ctl, target_ctl, build_weeks)
     build_loads, _ = _build_loads(current_ctl, target_ctl, build_weeks, ramp)
+    easing = _easing(current_ctl, target_ctl)
     last_build = next((build_loads[i] for i in reversed(range(build_weeks))
-                       if not _is_recovery_week(i, build_weeks)), current_ctl * 7)
-    taper_factors = TAPER_FACTORS[taper_weeks]
+                       if not _is_recovery_week(i, build_weeks, easing)), current_ctl * 7)
+    taper_factors = TAPER_FACTORS.get(taper_weeks, ())
 
     if phase_key not in DAY_TEMPLATES:
         phase_key = "Endurance"
@@ -234,7 +265,7 @@ def plan_block(current_ctl: float, target_ctl: float, race_date: date,
     workouts: list[dict] = []
     for wk in range(weeks_out):
         is_taper = wk >= build_weeks
-        recovery = (not is_taper) and _is_recovery_week(wk, build_weeks)
+        recovery = (not is_taper) and _is_recovery_week(wk, build_weeks, easing)
         if is_taper:
             week_tss = last_build * taper_factors[min(wk - build_weeks, len(taper_factors) - 1)]
             tmpl = week_template(TAPER_TEMPLATE)
@@ -294,7 +325,7 @@ def plan_block(current_ctl: float, target_ctl: float, race_date: date,
 
     # Openers added on a rest day can push race week past the riding days the athlete has. Keep
     # the openers and drop the week's smallest other rides instead.
-    if not days and days_per_week:
+    if taper and not days and days_per_week:
         last_week = [w for w in workouts if w["week_number"] == weeks_out]
         extra = len(last_week) - int(days_per_week)
         drop = sorted((w for w in last_week if workout_recipes.OPENERS_NAME not in w["name"]),
@@ -332,10 +363,11 @@ def block_outlook(workouts: list[dict], current_ctl: float, target_ctl: float,
 def generate_block(current_ctl: float, target_ctl: float, race_date: date,
                    phase_key: str, start_date: date | None = None,
                    days_per_week: int | None = None,
-                   available_days: list[str] | str | None = None) -> list[dict]:
+                   available_days: list[str] | str | None = None,
+                   taper: bool = True) -> list[dict]:
     """Just the workouts of plan_block."""
     return plan_block(current_ctl, target_ctl, race_date, phase_key, start_date,
-                      days_per_week, available_days)["workouts"]
+                      days_per_week, available_days, taper)["workouts"]
 
 
 # ── Target plan (set when a coach adds an athlete) ────────────────────────────

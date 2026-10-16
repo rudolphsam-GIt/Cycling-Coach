@@ -915,11 +915,15 @@ def manage_row(w: dict, prefix: str) -> None:
 
 @st.cache_data(max_entries=20, show_spinner=False)
 def quick_block(current_ctl: float, target_ctl: int, race_date: date, phase_key: str, start: date,
-                days_per_week: int | None, available_days: str | None) -> dict:
+                days_per_week: int | None, available_days: str | None, taper: bool = True) -> dict:
     """The Quick Generate block, kept until one of its inputs changes. It only depends on what is
-    passed in, so the athlete profile needs no part in the key."""
+    passed in, so the athlete profile needs no part in the key. With no race, `race_date` is the
+    day after the block ends and `taper` is off."""
     return planning.plan_block(current_ctl, target_ctl, race_date, phase_key, start,
-                               days_per_week=days_per_week, available_days=available_days)
+                               days_per_week=days_per_week, available_days=available_days, taper=taper)
+
+
+NO_RACE = "No race, build or hold fitness for a few weeks"
 
 
 def render_quick_generate() -> None:
@@ -928,48 +932,67 @@ def render_quick_generate() -> None:
                    "for when you just want something without a chat.")
         current_ctl = metrics["ctl"]
         race_options = {f"{r['name']} ({r['date']})": r for r in get_races(upcoming_only=True)}
+        choice = st.selectbox("Target race", list(race_options) + [NO_RACE], key="qg_race",
+                              help="With no race the block has no taper, which suits the off season "
+                                   "or a block that just builds or holds fitness.")
+        chosen_race = race_options.get(choice)
 
-        if race_options:
-            chosen_race = race_options[st.selectbox("Target race", list(race_options.keys()))]
+        if chosen_race:
             race_date = date.fromisoformat(chosen_race["date"])
             weeks_out = planning.weeks_to_race(today, race_date)
             st.info(f"{weeks_out} week{'s' if weeks_out != 1 else ''} to race · Current CTL **{current_ctl:.0f}**")
         else:
-            st.warning("No upcoming races. Add one in Race Prep first.")
-            chosen_race = None
-            weeks_out = 8
-            race_date = today + timedelta(weeks=8)
+            weeks_out = st.select_slider("How many weeks", options=list(range(2, 17)), value=8, key="qg_weeks")
+            race_date = today + timedelta(weeks=weeks_out)      # the day after the block ends
+            st.caption(f"From today to {fmt_day((race_date - timedelta(days=1)).isoformat())} · "
+                       f"Current CTL **{current_ctl:.0f}**")
 
-        lo, hi, default = planning.target_ctl_range(current_ctl)
+        lo, hi, default = planning.target_ctl_range(current_ctl, race=bool(chosen_race))
         target_ctl = st.slider(
-            "Target peak CTL", min_value=lo, max_value=hi, value=default, step=1,
-            help="The fitness (CTL) you want to arrive at race day with, before the taper drops it.",
+            "Target peak CTL" if chosen_race else "Target CTL at the end", min_value=lo, max_value=hi,
+            value=default, step=1, key=f"qg_target_{'race' if chosen_race else 'none'}",
+            help="The fitness (CTL) you want to arrive at race day with, before the taper drops it."
+                 if chosen_race else
+                 "Where you want fitness to be when the block ends. It starts at today's fitness, which "
+                 "holds it. Lower it for an easier off season block, raise it to build.",
         )
         phase_label = st.selectbox("Phase focus", list(planning.PHASE_LABELS.values()))
         phase_key = next(k for k, v in planning.PHASE_LABELS.items() if v == phase_label)
 
-        block = outlook = None
-        if chosen_race is not None:
-            block = quick_block(current_ctl, target_ctl, race_date, phase_key, today,
-                                int(float(get_setting("days_per_week", 0) or 0)) or None,
-                                get_setting("available_days", "") or None)
-            outlook = block["outlook"]
-            if outlook["reachable"] and outlook["ramp_per_week"] < 0.1:
-                st.caption(f"This block holds your fitness at about **{outlook['peak_ctl']:.0f}** before the "
-                           f"taper, and it is about {outlook['race_day_ctl']:.0f} on race day as the taper "
-                           f"freshens you up.")
-            elif outlook["reachable"]:
-                st.caption(f"Fitness climbs about {outlook['ramp_per_week']:.1f} points a week to a peak of "
-                           f"**{outlook['peak_ctl']:.0f}** before the taper, and is about "
-                           f"{outlook['race_day_ctl']:.0f} on race day as the taper freshens you up.")
+        block = quick_block(current_ctl, target_ctl, race_date, phase_key, today,
+                            int(float(get_setting("days_per_week", 0) or 0)) or None,
+                            get_setting("available_days", "") or None, taper=bool(chosen_race))
+        outlook = block["outlook"]
+        end_ctl = outlook["race_day_ctl"]
+        if not chosen_race:
+            if abs(end_ctl - current_ctl) < 1.5:
+                st.caption(f"This block holds your fitness at about **{end_ctl:.0f}**, with a lighter week "
+                           f"every fourth week.")
+            elif end_ctl > current_ctl:
+                st.caption(f"Fitness climbs from {current_ctl:.0f} to about **{end_ctl:.0f}** by the end, "
+                           f"with a lighter week every fourth week.")
             else:
-                st.warning(f"A target of {target_ctl} isn't reachable by race day while fitness climbs by at "
-                           f"most {outlook['max_ramp_per_week']:.0f} points a week. This block builds as far as "
-                           f"that allows and peaks at about **{outlook['peak_ctl']:.0f}**.",
-                           icon=":material/info:")
+                st.caption(f"Fitness eases from {current_ctl:.0f} to about **{end_ctl:.0f}** by the end, a "
+                           f"lighter block for the off season.")
+            if not outlook["reachable"] or abs(end_ctl - target_ctl) > planning.REACH_MARGIN:
+                st.warning(f"A target of {target_ctl} isn't reachable in {weeks_out} weeks while fitness "
+                           f"changes by at most {outlook['max_ramp_per_week']:.0f} points a week. This block "
+                           f"gets as close as that allows.", icon=":material/info:")
+        elif outlook["reachable"] and outlook["ramp_per_week"] < 0.1:
+            st.caption(f"This block holds your fitness at about **{outlook['peak_ctl']:.0f}** before the "
+                       f"taper, and it is about {end_ctl:.0f} on race day as the taper "
+                       f"freshens you up.")
+        elif outlook["reachable"]:
+            st.caption(f"Fitness climbs about {outlook['ramp_per_week']:.1f} points a week to a peak of "
+                       f"**{outlook['peak_ctl']:.0f}** before the taper, and is about "
+                       f"{end_ctl:.0f} on race day as the taper freshens you up.")
+        else:
+            st.warning(f"A target of {target_ctl} isn't reachable by race day while fitness climbs by at "
+                       f"most {outlook['max_ramp_per_week']:.0f} points a week. This block builds as far as "
+                       f"that allows and peaks at about **{outlook['peak_ctl']:.0f}**.",
+                       icon=":material/info:")
 
-        if st.button("Generate training block", width="stretch", type="primary",
-                     disabled=chosen_race is None):
+        if st.button("Generate training block", width="stretch", type="primary"):
             drafted = block["workouts"]
             new_ids = [add_workout({
                 "date": w["date"], "name": w["name"], "workout_type": w["workout_type"],
@@ -985,9 +1008,12 @@ def render_quick_generate() -> None:
                 if test_id:
                     new_ids.append(test_id)
             st.session_state["wizard_generated_ids"] = new_ids
-            st.session_state["wizard_msg"] = (f"Generated {len(drafted)} workouts over {weeks_out} "
-                                              f"week{'s' if weeks_out != 1 else ''}. Fitness peaks at about CTL {outlook['peak_ctl']:.0f} "
-                                              f"before the taper.")
+            weeks_txt = f"{weeks_out} week{'s' if weeks_out != 1 else ''}"
+            st.session_state["wizard_msg"] = (
+                f"Generated {len(drafted)} workouts over {weeks_txt}. Fitness peaks at about CTL "
+                f"{outlook['peak_ctl']:.0f} before the taper." if chosen_race else
+                f"Generated {len(drafted)} workouts over {weeks_txt}. Fitness is about CTL {end_ctl:.0f} "
+                f"at the end.")
             st.rerun()
 
         if gen_ids := st.session_state.get("wizard_generated_ids"):
