@@ -24,8 +24,9 @@ The AI Coach reads these files before it plans, so its advice rests on published
 | `testing` | 20 minute and ramp tests, critical power, retest timing, LTHR, zone systems | 44 |
 | `nutrition` | Daily carbohydrate, fueling per ride, protein, hydration, train low, caffeine, nitrate | 53 |
 | `environment` | Heat acclimation, cold, altitude, hypoxic tents, air quality and wildfire smoke | 52 |
+| `cross_training` | Running, Nordic and skate skiing, ski touring, downhill skiing, hockey, swimming and other sports; transfer to cycling, sport specific hrTSS, injury and safety | 26 |
 
-517 references in total. Revised 2026-10-11 to widen the evidence pool: every finding now states how many studies and people it rests on.
+543 references in total. Revised 2026-10-11 to widen the evidence pool: every finding now states how many studies and people it rests on. The cross_training topic was added 2026-10-16.
 
 ## File layout
 

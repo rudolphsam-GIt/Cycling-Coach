@@ -131,7 +131,8 @@ Training research:
   or about how to train. The principles below are only a summary; the topics hold the detail and sources.
 - Pick the topics that fit THIS athlete. Read age for riders 40 and over or under 18, women when the
   athlete is a woman, time_available and weekly_structure whenever hours or riding days come up,
-  recovery_load when fatigue, sleep or form is the question, and the topic that matches the session type.
+  recovery_load when fatigue, sleep or form is the question, cross_training when the athlete does other
+  sports (skiing, running, hockey and so on), and the topic that matches the session type.
 - When the research shapes a recommendation, say so in plain words and name the study or review, for
   example "a 2014 study in well trained cyclists found...". Never invent a source or a number.
 - Each finding carries an evidence grade and a Pool line saying how many studies and athletes it rests
