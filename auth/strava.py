@@ -15,7 +15,7 @@ import time
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta
 from db.queries import (get_setting, set_setting, upsert_activity, get_daily_tss,
-                        ftp_history_rows, ftp_on, hr_profile)
+                        ftp_history_rows, ftp_on, hr_profile, is_ride)
 from metrics.tss import ride_tss, time_rule, tss_duration
 from metrics.zones import estimate_zone_seconds
 import json
@@ -169,10 +169,13 @@ def sync_activities(client_id: str, client_secret: str, days_back: int = 60) -> 
             max_hr = act.get("max_heartrate")
 
             duration_s = tss_duration(moving_s, elapsed_s, rule=time_rule(profile))
-            ride_ftp = ftp_on(act["start_date_local"][:10], history)
-            act_lthr = sports.threshold_for(act.get("sport_type", act.get("type", "")), lthr, ski_lthr)
-            tss, if_value, tss_source = ride_tss(duration_s, np, avg_hr, max_hr, ride_ftp, act_lthr,
-                                                 act.get("perceived_exertion"), profile)
+            sport = act.get("sport_type", act.get("type", ""))
+            # Only rides are scored on the cycling FTP. A run with a power meter is scored from
+            # heart rate, since running watts mean nothing against a bike FTP.
+            ride_ftp = ftp_on(act["start_date_local"][:10], history) if is_ride({"sport_type": sport}) else None
+            act_lthr = sports.threshold_for(sport, lthr, ski_lthr)
+            tss, if_value, tss_source = ride_tss(duration_s, np if ride_ftp else None, avg_hr, max_hr,
+                                                 ride_ftp, act_lthr, act.get("perceived_exertion"), profile)
 
             zones = estimate_zone_seconds(
                 duration_s, avg_hr, max_hr, avg_power, np, ride_ftp, lthr,
