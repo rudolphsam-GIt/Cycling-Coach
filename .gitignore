@@ -33,3 +33,4 @@ data/profiles/
 .claude/launch.json
 data/app.log
 data/app.version
+.claude/settings.local.json
