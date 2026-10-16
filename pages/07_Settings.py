@@ -6,6 +6,7 @@ from datetime import date, datetime
 import ftp_change
 import compare
 import planning
+import sports
 from metrics.tss import STANDARDS
 from db.queries import (get_setting, set_setting, auto_max_hr, auto_resting_hr,
                         recalculate_all_tss, deduplicate_activities)
@@ -143,7 +144,7 @@ with tab_profile:
         pl1, pl2 = st.columns([3, 2])
         plan_start = pl1.date_input(
             "Plan start date", value=_plan["start"] if _plan else None, key="settings_plan_start",
-            placeholder="Not set", help="The day their first plan week starts. The coach drafts plans from it.")
+            help="The day their first plan week starts. The coach drafts plans from it. Empty means not set.")
         plan_weeks = pl2.number_input(
             "Plan length (weeks)", min_value=planning.PLAN_WEEKS_MIN, max_value=planning.PLAN_WEEKS_MAX,
             value=_plan["weeks"] if _plan else None, step=1, placeholder="Not set", key="settings_plan_weeks")
@@ -167,6 +168,13 @@ with tab_profile:
             value=int(get_setting("lthr", 155) or 155), step=1,
             help=setting_help("lthr"),
         )
+        ski_lthr_in = st.number_input(
+            "Ski threshold HR (bpm)", min_value=0, max_value=220, step=1,
+            value=int(float(get_setting(sports.SKI_LTHR_SETTING, 0) or 0)) or None, placeholder="Not set",
+            help="Threshold heart rate for Nordic, skate and backcountry skiing. It scores ski days (hrTSS) "
+                 "and sets the heart rate targets on planned ski days. Heart rate thresholds don't carry over "
+                 "between sports, so take it from a hard ski effort. A common field test is the average heart rate of the "
+                 "last 20 minutes of a 30 minute hard ski. Leave empty to score skiing on the cycling LTHR.")
         _score_like()
         auto_max, auto_rest = auto_max_hr(), auto_resting_hr()
         h1, h2 = st.columns(2)
@@ -194,7 +202,8 @@ with tab_profile:
         old_ftp = int(get_setting("ftp_watts", 0) or 0)
         old_lthr = int(get_setting("lthr", 0) or 0)
         old_hr = (get_setting("max_hr_manual", "") or "", get_setting("resting_hr_manual", "") or "",
-                  get_setting("gender", "") or "")
+                  get_setting("gender", "") or "", get_setting(sports.SKI_LTHR_SETTING, "") or "")
+        set_setting(sports.SKI_LTHR_SETTING, int(ski_lthr_in) if ski_lthr_in else "")
         set_setting("max_hr_manual", int(max_hr_in) if max_hr_in else "")
         set_setting("resting_hr_manual", int(rest_hr_in) if rest_hr_in else "")
         set_setting("weight_kg", weight)
@@ -221,12 +230,12 @@ with tab_profile:
         if lthr != old_lthr:
             set_setting("lthr_estimated", "0")
         new_hr = (get_setting("max_hr_manual", "") or "", get_setting("resting_hr_manual", "") or "",
-                  get_setting("gender", "") or "")
+                  get_setting("gender", "") or "", get_setting(sports.SKI_LTHR_SETTING, "") or "")
         if (lthr != old_lthr and lthr > 0) or new_hr != old_hr:
             # LTHR, max and resting heart rate have no history, so hrTSS follows them everywhere.
             with st.spinner("Updating TSS and zones for your rides…"):
                 n = recalculate_all_tss()
-            st.success(f"Profile saved. TSS and zones updated for {n} rides.")
+            st.success(f"Profile saved. TSS and zones updated for {n} activities.")
         else:
             st.success("Profile saved." + (" Past rides keep the TSS they earned on your old FTP."
                                            if ftp != old_ftp and ftp > 0 else ""))

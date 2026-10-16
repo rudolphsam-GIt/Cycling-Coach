@@ -22,6 +22,7 @@ import exporters
 import garmin_workouts
 import sync
 import planning
+import sports
 import strength_text
 from metrics.training_load import get_current_metrics
 from metrics import plan_impact
@@ -72,12 +73,13 @@ def queue_garmin_send(ws: list) -> None:
 
 
 def queue_fit_download(ws: list) -> None:
-    st.session_state["fit_queue"] = [w["id"] for w in ws]
+    st.session_state["fit_queue"] = [w["id"] for w in ws if not sports.is_ski_workout(w)]
     st.rerun()
 
 
 def can_send(w: dict) -> bool:
-    return garmin_auth.is_connected() and w["date"] >= today.isoformat()
+    """Bike workouts only: a ski day has no steps for a bike computer."""
+    return garmin_auth.is_connected() and w["date"] >= today.isoformat() and not sports.is_ski_workout(w)
 
 
 def garmin_button(w: dict, container, key: str) -> None:
@@ -91,6 +93,8 @@ def garmin_button(w: dict, container, key: str) -> None:
 
 
 def fit_button(w: dict, container, key: str) -> None:
+    if sports.is_ski_workout(w):
+        return
     if container.button("Download .fit", key=key, icon=":material/download:",
                         help="A .fit file you can import manually into TrainingPeaks or elsewhere"):
         queue_fit_download([w])
@@ -1095,10 +1099,11 @@ def render_manage_tab() -> None:
             elif week:
                 st.caption("Connect Garmin in Settings to send these workouts to your Edge or watch.")
         with gc2:
-            if st.button(f"Download this week as .fit ({len(week)})" if week
-                         else "No workouts this week",
-                         icon=":material/download:", disabled=not week, key="fit_week"):
-                queue_fit_download(week)
+            bike_week = [w for w in week if not sports.is_ski_workout(w)]
+            if st.button(f"Download this week as .fit ({len(bike_week)})" if bike_week
+                         else "No bike workouts this week",
+                         icon=":material/download:", disabled=not bike_week, key="fit_week"):
+                queue_fit_download(bike_week)
 
         render_send_panels()
         if week:

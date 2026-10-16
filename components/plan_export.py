@@ -20,6 +20,7 @@ import streamlit as st
 import exporters
 import garmin_workouts
 import programs
+import sports
 import workout_recipes
 from auth import intervals, trainingpeaks
 from db import schema
@@ -85,6 +86,19 @@ def share_package(rows: list, folder_program: dict | None) -> bytes:
     return exporters.share_package_zip(rows, get_setting("athlete_name", "") or "", ftp, folder_program, ctl)
 
 
+def ski_note(ski_days: list[dict]) -> None:
+    """Ski days can't go in bike workout files. Say where they do go, and list them so a coach can
+    add them to TrainingPeaks by hand when the athlete's calendar isn't synced."""
+    synced = trainingpeaks.is_enabled()
+    with st.expander(f"Ski days · {len(ski_days)} · not in the bike files", icon=":material/downhill_skiing:"):
+        st.caption("Zwift, Garmin and bike computers can't use a ski day, so these aren't in the downloads. "
+                   + ("The TrainingPeaks sync sends them as XC ski workouts with their hrTSS target."
+                      if synced else "Add them in TrainingPeaks as XC ski workouts with the hrTSS target below."))
+        for w in ski_days:
+            d = date.fromisoformat(w["date"])
+            st.markdown(f"**{d:%a %b} {d.day}** · {w['name']} · {w.get('tss_planned') or 0:.0f} hrTSS")
+
+
 def empty_range(span: str, today: date) -> None:
     """Nothing to export in the chosen range. Say where the next ride is, or how to get a plan."""
     from components.onboarding import first_block_button, next_planned_ride
@@ -120,7 +134,10 @@ def render(today: date | None = None) -> None:
             custom = st.date_input("From and to", value=(today, today + timedelta(days=27)), min_value=today,
                                    key="export_custom")
         start, end = date_range(choice, today, program, custom)
-        rides = [w for w in get_workouts(start, end) if not w.get("completed")]
+        planned = [w for w in get_workouts(start, end) if not w.get("completed")]
+        # Ski days have no bike steps, so they stay out of the Zwift, Garmin and .fit files.
+        ski_days = [w for w in planned if sports.is_ski_workout(w)]
+        rides = [w for w in planned if not sports.is_ski_workout(w)]
         missing = [w for w in rides if garmin_workouts.saved_steps(w) is None]
         # Standard workouts take their recipe's steps straight away. Only the rest need the coach.
         for w in [w for w in missing if workout_recipes.uses_recipe(w)]:
@@ -132,11 +149,17 @@ def render(today: date | None = None) -> None:
             w["structured_json"] = json.dumps(steps)
             missing.remove(w)
         span = programs.span_label(start, end)
-        if not rides:
+        if not rides and not ski_days:
             empty_range(span, today)
             _show_message()
             return
-        st.caption(f"{len(rides)} planned ride{'s' if len(rides) != 1 else ''} from {span}.")
+        st.caption(f"{len(rides)} planned ride{'s' if len(rides) != 1 else ''} from {span}"
+                   + (f", plus {len(ski_days)} ski day{'s' if len(ski_days) != 1 else ''}." if ski_days else "."))
+        if ski_days:
+            ski_note(ski_days)
+        if not rides:
+            _show_message()
+            return
 
         if missing:
             st.caption(f"{len(missing)} written workout{'s still need their' if len(missing) != 1 else ' still needs its'} steps "

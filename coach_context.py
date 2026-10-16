@@ -57,6 +57,12 @@ Building a multi-week plan:
   answer — change individual weeks or sessions based on what they tell you before proposing it.
 - When you propose the final version with propose_workouts, tag each ride with phase and
   week_number so it's grouped sensibly on screen instead of as one long flat list.
+- Ski days: when the athlete skis (Nordic, skate or backcountry), plan the day with workout_type
+  "Nordic Ski" or "Backcountry Ski", no steps, and tss_planned as an hrTSS target. Write heart rate
+  ranges from the ski threshold HR, never the cycling LTHR, and put the bike fallback (a ride of
+  similar TSS for poor snow) in the description. Base a backcountry target on climbing time; the
+  descents add little. Ski days go to TrainingPeaks as XC ski workouts and stay out of the bike files.
+  Read the cross_training topic first.
 - If the plan should include gym work, call propose_strength_sessions too, in the same
   conversation. A plan built only from rides when the athlete also wants to lift is incomplete.
 - Every strength exercise needs a real prescription: sets, reps, effort and a load in the athlete's
@@ -325,6 +331,14 @@ def _coach_line() -> str:
             f"{name}, and confirmations on screen are made by {coach}.\n")
 
 
+def _ski_line() -> str:
+    import sports
+    ski = sports.ski_lthr()
+    return (f"Ski threshold HR: {ski:.0f}bpm" if ski else
+            "Ski threshold HR: not set (skiing is scored on the cycling LTHR; ask for a ski threshold "
+            "before writing ski heart rate targets)")
+
+
 def build_context() -> str:
     ftp = get_setting("ftp_watts", "unknown")
     weight = get_setting("weight_kg", "unknown")
@@ -398,7 +412,7 @@ def build_context() -> str:
 Experience: {experience}{sex_note}
 Units: {units_note}
 Physiology:
-  FTP: {ftp}W{ftp_note} | Weight: {weight}kg | W/kg: {w_per_kg} | LTHR: {lthr}bpm
+  FTP: {ftp}W{ftp_note} | Weight: {weight}kg | W/kg: {w_per_kg} | LTHR: {lthr}bpm | {_ski_line()}
   {_hr_line()}
 
 Current Training Load:

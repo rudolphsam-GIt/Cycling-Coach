@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import sports
 from datetime import datetime, timezone
 
 from db.queries import (get_setting, upsert_activity, save_peaks, save_hr_peaks, save_streams,
@@ -55,7 +56,8 @@ def import_fit_files(uploaded_files) -> tuple[int, str]:
     profile = hr_profile()
     lthr = float(get_setting("lthr", 0) or 0)
 
-    count = 0
+    ski_lthr = sports.ski_lthr()
+    count = rides = 0
     skipped = 0
 
     for uf in uploaded_files:
@@ -86,8 +88,9 @@ def import_fit_files(uploaded_files) -> tuple[int, str]:
                     if "cycling" in combined or "biking" in combined or "virtual" in combined:
                         sport_type = combined or "cycling"
                     elif s.lower() not in ("", "generic"):
-                        skipped += 1
-                        break
+                        # Skiing, runs and other sports count toward fitness too, scored from heart
+                        # rate (skiing on the ski threshold when one is set), as Garmin sync does.
+                        sport_type = combined
 
                 elif mname == "session":
                     ts = _field(msg, "start_time")
@@ -115,14 +118,20 @@ def import_fit_files(uploaded_files) -> tuple[int, str]:
             elapsed_s = float(total_elapsed or total_timer or 0)
             moving_s = float(total_moving or total_timer or elapsed_s)
 
+            is_bike = "cycling" in sport_type or "biking" in sport_type or "virtual" in sport_type
+            if not is_bike and not avg_hr:
+                skipped += 1            # another sport with no heart rate can't be scored
+                continue
+
             # TSS
             tss_s = tss_duration(moving_s, elapsed_s, total_timer, time_rule(profile))
             ride_ftp = ftp_on(date_str, history)
-            tss, if_val, tss_source = ride_tss(tss_s, norm_power, avg_hr, max_hr, ride_ftp, lthr,
-                                               profile=profile)
+            act_lthr = sports.threshold_for(sport_type, lthr, ski_lthr)
+            tss, if_val, tss_source = ride_tss(tss_s, norm_power if is_bike else None, avg_hr, max_hr,
+                                               ride_ftp if is_bike else None, act_lthr, profile=profile)
 
             zones = estimate_zone_seconds(
-                tss_s, avg_hr, max_hr, avg_power, norm_power, ride_ftp, lthr
+                tss_s, avg_hr, max_hr, avg_power, norm_power, ride_ftp, act_lthr
             )
 
             external_id = f"fit_{start_time.strftime('%Y%m%dT%H%M%S')}"
@@ -150,15 +159,19 @@ def import_fit_files(uploaded_files) -> tuple[int, str]:
             })
             _save_file_peaks(activity_id, raw)
             count += 1
+            rides += is_bike
 
         except Exception as e:
             skipped += 1
             continue
 
     if count == 0:
-        return 0, f"No cycling activities found in the uploaded files ({skipped} skipped)."
-    return count, f"Imported {count} ride{'s' if count != 1 else ''}" + (
-        f" ({skipped} skipped — non-cycling or unreadable)" if skipped else "."
+        return 0, f"No activities could be read from the uploaded files ({skipped} skipped)."
+    others = count - rides
+    what = f"{rides} ride{'s' if rides != 1 else ''}" + (
+        f" and {others} other activit{'ies' if others != 1 else 'y'} (skiing, runs and the like)" if others else "")
+    return count, f"Imported {what}" + (
+        f" ({skipped} skipped, unreadable or with no heart rate)" if skipped else "."
     )
 
 

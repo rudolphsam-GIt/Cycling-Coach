@@ -348,7 +348,8 @@ def rescore_from_streams(activity_id: int) -> bool:
     if not act or act.get("tss_locked"):
         return False
     from metrics.tss import time_rule, tss_duration
-    lthr = float(get_setting("lthr", 0) or 0)
+    import sports
+    lthr = sports.threshold_for(act.get("sport_type"), float(get_setting("lthr", 0) or 0), sports.ski_lthr())
     profile = hr_profile()
     seconds = tss_duration(act.get("duration_seconds"), act.get("elapsed_seconds"), act.get("timer_seconds"),
                            time_rule(profile))
@@ -571,7 +572,7 @@ def get_daily_tss(start: str, end: str) -> dict:
 # ── Workouts ──────────────────────────────────────────────────────────────────
 
 WORKOUT_TYPES = ["Endurance", "Tempo", "Sweet Spot", "Threshold", "VO2 Max", "Sprint/Anaerobic",
-                 "Recovery", "Long Ride", "Race", "Other"]
+                 "Recovery", "Long Ride", "Race", "Other", "Nordic Ski", "Backcountry Ski"]
 
 
 def _plan_changed(conn) -> None:
@@ -1107,14 +1108,16 @@ def recalculate_all_tss(only_id: int | None = None, since: str | None = None):
 
     from metrics.tss import stream_tss
 
+    import sports
     history = _ftp_history_rows()
-    lthr = float(get_setting("lthr", 0) or 0)
+    bike_lthr = float(get_setting("lthr", 0) or 0)
+    ski_lthr = sports.ski_lthr()
     profile = hr_profile()
 
     conn = get_conn()
     with_streams = {r["activity_id"] for r in conn.execute("SELECT activity_id FROM activity_streams")}
     rows = conn.execute(
-        """SELECT id, date, duration_seconds, elapsed_seconds, timer_seconds, normalized_power,
+        """SELECT id, date, sport_type, duration_seconds, elapsed_seconds, timer_seconds, normalized_power,
                   avg_power_watts, avg_hr, max_hr FROM activities
            WHERE COALESCE(tss_locked, 0) = 0 AND (? IS NULL OR id = ?)
              AND (? IS NULL OR date >= ?)""",
@@ -1128,6 +1131,7 @@ def recalculate_all_tss(only_id: int | None = None, since: str | None = None):
         avg_hr = row["avg_hr"]
         max_hr = row["max_hr"]
         ftp = ftp_on(row["date"], history)
+        lthr = sports.threshold_for(row["sport_type"], bike_lthr, ski_lthr)   # ski days on the ski threshold
 
         tss, if_value, source = ride_tss(duration_s, np, avg_hr, max_hr, ftp, lthr, profile=profile)
         if row["id"] in with_streams:
