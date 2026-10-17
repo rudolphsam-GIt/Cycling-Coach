@@ -122,8 +122,14 @@ with tab_profile:
         "Gender", list(GENDER_LABELS), index=list(GENDER_LABELS.values()).index(saved_gender),
         help="Used only to pick typical power ranges, which differ between women and men. Non-binary and "
                  "Prefer not to say use an average of the two. You can change it any time in Settings.")
-    saved_age = age_from_birth_year(get_setting("birth_year", ""))
-    age = a_col.number_input("Age", min_value=12, max_value=95, value=saved_age, step=1,
+    # A number box can only be emptied if it starts empty, so it starts with value None and the saved
+    # age comes in through its key. Then clearing it and saving clears the birth year. The box is
+    # filled again whenever the stored birth year changes.
+    stored_year = get_setting("birth_year", "")
+    if st.session_state.get("settings_age_from") != stored_year:
+        st.session_state["settings_age"] = age_from_birth_year(stored_year)
+        st.session_state["settings_age_from"] = stored_year
+    age = a_col.number_input("Age", min_value=12, max_value=95, value=None, step=1, key="settings_age",
                              placeholder="Optional",
                              help="Power and heart rate change with age. Used for the starting estimates "
                                   "of FTP and threshold heart rate. Only your birth year is stored.")

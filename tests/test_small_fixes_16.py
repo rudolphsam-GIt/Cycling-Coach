@@ -37,8 +37,22 @@ class SmallFixTests(unittest.TestCase):
         self.assertTrue(any("3 or fewer days" in w.value for w in at.warning))
 
     def test_clearing_age_clears_the_birth_year(self):
-        # AppTest can't send a cleared number box (it falls back to the default), so the rule that
-        # Save profile uses is checked on its own.
+        q.set_setting("birth_year", date.today().year - 40)
+        at = AppTest.from_file(os.path.join(PAGES, "07_Settings.py"), default_timeout=60).run()
+        self.assertFalse(at.exception)
+        age = next(n for n in at.number_input if n.label == "Age")
+        self.assertEqual(age.value, 40)
+        age.set_value(None).run()                     # the box starts empty, so None is what a clear sends
+        self.assertIsNone(next(n for n in at.number_input if n.label == "Age").value)
+        next(b for b in at.button if b.label == "Save profile").click().run()
+        self.assertFalse(at.exception)
+        self.assertEqual(q.get_setting("birth_year", ""), "")
+
+        q.set_setting("birth_year", date.today().year - 46)            # the stored year changes later
+        at.run()
+        self.assertEqual(next(n for n in at.number_input if n.label == "Age").value, 46)
+
+    def test_the_birth_year_rule(self):
         from metrics.explain import birth_year_for
         today = date(2026, 10, 16)
         self.assertEqual(birth_year_for(40, today), 1986)
