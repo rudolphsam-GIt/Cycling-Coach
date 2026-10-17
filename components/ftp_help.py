@@ -18,14 +18,23 @@ from metrics import explain
 SUGGEST_DIFF_W = 3   # don't suggest a change smaller than this
 
 
-def _next_free_day(today: date) -> date:
-    """The first day from tomorrow with nothing planned, within the next two weeks."""
+FREE_DAY_WINDOW = 14
+
+
+def _next_free_day(today: date) -> date | None:
+    """The first day from tomorrow with nothing planned, within the next two weeks, or None
+    when every one of them is taken."""
     start = today + timedelta(days=1)
-    busy = {w["date"] for w in get_workouts(start.isoformat(), (start + timedelta(days=14)).isoformat())}
-    day = start
-    while day.isoformat() in busy and day < start + timedelta(days=14):
-        day += timedelta(days=1)
-    return day
+    days = [start + timedelta(days=n) for n in range(FREE_DAY_WINDOW)]
+    busy = {w["date"] for w in get_workouts(days[0].isoformat(), days[-1].isoformat())}
+    return next((d for d in days if d.isoformat() not in busy), None)
+
+
+def _upcoming_test(today: date) -> dict | None:
+    """The next FTP test on the plan that hasn't been done, from today on."""
+    tests = [w for w in get_workouts(today.isoformat(), "9999-12-31")
+             if w["name"] == explain.FTP_TEST_NAME and not w.get("completed")]
+    return min(tests, key=lambda w: w["date"]) if tests else None
 
 
 def plan_test_in_block(block_dates: list[str]) -> int | None:
@@ -61,7 +70,14 @@ def _is_new_rider() -> bool:
 
 
 def _plan_test(has_power: bool) -> None:
+    if (planned := _upcoming_test(date.today())):
+        st.session_state["ftp_test_day"] = planned["date"]
+        return
     day = _next_free_day(date.today())
+    if day is None:
+        st.toast(f"There is no free day in the next {FREE_DAY_WINDOW} days. Move a workout to make room, "
+                 "or add the test from the calendar.", icon=":material/block:")
+        return
     add_workout({**explain.ftp_test_workout(day, has_power, gentle=_is_new_rider()),
                  "structured_json": None, "notes": ""})
     st.session_state["ftp_test_day"] = day.isoformat()
@@ -112,6 +128,7 @@ def render(key: str = "ftp_help", *, snoozable: bool = True, show_lower: bool = 
         return
 
     has_power = any(a.get("avg_power_watts") for a in get_activities(days_back=60))
+    upcoming = _upcoming_test(today)
     with st.container(border=True):
         if estimated:
             st.markdown("**Your FTP is an estimate, and that is completely fine.** The app picked a starting "
@@ -136,8 +153,9 @@ def render(key: str = "ftp_help", *, snoozable: bool = True, show_lower: bool = 
                 st.button(f"Use {suggestion['ftp']} W", key=f"{key}_use", type="primary",
                           icon=":material/check:", on_click=_use_ftp, args=(suggestion["ftp"],))
             st.button("Plan an FTP test", key=f"{key}_test", icon=":material/event:",
-                      on_click=_plan_test, args=(has_power,),
-                      help="Adds a guided 20 minute test on your next free day")
+                      on_click=_plan_test, args=(has_power,), disabled=bool(upcoming),
+                      help=(f"A test is already on your plan for {date.fromisoformat(upcoming['date']):%a %b %-d}"
+                            if upcoming else "Adds a guided 20 minute test on your next free day"))
             with st.popover("Enter it myself", icon=":material/edit:"):
                 st.number_input("FTP in watts", min_value=50, max_value=600, value=int(ftp) or 200, step=5,
                                 key=f"{key}_manual")

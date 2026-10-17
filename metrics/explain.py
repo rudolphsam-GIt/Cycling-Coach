@@ -654,6 +654,9 @@ def suggest_ftp(peak_rows: list, today: date, days: int = 42) -> dict | None:
             "date": str(best["date"])[:10], "name": best.get("name") or "Ride"}
 
 
+FTP_TEST_NAME = "FTP test (20 minutes)"
+
+
 def ftp_test_workout(day: date, has_power: bool = True, gentle: bool = False) -> dict:
     """A guided 20 minute FTP test, as a workout dict ready for the planner.
     `gentle` is for newcomers. The effort is the same one steady 20 minutes but described
@@ -668,7 +671,7 @@ def ftp_test_workout(day: date, has_power: bool = True, gentle: bool = False) ->
                  "Ride 5 minutes easy. Then 20 minutes as hard as you can hold evenly. Cool down 10 minutes easy.")
         use = "Your threshold heart rate is your average heart rate over the last 10 minutes of the 20."
     return {
-        "date": day.isoformat(), "name": "FTP test (20 minutes)", "workout_type": "Threshold",
+        "date": day.isoformat(), "name": FTP_TEST_NAME, "workout_type": "Threshold",
         "description": f"{steps} {use}", "tss_planned": 75.0,
         "purpose": "Finds your FTP so every zone and training stress number in the app fits you. "
                    "Do it fresh, after an easy day or two."
