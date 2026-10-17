@@ -625,14 +625,28 @@ def apply_move(kind: str, item_id, to_iso, today: date | None = None) -> str | N
 
 
 def undo_last_move() -> None:
-    """Put the last moved item back on its original day."""
+    """Put the last moved item back on its original day. It is checked again first, since it may
+    have been done, deleted or moved since."""
     import streamlit as st
     from db import queries as q
 
     last = st.session_state.pop(LAST_MOVE_KEY, None)
     if not last:
         return
-    if last["kind"] == "ride":
+    ride = last["kind"] == "ride"
+    row = q.get_workout(last["id"]) if ride else q.get_strength_session(last["id"])
+    if not row:
+        st.toast(f"{last['label']} no longer exists, so there is nothing to move back.",
+                 icon=":material/block:")
+        return
+    if row.get("completed"):
+        st.toast(f"{last['label']} is done now, so it stays where it is.", icon=":material/block:")
+        return
+    if row["date"] != last["to"]:
+        st.toast(f"{last['label']} has moved since, so Undo left it where it is.",
+                 icon=":material/block:")
+        return
+    if ride:
         q.move_workout(last["id"], last["from"])
     else:
         q.move_strength_session(last["id"], last["from"])

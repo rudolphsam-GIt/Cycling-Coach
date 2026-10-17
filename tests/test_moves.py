@@ -160,6 +160,44 @@ class ApplyMoveTests(unittest.TestCase):
         cal.undo_last_move()
         self.assertEqual(q.get_strength_session(planned)["date"], "2026-10-12")
 
+    # Undo checks the item again. It may have been done or deleted since the move.
+
+    def _undo_toasts(self) -> list:
+        toasts = []
+        with mock.patch.object(st, "toast", lambda msg, **k: toasts.append(msg)):
+            cal.undo_last_move()
+        return toasts
+
+    def test_undo_leaves_a_workout_that_was_done_since(self):
+        wid = self._workout("2026-10-12")
+        cal.apply_move("ride", wid, "2026-10-14", self.TODAY)
+        q.update_workout(wid, {**q.get_workout(wid), "completed": 1})
+        toasts = self._undo_toasts()
+        self.assertEqual(q.get_workout(wid)["date"], "2026-10-14")
+        self.assertEqual(len(toasts), 1)
+        self.assertNotIn("back", toasts[0])
+        self.assertIn("done", toasts[0])
+        self.assertNotIn(cal.LAST_MOVE_KEY, st.session_state)
+
+    def test_undo_says_so_when_the_workout_is_gone(self):
+        wid = self._workout("2026-10-12")
+        cal.apply_move("ride", wid, "2026-10-14", self.TODAY)
+        q.delete_workout(wid)
+        toasts = self._undo_toasts()
+        self.assertIsNone(q.get_workout(wid))
+        self.assertEqual(len(toasts), 1)
+        self.assertIn("no longer", toasts[0])
+        self.assertNotEqual(st.session_state.get("cal_sel"), "2026-10-12")
+
+    def test_undo_leaves_a_strength_session_that_was_logged_since(self):
+        sid = q.add_strength_session({"date": "2026-10-12", "plan_week": 1, "exercises_json": "[]",
+                                      "duration_minutes": 40, "notes": "Legs | Planned by AI Coach"})
+        cal.apply_move("strength", sid, "2026-10-15", self.TODAY)
+        q.mark_strength_complete(sid, 40, "Legs | felt good")
+        toasts = self._undo_toasts()
+        self.assertEqual(q.get_strength_session(sid)["date"], "2026-10-15")
+        self.assertIn("done", toasts[0])
+
 
 if __name__ == "__main__":
     unittest.main()
