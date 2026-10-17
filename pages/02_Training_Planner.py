@@ -891,7 +891,13 @@ def render_coach_tab(next_race) -> None:
             with st.chat_message("assistant"):
                 st.error(err)
 
-        if st.session_state.get("chat_error"):
+        # A reply cut off part way (a tab switch stops the stream) leaves the question saved with no
+        # answer and no error, so it is read from the history too.
+        unanswered = not job and bool(history) and history[-1]["role"] == "user"
+        if unanswered and not st.session_state.get("chat_error"):
+            with st.chat_message("assistant"):
+                st.warning("Your coach didn't finish replying to this.")
+        if st.session_state.get("chat_error") or unanswered:
             st.button("Try again", key="chat_retry", icon=":material/refresh:",
                       on_click=queue_resend)
 
