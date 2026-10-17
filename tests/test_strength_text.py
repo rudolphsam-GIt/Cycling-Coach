@@ -33,6 +33,9 @@ class LineTests(unittest.TestCase):
         self.assertTrue(stx.bodyweight_only({"name": "Plank", "intensity": "Bodyweight"}))
         self.assertFalse(stx.bodyweight_only({"name": "Calf raise", "intensity": "RPE 7", "load": "bodyweight plus 45 lb"}))
         self.assertFalse(stx.bodyweight_only(SQUAT))
+        # "Bodyweight/weighted" can carry a weight, so it gets a box to log one.
+        self.assertFalse(stx.bodyweight_only({"name": "Calf raise", "intensity": "Bodyweight/weighted"}))
+        self.assertFalse(stx.bodyweight_only({"name": "Back Squat", "intensity": "75-85% 1RM"}))
 
     def test_same_session(self):
         a = {"name": "Lower", "exercises": [SQUAT]}

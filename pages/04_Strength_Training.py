@@ -200,10 +200,10 @@ with col_log:
             duration = st.number_input("Duration (minutes)", 20, 180, 60)
             notes = st.text_area("Notes", placeholder="How did it go? Any PRs?")
 
-            # Quick weight logging for key lifts
+            # A weight box for every lift that takes one, the same test the coach's sessions use
             weights = {}
             for ex in exercises:
-                if ex.get("intensity") not in ("Bodyweight",) and "%" not in ex.get("intensity", ""):
+                if not strength_text.bodyweight_only(ex):
                     w = weight_input(f"{ex['name']}, weight used", 0.0, key=f"w_{ex['name']}",
                                      unit=unit, min_kg=0.0, max_kg=300.0, step_lb=5.0, step_kg=2.5)
                     weights[ex["name"]] = w
