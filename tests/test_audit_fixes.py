@@ -192,6 +192,32 @@ class FtpCardTests(DbCase):
         self.assertEqual(q.get_setting("ftp_estimated"), "0")
         self.assertEqual(q.get_ftp_history(limit=1)[-1]["ftp_watts"], 285)
 
+    # Plan an FTP test adds one test. Not one per click, and never on a day that is already taken.
+
+    def ftp_tests(self):
+        return [w for w in q.get_workouts(D(0), D(30)) if w["name"] == "FTP test (20 minutes)"]
+
+    def plan_button(self, at):
+        return next(b for b in at.button if b.label == "Plan an FTP test")
+
+    def test_planning_a_test_twice_adds_it_once(self):
+        self.peak(360)
+        at = self.run_app()
+        self.plan_button(at).click().run()
+        self.assertEqual(len(self.ftp_tests()), 1)
+        self.assertTrue(self.plan_button(at).disabled)
+        self.assertTrue(self.plan_button(self.run_app()).disabled)          # still on a fresh visit
+
+    def test_no_test_is_added_when_the_next_two_weeks_are_full(self):
+        self.peak(360)
+        for n in range(1, 16):
+            q.add_workout({"date": D(n), "name": "Endurance", "workout_type": "Endurance", "description": "",
+                           "structured_json": None, "tss_planned": 50, "notes": ""})
+        at = self.run_app()
+        self.plan_button(at).click().run()
+        self.assertEqual(self.ftp_tests(), [])
+        self.assertTrue(any("free day" in t.value for t in at.toast))
+
 
 if __name__ == "__main__":
     unittest.main()
