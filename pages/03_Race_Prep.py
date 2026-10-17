@@ -263,7 +263,7 @@ with tab2:
 
         st.info(f"**{days_out} days to {chosen['name']}** · Current form (TSB): {current_tsb:.1f}")
 
-        if days_out < 3:
+        if days_out <= 3:
             st.warning("Race is in 3 or fewer days — focus on rest and openers only.")
         elif days_out > 60:
             st.info("More than 60 days out. Use the Plan page to build fitness first.")
@@ -393,7 +393,7 @@ with tab3:
                     nutrition_rows.append({"Time": f"{int(t*60)} min", "Action": "First gel or bar (30g carbs)"})
                 else:
                     nutrition_rows.append({"Time": f"{int(t*60)} min", "Action": f"Gel/chew/bar ({carbs_per_hr}g carbs) + water"})
-                t += 0.75 if t == 0 else 0.75
+                t += 0.75
             nutrition_rows.append({"Time": "Finish line", "Action": "Recovery drink within 30 min (carbs + protein)"})
             st.dataframe(pd.DataFrame(nutrition_rows), hide_index=True, width="stretch")
             st.caption(f"Total carbs: ~{total_carbs}g | Rule of thumb: 60g/hr for rides under 2.5 hrs, 90g/hr for longer rides with mixed carb sources")
