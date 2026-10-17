@@ -440,26 +440,29 @@ def workout_dialog(kind: str, item_id, state: dict) -> None:
                 st.rerun()
         return
 
-    st.toggle("Key workout", value=bool(w.get("key_session")), key="dlg_key",
-              on_change=lambda: set_key_session(w["id"], st.session_state["dlg_key"]),
+    # Keys carry the workout id. A closed dialog doesn't rerun the page, so the next workout opened
+    # would otherwise pick up the values left in these inputs by the one before.
+    k = f"dlg_{w['id']}"
+    st.toggle("Key workout", value=bool(w.get("key_session")), key=f"{k}_key",
+              on_change=lambda: set_key_session(w["id"], st.session_state[f"{k}_key"]),
               help="A key workout is one you want to protect. Your coach keeps it on its day and "
                    "rearranges the sessions around it, unless you ask to change this one by name.")
-    name = st.text_input("Workout name", value=w["name"], key="dlg_name")
+    name = st.text_input("Workout name", value=w["name"], key=f"{k}_name")
     c1, c2 = st.columns(2)
-    wtype = c1.selectbox("Type", WORKOUT_TYPES, key="dlg_type",
+    wtype = c1.selectbox("Type", WORKOUT_TYPES, key=f"{k}_type",
                          index=WORKOUT_TYPES.index(w["workout_type"])
                          if w.get("workout_type") in WORKOUT_TYPES else 0)
     new_date = c2.date_input("Date", value=date.fromisoformat(w["date"]),
-                             min_value=None if skipped else today, key="dlg_date")
+                             min_value=None if skipped else today, key=f"{k}_date")
     if skipped:
         st.info("This workout was not ridden on its day. Move it to another day to do it later, or to the "
                 "day you really did it, then mark it done. You can also edit it first.", icon=":material/event_busy:")
-    tss = c1.number_input("Planned TSS", min_value=0, max_value=500, step=5, key="dlg_tss",
+    tss = c1.number_input("Planned TSS", min_value=0, max_value=500, step=5, key=f"{k}_tss",
                           value=int(w["tss_planned"]) if w.get("tss_planned") is not None else 60)
-    desc = st.text_area("Description or notes", value=w.get("description") or "", key="dlg_desc",
+    desc = st.text_area("Description or notes", value=w.get("description") or "", key=f"{k}_desc",
                         placeholder="3x10 min @ 95% FTP, 5 min rest")
-    purpose = st.text_area("What is it for?", value=w.get("purpose") or "", key="dlg_purpose", height=80)
-    feel = st.text_input("How should it feel?", value=w.get("feel") or "", key="dlg_feel")
+    purpose = st.text_area("What is it for?", value=w.get("purpose") or "", key=f"{k}_purpose", height=80)
+    feel = st.text_input("How should it feel?", value=w.get("feel") or "", key=f"{k}_feel")
     note = get_phase_notes().get(w.get("phase") or "")
     if note:
         st.caption(f"Part of {w['phase']}. {note['focus']} {note['why']}")
@@ -631,7 +634,7 @@ def strength_dialog(item_id) -> None:
         st.info("This session was not done on its day. Move it to another day to do it later.",
                 icon=":material/event_busy:")
     new_date = st.date_input("Date", value=date.fromisoformat(row["date"]),
-                             min_value=None if skipped else today, key="dlg_s_date")
+                             min_value=None if skipped else today, key=f"dlg_s_date_{row['id']}")
     with st.container(horizontal=True):
         if st.button("Move session", key="dlg_s_save", type="primary", icon=":material/event:",
                      disabled=new_date.isoformat() == row["date"]):
