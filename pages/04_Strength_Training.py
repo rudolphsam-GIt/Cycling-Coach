@@ -9,7 +9,7 @@ from components.units import weight_input, weight_unit
 from metrics.units import from_kg
 import strength_text
 
-from db.queries import (add_strength_session, get_strength_sessions,
+from db.queries import (add_strength_session, get_strength_sessions, get_strength_between,
                          mark_strength_complete, get_setting, delete_strength_session)
 
 
@@ -123,9 +123,15 @@ def is_planned(s: dict) -> bool:
     return not s.get("completed") and "Planned by AI Coach" in (s.get("notes") or "")
 
 
-planned = sorted((s for s in get_strength_sessions(days_back=14) if is_planned(s)),
-                 key=lambda s: s["date"])
-if planned:
+# Sessions to log now. Unlogged ones from the last two weeks and the coming week each get a form.
+# Later ones wait on the Plan calendar, so a long block doesn't put dozens of forms here.
+DUE_BACK, DUE_AHEAD = 14, 7
+_due_end = date.today() + timedelta(days=DUE_AHEAD)
+planned = [s for s in get_strength_between((date.today() - timedelta(days=DUE_BACK)).isoformat(),
+                                           _due_end.isoformat()) if is_planned(s)]
+later = [s for s in get_strength_between((_due_end + timedelta(days=1)).isoformat(), "9999-12-31")
+         if is_planned(s)]
+if planned or later:
     section_header("Planned by your coach",
                    "Log the weights you used and the session counts toward your Strength Progress chart.")
     for ps in planned:
@@ -163,6 +169,9 @@ if planned:
                 delete_strength_session(ps["id"])
                 st.toast("Removed " + ps_name)
                 st.rerun()
+    if later:
+        st.caption(f"{len(later)} more planned after {_due_end:%a %b} {_due_end.day}. "
+                   "They are on the Plan calendar and show here a week ahead.")
     st.divider()
 
 # ── Phase selector ────────────────────────────────────────────────────────────
