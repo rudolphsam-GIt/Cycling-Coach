@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import html
 import json
+import zlib
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -69,7 +70,12 @@ def rides_frame(activities: list, unit: str = "km") -> pd.DataFrame:
 
 def ride_table(activities: list, key: str, *, max_height: int = 420) -> dict | None:
     """A sortable table of rides with single row selection. Returns the selected
-    ride, or None. `activities` should already be sorted the way you want."""
+    ride, or None. `activities` should already be sorted the way you want.
+
+    The selection is kept as a row number, so the widget key follows the rides shown. When a sync
+    adds a ride, the table starts with nothing picked instead of picking whatever ride is in that row."""
+    ids = ",".join(str(a.get("id")) for a in activities)
+    key = f"{key}_{zlib.crc32(ids.encode()):08x}"
     unit = distance_unit()
     df = rides_frame(activities, unit)
     dist, climb = f"Distance {unit}", f"Climb {climb_unit(unit)}"
