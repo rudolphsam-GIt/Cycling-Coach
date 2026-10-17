@@ -106,12 +106,14 @@ obra_details = st.session_state.get("comp_obra_details", {})
 
 # ── Show selected race as info card ──────────────────────────────────────────
 chosen_race = None  # used later for saving tactics to calendar
+race_key = None     # which race a tactics brief belongs to
 
 if obra_sel:
     race_name = obra_sel["name"]
     race_dist = float(obra_details.get("distance_km") or 80.0)
     race_elev = float(obra_details.get("elevation_m") or 500.0)
     race_notes = obra_sel.get("url", "")
+    race_key = ("obra", obra_sel.get("id"), race_name)
 
     st.markdown(f"### {race_name}")
 
@@ -173,6 +175,7 @@ else:
         race_dist = float(chosen_race.get("distance_km") or 80.0)
         race_elev = float(chosen_race.get("elevation_gain_meters") or 500.0)
         race_notes = chosen_race.get("notes") or ""
+        race_key = ("calendar", chosen_race["id"])
         st.markdown(f"### {race_name}")
         cols = st.columns(3)
         cols[0].metric("Date", chosen_race.get("date", "—"))
@@ -474,8 +477,10 @@ if profiles:
                 st.error(f"Couldn't write the tactics brief. {e}")
             else:
                 st.session_state.tactics_brief = brief
+                st.session_state.tactics_brief_race = race_key
 
-if st.session_state.get("tactics_brief"):
+# A brief is only shown, and saved, with the race it was written for.
+if st.session_state.get("tactics_brief") and st.session_state.get("tactics_brief_race") == race_key:
     section_header(f"Race Tactics Brief for {escape(race_name)}")
     st.markdown(st.session_state.tactics_brief)
     st.download_button(
