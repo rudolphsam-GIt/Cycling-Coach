@@ -21,7 +21,7 @@ import program_pdf
 import programs
 import strength_text
 from components import charts, theme
-from db import queries as q
+from db import queries as q, schema
 from metrics.training_load import get_current_metrics
 
 MODE_KEY = "program_mode"
@@ -87,8 +87,11 @@ def _clean(program: dict) -> dict:
 
 
 def _pdf_button(program: dict, key: str, m: dict, *, primary: bool = False) -> None:
-    """`m` is get_current_metrics(), passed in so a card works it out once."""
-    data = _pdf_bytes(json.dumps(_clean(program), sort_keys=True), round(m["ctl"], 1), round(m["atl"], 1))
+    """`m` is get_current_metrics(), passed in so a card works it out once.
+    The PDF is built when the button is pressed, not on every draw. It runs later, so it is pinned
+    to this athlete's database like the plan export downloads."""
+    content, ctl, atl = json.dumps(_clean(program), sort_keys=True), round(m["ctl"], 1), round(m["atl"], 1)
+    data = schema.pinned(lambda: _pdf_bytes(content, ctl, atl))
     st.download_button("Download PDF", data, file_name=program_pdf.filename(program), mime="application/pdf",
                        key=key, icon=":material/picture_as_pdf:", width="stretch",
                        type="primary" if primary else "secondary")
