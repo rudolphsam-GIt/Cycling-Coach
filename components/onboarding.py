@@ -296,11 +296,18 @@ def build_first_block_message() -> str:
         coach=None if schema.is_owner() else profiles.owner_name(), plan=target_plan())
 
 
+# Set by the Build first block button. app.py sees it and opens the Plan page, since a callback
+# runs before the pages are set up and can't switch page itself.
+FIRST_BLOCK_KEY = "first_block_go"
+
+
 def _go_first_block() -> None:
+    """Callback, so the click still counts when the button is gone on the next run (the welcome
+    banner shows only once)."""
     from components import coach_ui
     st.session_state["pending_message"] = build_first_block_message()
     st.session_state[coach_ui.PLAN_JUMP_KEY] = "coach"
-    st.switch_page(coach_ui.PLAN_PAGE)
+    st.session_state[FIRST_BLOCK_KEY] = True
 
 
 def first_block_button(key: str) -> None:
@@ -313,9 +320,8 @@ def first_block_button(key: str) -> None:
         label = label.replace("first block", "plan")
     ask = (f"a {plan['weeks']} week plan starting {plan['start']:%b} {plan['start'].day}" if plan
            else "a four week starting block")
-    if st.button(label, key=key, type="primary", icon=":material/auto_awesome:",
-                 help=f"Opens the coach with a request for {ask}, written from {whose} goals and hours"):
-        _go_first_block()
+    st.button(label, key=key, type="primary", icon=":material/auto_awesome:", on_click=_go_first_block,
+              help=f"Opens the coach with a request for {ask}, written from {whose} goals and hours")
 
 
 # The Build plan card shows when nothing is planned this far ahead.
