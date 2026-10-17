@@ -578,6 +578,11 @@ YOUTH_FACTOR = 0.9           # under 18, still developing
 MIN_AGE, MAX_AGE = 12, 95
 
 
+def birth_year_for(age: int | None, today: date | None = None) -> int | str:
+    """What Settings stores for an Age box. A cleared box stores nothing, so the old year goes too."""
+    return (today or date.today()).year - int(age) if age else ""
+
+
 def age_from_birth_year(birth_year: int | None, today: date | None = None) -> int | None:
     """Age this year, or None when the birth year is missing or not believable."""
     try:

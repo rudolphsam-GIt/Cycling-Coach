@@ -20,7 +20,7 @@ from auth import tp_login
 from components import ftp_help, ftp_review
 from components.units import distance_switch, unit_switch, weight_input
 from metrics.explain import (DEFAULT_GENDER, GENDER_LABELS, GENDER_PROFILE_TABLE,
-                             age_from_birth_year)
+                             age_from_birth_year, birth_year_for)
 from components.cards import page_header
 from components.explain import setting_help
 from components.onboarding import GOAL_EXAMPLES, goal_keys_to_labels, infer_goal_keys, parse_goal_keys
@@ -210,8 +210,7 @@ with tab_profile:
         set_setting("weight_unit", unit)
         set_setting("lthr", lthr)
         set_setting("ctl_start", init_ctl)
-        if age:
-            set_setting("birth_year", date.today().year - int(age))
+        set_setting("birth_year", birth_year_for(age))
         set_setting("gender", GENDER_LABELS[gender_label])
         if GENDER_LABELS[gender_label] in GENDER_PROFILE_TABLE:
             set_setting("power_profile_table", GENDER_PROFILE_TABLE[GENDER_LABELS[gender_label]])
