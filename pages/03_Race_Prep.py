@@ -10,7 +10,7 @@ from metrics.units import fmt_climb, fmt_distance, speed_from_kph, speed_unit
 
 from db.queries import (get_races, add_race, delete_race, get_setting,
                          add_workout, get_workouts, log_race_result)
-from metrics import explain
+from metrics import explain, pacing
 from metrics.taper import taper_schedule, taper_workout
 from metrics.training_load import get_current_metrics, project_future
 from research.obra_schedule import get_upcoming_races, DISCIPLINES
@@ -340,6 +340,10 @@ with tab3:
                                  help="Defaults to your saved FTP")
         p_weight = weight_input("Weight", float(weight), key="pace_weight", unit=weight_unit(),
                                 min_kg=30.0, max_kg=150.0)
+        p_bike = weight_input("Bike weight", pacing.BIKE_KG, key="pace_bike", unit=weight_unit(),
+                              min_kg=3.0, max_kg=30.0,
+                              help="With bottles and anything you carry. It counts on the climbs and in rolling "
+                                   "resistance.")
 
     if st.button("Calculate Pacing Plan", width="stretch"):
         target_s = p_target_h * 3600 + p_target_m * 60
@@ -350,11 +354,8 @@ with tab3:
             speed_kph = p_dist / target_h
             w_per_kg = p_ftp / p_weight
 
-            # Simplified required power estimate
-            # ~20W per 100m/hr climb, adjusted for speed
-            climb_watts = (p_elev / target_h) * 0.25 * p_weight / 9.81
-            flat_watts = (speed_kph / 30) ** 3 * 150  # rough aero drag model
-            total_watts = flat_watts + climb_watts
+            need = pacing.required_power(p_dist, p_elev, target_s, p_weight, p_bike)
+            total_watts = need["total"]
             if_value = total_watts / p_ftp if p_ftp else 0
 
             st.subheader("Pacing Recommendations")
@@ -364,6 +365,12 @@ with tab3:
             m3.metric("Intensity Factor", f"{if_value:.2f}",
                        help="< 0.75 = easy, 0.75-0.85 = moderate, > 0.85 = hard")
             m4.metric("Your W/kg at FTP", f"{w_per_kg:.2f}")
+            eff = pacing.DRIVETRAIN_EFF
+            st.caption(f"Climbing {need['climb'] / eff:.0f} W, air {need['air'] / eff:.0f} W, rolling "
+                       f"{need['rolling'] / eff:.0f} W, from the standard road cycling power equation with "
+                       f"typical road values (CdA {pacing.CD_A}, Crr {pacing.CRR}, no wind). It works from average "
+                       "speed and gives nothing back for descents, so treat it as an estimate. Surges, wind and a "
+                       "different position all change it.")
 
             # Nutrition
             carbs_per_hr = 60

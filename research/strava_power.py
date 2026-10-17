@@ -23,13 +23,9 @@ STRAVA_API = "https://www.strava.com/api/v3"
 # Oregon bounding box [sw_lat, sw_lng, ne_lat, ne_lng]
 OREGON_BBOX = "42.0,-124.5,46.3,-116.5"
 
-# Typical road cyclist aerodynamic constants for flat-road power estimation
-CD_A = 0.32       # drag area (m²) — hoods position
-RHO = 1.18        # air density kg/m³ (sea level, mild temp)
-CRR = 0.004       # rolling resistance
-G = 9.81          # m/s²
+# The same road power constants the Races page pacing calculator uses.
+from metrics.pacing import CD_A, CRR, DRIVETRAIN_EFF, G, RHO  # noqa: E402
 ASSUMED_MASS_KG = 73.0  # used when we don't know rider weight
-DRIVETRAIN_EFF = 0.976  # 97.6% drivetrain efficiency
 
 
 def _headers(token: str) -> dict:
