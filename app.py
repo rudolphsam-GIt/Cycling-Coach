@@ -6,7 +6,7 @@ from db import schema
 from db.schema import run_migrations
 from config import is_setup_complete
 from components import inject_styles
-from components.onboarding import is_onboarding_complete, render_onboarding
+from components.onboarding import FIRST_BLOCK_KEY, is_onboarding_complete, render_onboarding
 
 st.set_page_config(
     page_icon="assets/icon.svg",
@@ -102,6 +102,8 @@ else:
                     url_path="settings"),
         ],
     })
+    if st.session_state.pop(FIRST_BLOCK_KEY, False):
+        st.switch_page("pages/02_Training_Planner.py")      # a Build first block button was pressed
 # Garmin, TrainingPeaks and intervals.icu belong to the owner's profile only.
 owner = schema.is_owner()
 
