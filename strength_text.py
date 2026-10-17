@@ -57,9 +57,10 @@ def note(ex: dict) -> str:
 
 def bodyweight_only(ex: dict) -> bool:
     """True when nothing is added to bodyweight, so there is no weight to log. "bodyweight plus
-    45 lb" has a weight."""
+    45 lb" and "bodyweight/weighted" can carry a weight."""
     text = f"{_clean(ex.get('intensity'))} {_clean(ex.get('load'))}".lower()
-    return "bodyweight" in text and not any(ch.isdigit() for ch in _clean(ex.get("load")))
+    return ("bodyweight" in text and "weighted" not in text
+            and not any(ch.isdigit() for ch in _clean(ex.get("load"))))
 
 
 def same_session(a: dict, b: dict) -> bool:
