@@ -10,7 +10,7 @@ from metrics.units import fmt_climb, fmt_distance, speed_from_kph, speed_unit
 
 from db.queries import (get_races, add_race, delete_race, get_setting,
                          add_workout, get_workouts, log_race_result)
-from metrics import explain, pacing
+from metrics import explain, fueling, pacing
 from metrics.taper import taper_schedule, taper_workout
 from metrics.training_load import get_current_metrics, project_future
 from research.obra_schedule import get_upcoming_races, DISCIPLINES
@@ -342,6 +342,14 @@ with tab3:
         p_elev = climb_input("Total elevation gain", 800, key="pace_elev", unit=unit, min_m=0, max_m=5000)
         p_target_h = st.number_input("Target time (hours)", 0, 10, 2)
         p_target_m = st.number_input("Target time (minutes)", 0, 59, 30)
+        # The rider's own number. It starts at the suggestion for this race length, and starts again
+        # from the new suggestion when the target time changes.
+        fuel = fueling.suggest((p_target_h * 60 + p_target_m) / 60)
+        p_carbs = st.number_input("Carbs per hour (g)", 0, 150, fuel["g_per_h"], 5,
+                                  help=f"{fuel['note']} {fueling.SOURCE}")
+        st.caption(f"Suggested starting point {fuel['g_per_h']} g. Research range {fuel['range']}.")
+        for n in fueling.notes(p_carbs):
+            st.caption(n)
 
     with pcol2:
         p_ftp = st.number_input("FTP (W)", 50, 600, int(ftp), 5,
@@ -380,23 +388,22 @@ with tab3:
                        "speed and gives nothing back for descents, so treat it as an estimate. Surges, wind and a "
                        "different position all change it.")
 
-            # Nutrition
-            carbs_per_hr = 60
-            total_carbs = round(carbs_per_hr * target_h)
+            # Nutrition, at the rate the rider picked above
             st.subheader("Nutrition Plan")
-            nutrition_rows = []
-            t = 0
-            while t < target_h:
-                if t == 0:
-                    nutrition_rows.append({"Time": "Pre-race (30 min before)", "Action": "200ml water + small carb snack (30g)"})
-                elif t == 0.75:
-                    nutrition_rows.append({"Time": f"{int(t*60)} min", "Action": "First gel or bar (30g carbs)"})
-                else:
-                    nutrition_rows.append({"Time": f"{int(t*60)} min", "Action": f"Gel/chew/bar ({carbs_per_hr}g carbs) + water"})
-                t += 0.75
+            nutrition_rows = [{"Time": "Pre-race (30 min before)", "Action": "200ml water + small carb snack (30g)"}]
+            race_feeds = fueling.feeds(target_h, p_carbs)
+            for minute, grams in race_feeds:
+                nutrition_rows.append({"Time": f"{minute} min", "Action": f"{grams:.0f} g carbs + water"})
+            if not race_feeds:
+                nutrition_rows.append({"Time": "During", "Action": "Water. A carb mouth rinse is optional."
+                                       if target_h * 60 >= 45 else "Water"})
             nutrition_rows.append({"Time": "Finish line", "Action": "Recovery drink within 30 min (carbs + protein)"})
             st.dataframe(pd.DataFrame(nutrition_rows), hide_index=True, width="stretch")
-            st.caption(f"Total carbs: ~{total_carbs}g | Rule of thumb: 60g/hr for rides under 2.5 hrs, 90g/hr for longer rides with mixed carb sources")
+            total_carbs = round(sum(g for _, g in race_feeds))
+            st.caption(f"About {total_carbs} g of carbs during the race at {p_carbs} g an hour, a feed every "
+                       f"{fueling.FEED_EVERY_MIN} minutes. Change the rate above to suit you.")
+            for n in fueling.notes(p_carbs):
+                st.caption(n)
 
             # Pacing strategy
             st.subheader("Pacing Strategy")
