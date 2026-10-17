@@ -287,9 +287,11 @@ def why_block(w: dict) -> None:
 
 
 def workout_form(default_date: date) -> None:
-    """The add form. Editing an existing workout happens in workout_dialog."""
+    """The add form. Editing an existing workout happens in workout_dialog.
+    It doesn't clear on submit, so a blank name keeps the other fields. A real add closes the form,
+    and its fields start fresh the next time it opens."""
     st.markdown("**Add a workout**")
-    with st.form("workout_form", clear_on_submit=True, border=False):
+    with st.form("workout_form", border=False):
         w_date = st.date_input("Date", value=default_date)
         w_name = st.text_input("Workout name", placeholder="e.g. Threshold intervals")
         w_type = st.selectbox("Type", WORKOUT_TYPES)

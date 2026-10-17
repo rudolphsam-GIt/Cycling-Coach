@@ -112,30 +112,38 @@ with tab1:
                     st.info("No races found. Try adding more disciplines or enabling past races.")
 
         st.divider()
-        with st.form("add_race_form", clear_on_submit=True):
+        # Not clear_on_submit, so a blank name keeps the other fields. A real add bumps the
+        # widget keys instead, which starts the form fresh.
+        n = st.session_state.get("race_form_n", 0)
+        with st.form("add_race_form"):
             st.caption("Or add manually:")
-            r_name = st.text_input("Race name", placeholder="e.g. OBRA Road Race #3")
-            r_date = st.date_input("Race date", value=date.today() + timedelta(days=30))
-            r_dist = distance_input("Distance", 80.0, key="race_dist", unit=unit, min_km=1.0, max_km=300.0)
-            r_elev = climb_input("Elevation gain", 800, key="race_elev", unit=unit, min_m=0, max_m=5000)
-            r_cat = st.selectbox("Category", ["A", "B", "C", "Open"])
-            r_target_h = st.number_input("Target finish time (hours)", 0, 10, 2)
-            r_target_m = st.number_input("Target finish time (minutes)", 0, 59, 30)
-            r_notes = st.text_area("Notes", placeholder="Hilly circuit race, aggressive start expected")
+            r_name = st.text_input("Race name", placeholder="e.g. OBRA Road Race #3", key=f"race_name_{n}")
+            r_date = st.date_input("Race date", value=date.today() + timedelta(days=30), key=f"race_date_{n}")
+            r_dist = distance_input("Distance", 80.0, key=f"race_dist_{n}", unit=unit, min_km=1.0, max_km=300.0)
+            r_elev = climb_input("Elevation gain", 800, key=f"race_elev_{n}", unit=unit, min_m=0, max_m=5000)
+            r_cat = st.selectbox("Category", ["A", "B", "C", "Open"], key=f"race_cat_{n}")
+            r_target_h = st.number_input("Target finish time (hours)", 0, 10, 2, key=f"race_h_{n}")
+            r_target_m = st.number_input("Target finish time (minutes)", 0, 59, 30, key=f"race_m_{n}")
+            r_notes = st.text_area("Notes", placeholder="Hilly circuit race, aggressive start expected",
+                                   key=f"race_notes_{n}")
+            submitted = st.form_submit_button("Add Race", icon=":material/add:", width="stretch")
 
-            if st.form_submit_button("Add Race", icon=":material/add:", width="stretch") and r_name:
-                target_s = (r_target_h * 3600 + r_target_m * 60) if (r_target_h or r_target_m) else None
-                add_race({
-                    "name": r_name,
-                    "date": r_date.isoformat(),
-                    "distance_km": r_dist,
-                    "elevation_gain_meters": r_elev,
-                    "category": r_cat,
-                    "target_time_seconds": target_s,
-                    "notes": r_notes,
-                })
-                st.success(f"Added: {r_name}")
-                st.rerun()
+        if submitted and not r_name.strip():
+            st.warning("Give the race a name first.")
+        elif submitted:
+            target_s = (r_target_h * 3600 + r_target_m * 60) if (r_target_h or r_target_m) else None
+            add_race({
+                "name": r_name.strip(),
+                "date": r_date.isoformat(),
+                "distance_km": r_dist,
+                "elevation_gain_meters": r_elev,
+                "category": r_cat,
+                "target_time_seconds": target_s,
+                "notes": r_notes,
+            })
+            st.session_state["race_form_n"] = n + 1
+            st.toast(f"Added: {r_name.strip()}")
+            st.rerun()
 
     with col_list:
         st.subheader("Upcoming Races")
