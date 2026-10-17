@@ -443,6 +443,19 @@ def save_hr_peaks(activity_id: int, peaks: dict) -> None:
     conn.close()
 
 
+def history_stamp() -> int:
+    """A cheap fingerprint of what the fitness history tables are built from: each ride's date, type,
+    time, distance, TSS and power, and the power and heart rate peaks. It changes when a sync, an
+    edit, a TSS recalculation or a peak load changes any of them."""
+    conn = get_conn()
+    rides = conn.execute("SELECT id, date, sport_type, duration_seconds, distance_meters, tss, "
+                         "avg_power_watts FROM activities ORDER BY id").fetchall()
+    peaks = conn.execute("SELECT count(*), total(watts), total(duration_s) FROM activity_peaks").fetchone()
+    hr = conn.execute("SELECT count(*), total(bpm), total(duration_s) FROM activity_hr_peaks").fetchone()
+    conn.close()
+    return hash((tuple(tuple(r) for r in rides), tuple(peaks), tuple(hr)))
+
+
 def get_hr_peaks_between(start: str, end: str) -> list:
     """Rows of {activity_id, date, name, duration_s, bpm} for rides in the range."""
     conn = get_conn()

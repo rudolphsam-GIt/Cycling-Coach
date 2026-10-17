@@ -14,9 +14,10 @@ from plotly.subplots import make_subplots
 
 from components import charts, data_filters, history_table, ride_analysis, ride_detail, theme
 from components.cards import page_header, section_header
+from db import schema
 from db.queries import (get_activities_between, get_ftp_history, get_hr_peaks_between,
                         get_peaks_between, get_races, get_recovery_range, get_setting,
-                        get_workouts, set_setting)
+                        get_workouts, history_stamp, set_setting)
 from components.units import distance_unit, weight_unit
 from metrics import analysis as an
 from metrics.units import climb_from_m, climb_unit, dist_from_km, fmt_weight
@@ -140,8 +141,10 @@ def rides_list() -> None:
             st.info("No rides in this date range. Pick a longer range, or sync your rides.")
             _settings_link("Connect or sync in Settings")
         return
+    unit = distance_unit()
+    # Built when downloaded, not on every rerun. Pinned, since it runs after this script.
     dl.download_button(
-        "Download CSV", data=ride_detail.rides_frame(rides, distance_unit()).to_csv(index=False).encode(),
+        "Download CSV", data=schema.pinned(lambda: ride_detail.rides_frame(rides, unit).to_csv(index=False).encode()),
         file_name=f"rides_{f.start.isoformat()}_{f.end.isoformat()}.csv", mime="text/csv",
         icon=":material/download:", width="stretch")
     # A new key whenever the filters change, so a selected row never points at a different ride.
@@ -313,15 +316,22 @@ def _saved_choice(label: str, options: list, setting: str, key: str) -> str:
     return choice
 
 
+@st.cache_data(max_entries=4, show_spinner=False)
+def _history(db_path: str, today: date, stamp: int) -> tuple[list, bool, bool]:
+    """The fitness history rows, and whether there are power and heart rate peaks. Kept until the
+    athlete, the day or the rides and peaks (`stamp`) change."""
+    rides = get_activities_between(*ALL_DATES)
+    power, hr = get_peaks_between(*ALL_DATES), get_hr_peaks_between(*ALL_DATES)
+    return an.period_history(rides, power, hr, today), bool(power), bool(hr)
+
+
 def fitness_history() -> None:
     section_header("Fitness history", "Every ride, whatever the search. The week and month "
                                       "still in progress are in grey. Change miles or km in the filter bar above.",
                    explain="history")
     unit = distance_unit()
 
-    rides = get_activities_between(*ALL_DATES)
-    power, hr = get_peaks_between(*ALL_DATES), get_hr_peaks_between(*ALL_DATES)
-    rows = an.period_history(rides, power, hr, date.today())
+    rows, power, hr = _history(schema.current_path(), date.today(), history_stamp())
 
     st.markdown("**Peak power (W)**")
     history_table.render(rows, "power", unit)
