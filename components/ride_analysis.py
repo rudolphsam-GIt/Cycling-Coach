@@ -498,10 +498,13 @@ def _coach(act: dict) -> None:
     from components import coach_ui
 
     key, title, prompt = coach_reports.ride_review(act)
+    state_key = f"proposals_ride_review_{key}"        # the same place Today's review card keeps them
     existing = get_report("ride_review", key)
     if existing:
         st.markdown(existing["content"])
         st.caption(f"Written {coach_ui.local_time(existing['created_at'])}")
+        # A workout the review suggested waits here, next to the review, whichever ride it is.
+        coach_ui.proposal_card(state_key, in_dialog=True)
         return
     st.caption("Your coach reads this ride against your plan, your recovery and your training load.")
     if st.button("Review this ride with my coach", key=f"ra_review_{act['id']}", type="primary",
@@ -514,8 +517,8 @@ def _coach(act: dict) -> None:
         if not error and reply.strip():
             save_report("ride_review", key, title, reply)
             if proposals:
-                st.session_state[f"proposals_ride_review_{key}"] = proposals
-                st.info("Your coach suggested a workout. It is waiting for you to confirm on the Today page.")
+                st.session_state[state_key] = proposals
+                coach_ui.proposal_card(state_key, in_dialog=True)
 
 
 # ── The popup ─────────────────────────────────────────────────────────────────

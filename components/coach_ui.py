@@ -284,7 +284,16 @@ def _ride_label(row) -> str:
     return f"{day}, {row.get('Workout', 'ride')}"
 
 
-def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
+def _rerun(in_dialog: bool) -> None:
+    """After a click inside a popup, redraw just the popup so it stays open. Streamlit allows that
+    only in the popup's own rerun, which is how its clicks normally arrive, so anything else
+    reruns the page."""
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
+    ctx = get_script_run_ctx()
+    st.rerun(scope="fragment" if in_dialog and ctx and ctx.fragment_ids_this_run else "app")
+
+
+def proposal_card(state_key: str, *, on_plan_page: bool = False, in_dialog: bool = False) -> None:
     """
     Show workouts and/or strength sessions proposed by the coach, stored in
     st.session_state[state_key], with confirm/discard. Each item is tagged
@@ -296,7 +305,12 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
     on the earliest added date. `on_plan_page` says whether this card is already
     drawn on the Plan page (then it just switches tab) or on another page (then
     it navigates there).
+
+    `in_dialog` is for a card inside a popup (the ride analysis). Its buttons get their own keys,
+    since the page behind can show the same card in the same run, and Add and Discard redraw only
+    the popup, so it stays open to say what was added.
     """
+    wk = f"dlg_{state_key}" if in_dialog else state_key      # widget keys
     added_key = f"{state_key}_added"
     added = st.session_state.get(added_key)
     if added:
@@ -320,7 +334,7 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
         for skipped in added.get("skipped", []):
             st.warning(f"Skipped {skipped['name']}. {skipped['why']}.")
         if parts and added.get("first"):
-            if st.button("View on calendar", key=f"{state_key}_viewcal", icon=":material/calendar_month:"):
+            if st.button("View on calendar", key=f"{wk}_viewcal", icon=":material/calendar_month:"):
                 jump_to_calendar(added["first"], on_plan_page)
 
     proposed = st.session_state.get(state_key)
@@ -331,7 +345,7 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
     strength = [p for p in proposed if p.get("kind") == "strength"]
     changes = [p for p in proposed if p.get("kind") == "change"]
 
-    ckey = comment_key(state_key, proposed)
+    ckey = ("dlg_" if in_dialog else "") + comment_key(state_key, proposed)
     comments: list[str] = []
     with st.container(border=True):
         st.markdown("**Proposed changes** · review before they touch your calendar" if changes and not
@@ -404,7 +418,7 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
         adding = bool(rides or strength)
         label = ("Add to Training Planner" if adding and not changes else
                  "Apply changes" if changes and not adding else "Add and apply changes")
-        if c1.button(label, type="primary", width="stretch", key=f"{state_key}_add"):
+        if c1.button(label, type="primary", width="stretch", key=f"{wk}_add"):
             for w in rides:
                 if w.get("save"):
                     add_my_workout({"name": w["name"], "workout_type": w["workout_type"],
@@ -437,10 +451,10 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False) -> None:
                                            "skipped": outcome.get("skipped", []),
                                            "first": min(dates) if dates else None,
                                            "shown": False}
-            st.rerun()
-        if c2.button("Discard", width="stretch", key=f"{state_key}_discard"):
+            _rerun(in_dialog)
+        if c2.button("Discard", width="stretch", key=f"{wk}_discard"):
             st.session_state.pop(state_key)
-            st.rerun()
+            _rerun(in_dialog)
 
 
 def report_block(kind: str, ref_key: str, title: str, prompt: str, *,
