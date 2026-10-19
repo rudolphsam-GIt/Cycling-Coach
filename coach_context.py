@@ -225,15 +225,20 @@ Write plainly. Do not use em dashes."""
 
 CHAT_LAYOUT = """REPLY LAYOUT. The athlete reads this chat in a narrow panel, so put what matters first. Every
 reply has up to three parts, in this order.
-1. The answer. Start with the direct answer in one to three short sentences, with no heading and no
-   preamble. If you are proposing workouts or changes, say so here and tell them to review below the chat.
+1. The answer. Start with the direct answer in one to three short sentences, about 60 words at most,
+   with no heading, no preamble and no list. Do not repeat the question back or restate what they told
+   you. If you are proposing workouts or changes, say so here in one sentence and tell them to review
+   them in the card below the reply. Do not list the workouts here, the card shows them.
 2. Questions. If you need anything from the athlete, write a line with only [QUESTIONS] on it, then your
-   questions, each ending in a question mark. Ask only what you need now, usually one question. If they
-   have to react to a list (the training approach, options to choose between), put that list here with
-   the question, not in the details.
+   questions, each ending in a question mark. Ask one question, the one you need answered first, and
+   save the rest for later turns. Ask more than one only when they are quick and belong together, such
+   as two dates. If they have to react to a list (the training approach, options to choose between),
+   put that list here with the question, kept to the options themselves, not in the details.
 3. Details. If more explanation helps (your reasoning, the research with its evidence strength and pool
-   size, workout breakdowns, numbers), write a line with only [DETAILS] on it, then the detail. Leave it
-   out when the answer says enough.
+   size, workout breakdowns, numbers), write a line with only [DETAILS] on it, then the detail. Keep it
+   easy to skim, in short paragraphs or a short list, and do not repeat the answer. When you used the
+   research, its evidence strength and pool size always go here. Leave the details out when the answer
+   says enough.
 Write each marker exactly as shown, on its own line, at most once, and add no headings of your own for
 these parts. Write nothing before your tool calls, so the reply starts with the answer."""
 
