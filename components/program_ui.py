@@ -1,8 +1,9 @@
 """
 The multi month program on the Plan page's Coach tab.
 
-start_card      three ways to begin a program conversation
-draft_card      the draft the coach saved, with a chart, a PDF download, and Add to my calendar
+start_card      three ways to begin a program conversation, in a popover
+draft_card      the draft the coach saved, short, with Open draft (chart, phases, comments in a popup),
+                a PDF download, and Add to my calendar
 active_card     the program that is on the calendar, with the same details and PDF
 
 The conversation itself is the ordinary coach chat, run with program_rules as extra instructions
@@ -57,21 +58,26 @@ def _leave() -> None:
 
 
 def start_card() -> None:
+    """Begin a program conversation: a small popover with three starters, or, while program
+    planning is on, a button back to the normal chat. It sits in the bar above the chat."""
     if st.session_state.get(MODE_KEY):
-        with st.container(border=True):
-            text, back = st.columns([4, 1], vertical_alignment="center")
-            text.markdown("**Program planning is on.** Your coach is asking questions so it can draft a program. "
-                          "Everything you type here goes toward that.")
-            back.button("Back to normal chat", key="prog_leave", on_click=_leave, width="stretch")
+        st.button("Back to normal chat", key="prog_leave", on_click=_leave, width="stretch",
+                  icon=":material/chat:", help="Program planning is on. Everything you type goes toward "
+                                                "the program until you leave it.")
         return
-    with st.container(border=True):
-        st.markdown("**Plan a longer program**")
+    with st.popover("Plan a longer program", icon=":material/route:", width="stretch"):
         st.caption("Talk it through with your coach, review the plan, download it as a PDF, "
                    "then add it to your calendar when you are happy.")
-        cols = st.columns(len(STARTERS))
-        for col, (label, icon, message) in zip(cols, STARTERS):
-            col.button(label, icon=icon, key=f"prog_start_{label}", width="stretch",
-                       on_click=begin, args=(message,))
+        for label, icon, message in STARTERS:
+            st.button(label, icon=icon, key=f"prog_start_{label}", width="stretch",
+                      on_click=begin, args=(message,))
+
+
+def mode_note() -> None:
+    """One line above the chat while program planning is on."""
+    if st.session_state.get(MODE_KEY):
+        st.caption(":material/route: **Program planning is on.** Your coach is asking questions so it can "
+                   "draft a program. Everything you type here goes toward that.")
 
 
 @st.cache_data(show_spinner=False, max_entries=8)
@@ -248,11 +254,11 @@ def _load_editor(draft: dict) -> None:
         if c1.button("Save load changes", type="primary", width="stretch", disabled=not changes,
                      key=f"prog_load_save_{draft['id']}", icon=":material/save:"):
             programs.set_week_tss(draft["id"], changes)
-            st.rerun()
+            _stay()
         if c2.button("Back to the planned load", width="stretch", disabled=not n_edited,
                      key=f"prog_load_reset_{draft['id']}"):
             programs.set_week_tss(draft["id"], {w["week"]: None for w in weeks if w["edited"]})
-            st.rerun()
+            _stay()
 
 
 def draft_card(*, on_plan_page: bool = True) -> None:
@@ -279,18 +285,9 @@ def draft_card(*, on_plan_page: bool = True) -> None:
     if not draft:
         return
     with st.container(border=True):
-        st.markdown(f"**Draft program** · version {draft['version']} · not on your calendar yet")
-        st.subheader(draft["title"], anchor=False)
-        m = get_current_metrics()
-        ckey = coach_ui.comment_key(DRAFT_COMMENTS, [draft["id"], draft["version"]])
-        comments: list[str] = []
-        details(draft, ckey, m, comments)
-        _load_editor(draft)
-        st.caption("Want changes? Open a phase and write in the Your comment column or boxes, then send "
-                   "them to the coach in one go.")
-        coach_ui.comment_footer(DRAFT_COMMENTS, ckey, comments, what="the draft program",
-                                on_plan_page=on_plan_page)
-
+        st.markdown(f"**Draft program** · {draft['title']}")
+        st.caption(f"Version {draft['version']} · {programs.friendly_range(draft)} · {draft['total_weeks']} weeks · "
+                   "not on your calendar yet")
         if draft["start_date"] < date.today().isoformat():
             st.warning("The start date has passed. Days before today are skipped when you add it. "
                        "Ask your coach to move the start if you want the whole program.")
@@ -303,12 +300,14 @@ def draft_card(*, on_plan_page: bool = True) -> None:
                 value=True, key=f"prog_replace_{draft['id']}",
                 help="Planned rides and strength sessions inside the program's dates are removed so days are not "
                      "double booked. Rides you have already done are never touched.")
-        else:
-            st.caption("Nothing else is planned on these dates.")
 
-        c1, c2, c3 = st.columns(3)
+        c0, c1, c2, c3 = st.columns(4)
+        if c0.button("Open draft", width="stretch", icon=":material/visibility:",
+                     key=f"prog_open_{draft['id']}_{draft['version']}",
+                     help="See the phases, the fitness chart and the weekly load, and write comments."):
+            _draft_dialog(on_plan_page)
         with c1:
-            _pdf_button(draft, f"prog_pdf_{draft['id']}_{draft['version']}", m)
+            _pdf_button(draft, f"prog_pdf_{draft['id']}_{draft['version']}", get_current_metrics())
         if c2.button("Add to my calendar", type="primary", width="stretch", icon=":material/event_available:",
                      key=f"prog_add_{draft['id']}_{draft['version']}"):
             try:
@@ -325,6 +324,34 @@ def draft_card(*, on_plan_page: bool = True) -> None:
             st.session_state.pop(MODE_KEY, None)
             st.rerun()
         st.caption("Want something different? Tell your coach in the chat and the draft updates.")
+
+
+def _stay() -> None:
+    """Redraw just the draft popup after a click in it, so it stays open."""
+    from components import coach_ui
+    coach_ui._rerun(True)
+
+
+@st.dialog("Draft program", width="large", on_dismiss="rerun")
+def _draft_dialog(on_plan_page: bool) -> None:
+    """The whole draft: numbers, chart, phases with comment boxes, and the weekly load editor.
+    Send comments reruns the page, which closes the popup and sends them to the chat."""
+    from components import coach_ui
+
+    draft = programs.load("draft")
+    if not draft:
+        st.caption("This draft is gone. It was added to your calendar or discarded.")
+        return
+    st.subheader(draft["title"], anchor=False)
+    st.caption(f"Version {draft['version']} · not on your calendar yet")
+    ckey = coach_ui.comment_key(DRAFT_COMMENTS, [draft["id"], draft["version"]])
+    comments: list[str] = []
+    details(draft, ckey, get_current_metrics(), comments)
+    _load_editor(draft)
+    st.caption("Want changes? Open a phase and write in the Your comment column or boxes, then send "
+               "them to the coach in one go.")
+    coach_ui.comment_footer(DRAFT_COMMENTS, ckey, comments, what="the draft program",
+                            on_plan_page=on_plan_page)
 
 
 def _open_export() -> None:
