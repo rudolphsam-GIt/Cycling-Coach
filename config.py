@@ -8,6 +8,8 @@ STRAVA_CLIENT_SECRET = os.getenv("STRAVA_CLIENT_SECRET", "")
 GARMIN_EMAIL = os.getenv("GARMIN_EMAIL", "")
 GARMIN_PASSWORD = os.getenv("GARMIN_PASSWORD", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+# Unlocks the Claude usage section on Settings. Without it the section stays hidden.
+USAGE_PASSCODE = os.getenv("USAGE_PASSCODE", "")
 
 # CYCLING_COACH_DB lets you point the app at another database file, for
 # example a demo copy, without touching your real data.

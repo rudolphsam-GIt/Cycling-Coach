@@ -89,7 +89,7 @@ class ProfileTests(unittest.TestCase):
         q.set_setting("ftp_watts", 330)
         seen = []
 
-        def fake_structured(system, prompt, schema_, effort=None):
+        def fake_structured(system, prompt, schema_, effort=None, feature=None):
             seen.append(prompt.splitlines()[0])
             return {"steps": [{"kind": "interval", "minutes": 30, "low_pct": 60, "high_pct": 70}]}
 

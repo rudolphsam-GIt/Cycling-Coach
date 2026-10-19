@@ -18,6 +18,13 @@ LIGHT_MODEL = "claude-sonnet-5-5"
 MAX_TOKENS = 16000
 STREAM_MAX_TOKENS = 32000
 
+# Dollars per million tokens: (input, output, cache read). A cache write costs 1.25 times input
+# for the 5 minute cache and 2 times for the 1 hour cache. Used only for the usage log's estimates.
+PRICES = {
+    "claude-opus-5-5": (4.00, 20.00, 0.20),
+    "claude-sonnet-5-5": (2.00, 10.00, 0.20),
+}
+
 # Most tool rounds the coach may take for one question before we stop it.
 MAX_TOOL_ROUNDS = 8
 
@@ -52,6 +59,31 @@ def _request(system: list[dict], messages: list[dict], effort: str, max_tokens: 
     )
 
 
+def cost(model: str, input_tokens: int, cache_read: int, cache_write_5m: int, cache_write_1h: int,
+         output_tokens: int) -> float | None:
+    """Estimated dollars for one request, or None for a model without a price here."""
+    if model not in PRICES:
+        return None
+    inp, out, read = PRICES[model]
+    return (input_tokens * inp + cache_read * read + cache_write_5m * inp * 1.25
+            + cache_write_1h * inp * 2 + output_tokens * out) / 1_000_000
+
+
+def _log(response, feature: str) -> None:
+    """Add a response's token use to the usage log (db/usage.py). Never raises."""
+    try:
+        from db import usage
+        u = response.usage
+        written = u.cache_creation_input_tokens or 0
+        split = getattr(u, "cache_creation", None)
+        w5, w1 = (split.ephemeral_5m_input_tokens, split.ephemeral_1h_input_tokens) if split else (written, 0)
+        n = dict(input_tokens=u.input_tokens or 0, cache_read=u.cache_read_input_tokens or 0,
+                 cache_write_5m=w5 or 0, cache_write_1h=w1 or 0, output_tokens=u.output_tokens or 0)
+        usage.record(feature, response.model, **n, cost_usd=cost(response.model, **n))
+    except Exception:
+        pass
+
+
 def _error_message(e: anthropic.APIError) -> str:
     if isinstance(e, anthropic.AuthenticationError):
         return "Claude rejected the API key. Check ANTHROPIC_API_KEY in your .env file."
@@ -66,13 +98,16 @@ def _error_message(e: anthropic.APIError) -> str:
     return f"Something went wrong talking to Claude: {e}"
 
 
-def ask(system: list[dict], messages: list[dict], effort: str = "medium", model: str = MODEL) -> str:
+def ask(system: list[dict], messages: list[dict], effort: str = "medium", model: str = MODEL,
+        feature: str = "other") -> str:
     """Send a request and return the reply text. Raises ClaudeError with a readable message
-    when there's no usable reply, so an error is never mistaken for an answer."""
+    when there's no usable reply, so an error is never mistaken for an answer. `feature` names
+    the caller in the usage log."""
     try:
         response = _client().beta.messages.create(**_request(system, messages, effort, MAX_TOKENS, model))
     except anthropic.APIError as e:
         raise ClaudeError(_error_message(e)) from e
+    _log(response, feature)
 
     if response.stop_reason == "refusal":
         raise ClaudeError(REFUSAL_MESSAGE)
@@ -93,9 +128,11 @@ def stream_chat(
     run_tool: Callable[[str, dict], str],
     effort: str = "medium",
     model: str = MODEL,
+    feature: str = "other",
 ) -> Iterator[tuple[str, str]]:
     """
-    Stream a reply, running tools as Claude asks for them.
+    Stream a reply, running tools as Claude asks for them. Each request in the loop goes in the
+    usage log under `feature`.
 
     Yields ("text", chunk) as the reply arrives, ("tool", name) when a tool
     runs, and ("error", message) if the reply could not be finished.
@@ -116,6 +153,7 @@ def stream_chat(
                     if event.type == "text":
                         yield ("text", event.text)
                 response = stream.get_final_message()
+            _log(response, feature)
             json_retries = 0
         except anthropic.APIError as e:
             yield ("error", _error_message(e))
@@ -167,7 +205,7 @@ class ClaudeError(Exception):
 
 
 def structured(system: str, prompt: str, schema: dict, effort: str = "low",
-               model: str = LIGHT_MODEL) -> dict:
+               model: str = LIGHT_MODEL, feature: str = "other") -> dict:
     """Ask for JSON that matches `schema` and return it parsed. Raises ClaudeError."""
     import json
 
@@ -179,6 +217,7 @@ def structured(system: str, prompt: str, schema: dict, effort: str = "low",
         response = _client().beta.messages.create(**request)
     except anthropic.APIError as e:
         raise ClaudeError(_error_message(e)) from e
+    _log(response, feature)
     if response.stop_reason == "refusal":
         raise ClaudeError(REFUSAL_MESSAGE)
     if response.stop_reason == "max_tokens":

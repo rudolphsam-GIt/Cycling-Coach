@@ -102,4 +102,5 @@ Please provide:
         [{"type": "text", "text": TACTICS_SYSTEM}],
         [{"role": "user", "content": prompt}],
         effort="high",
+        feature="tactics",
     )
