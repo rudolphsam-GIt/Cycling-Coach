@@ -1,3 +1,8 @@
+[server]
+# Answer only on this Mac. Without this the app listens on every network address, so anyone on the
+# same Wi-Fi could open it, rides and health data included.
+address = "localhost"
+
 [client]
 toolbarMode = "minimal"
 
