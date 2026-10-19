@@ -138,7 +138,7 @@ def build_steps(workout: dict) -> list:
               f"Planned TSS: {workout.get('tss_planned') or 'unknown'}\n"
               f"Description: {workout.get('description') or '(none)'}")
     try:
-        data = claude_client.structured(SYSTEM, prompt, SCHEMA, effort="low")
+        data = claude_client.structured(SYSTEM, prompt, SCHEMA, effort="low", feature="workout_steps")
     except claude_client.ClaudeError as e:
         raise WorkoutError(str(e)) from e
     return check_steps(data.get("steps"))

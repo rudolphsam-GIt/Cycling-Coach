@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import streamlit as st
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import ftp_change
 import compare
@@ -580,6 +580,73 @@ else:
         _import_files("Upload .fit or .csv files")
 
 
+def _usage_unlocked() -> bool:
+    """The usage numbers show only after the passcode from USAGE_PASSCODE in .env is typed, once per
+    browser session. Without a passcode set, the section stays hidden."""
+    import hmac
+    import config
+
+    if not config.USAGE_PASSCODE:
+        st.caption("Hidden. Add a USAGE_PASSCODE line to your .env file, then restart the app, to see "
+                   "what Claude calls cost.")
+        return False
+    if st.session_state.get("usage_unlocked"):
+        if st.button("Hide usage", key="usage_lock", icon=":material/lock:"):
+            st.session_state.pop("usage_unlocked")
+            st.rerun()
+        return True
+    with st.form("usage_unlock", border=False):
+        code = st.text_input("Passcode", type="password", key="usage_code",
+                             placeholder="Your usage passcode", label_visibility="collapsed")
+        if st.form_submit_button("Show usage", icon=":material/lock_open:"):
+            if hmac.compare_digest(code.encode(), config.USAGE_PASSCODE.encode()):
+                st.session_state["usage_unlocked"] = True
+                st.rerun()
+            st.error("That passcode doesn't match.")
+    return False
+
+
+def _claude_usage() -> None:
+    """What the Claude calls cost, per feature, for this month or last month (db/usage.py)."""
+    import pandas as pd
+    from db import usage
+
+    st.markdown("**Claude usage**")
+    if not _usage_unlocked():
+        return
+    now = date.today()
+    last = (now.replace(day=1) - timedelta(days=1))
+    months = {f"This month ({now:%B})": (now.year, now.month), f"Last month ({last:%B})": (last.year, last.month)}
+    pick = st.segmented_control("Month", list(months), default=list(months)[0], key="usage_month",
+                                label_visibility="collapsed") or list(months)[0]
+    rows = usage.summary(*usage.month_bounds(*months[pick]))
+    if not rows:
+        st.caption("No Claude calls logged for this month yet. Every call from the coach, reviews, check ins, "
+                   "race plans, tactics briefs and workout steps is logged from now on.")
+        return
+    total = sum(r["cost_usd"] or 0 for r in rows)
+    read = sum(r["cache_read_tokens"] or 0 for r in rows)
+    sent = read + sum((r["input_tokens"] or 0) + (r["cache_write_tokens"] or 0) for r in rows)
+    a, b, c = st.columns(3)
+    a.metric("Estimated cost", f"${total:,.2f}")
+    b.metric("Requests", f"{sum(r['calls'] for r in rows):,}")
+    c.metric("Read from cache", f"{read / sent:.0%}" if sent else "n/a",
+             help="Share of the text sent to Claude that came from the prompt cache, billed at a small "
+                  "fraction of the normal price. Higher is cheaper.")
+    st.dataframe(pd.DataFrame([{
+        "Feature": usage.FEATURE_LABELS.get(r["feature"], r["feature"]),
+        "Requests": r["calls"],
+        "Input": r["input_tokens"], "Cache read": r["cache_read_tokens"], "Cache write": r["cache_write_tokens"],
+        "Output": r["output_tokens"], "Cost": r["cost_usd"] or 0.0} for r in rows]),
+        hide_index=True, width="stretch",
+        column_config={"Cost": st.column_config.NumberColumn("Cost", format="$%.2f"),
+                       **{k: st.column_config.NumberColumn(k, format="localized")
+                          for k in ("Input", "Cache read", "Cache write", "Output")}})
+    st.caption("Costs are estimates from Anthropic's list prices. A request is one call to Claude, so a "
+               "coach reply that looks something up counts once per lookup round. Output includes the "
+               "coach's thinking, which is billed like the reply. Calls from every athlete profile count here.")
+
+
 # ── Tab 3: Data Tools ─────────────────────────────────────────────────────────
 with tab_data:
     st.subheader("Data Tools")
@@ -601,6 +668,10 @@ with tab_data:
             with st.spinner("Looking for duplicate rides…"):
                 n = deduplicate_activities()
             st.success(f"Removed {n} duplicate ride{'s' if n != 1 else ''}." if n else "No duplicates found.")
+
+    if schema.is_owner():
+        st.divider()
+        _claude_usage()
 
     if not schema.is_owner():
         st.divider()

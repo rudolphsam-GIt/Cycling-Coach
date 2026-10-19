@@ -917,11 +917,12 @@ def render_coach_tab(next_race) -> None:
                 proposals: list[dict] = []
                 with st.chat_message("assistant"):
                     extra = coach_context.CHAT_LAYOUT
-                    if program_ui.in_program_mode():
+                    planning = program_ui.in_program_mode()
+                    if planning:
                         extra += "\n\n" + coach_context.program_rules(programs.load("draft"))
                     reply, error = coach_ui.stream_reply(
                         coach_context.system_blocks(extra), messages, "medium", proposals, ask=True,
-                        sources=False)
+                        sources=False, feature="program" if planning else "chat")
                 if error or not reply.strip():
                     st.session_state["chat_error"] = error or "The coach sent back an empty reply."
                     if not error:

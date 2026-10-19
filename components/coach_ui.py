@@ -122,13 +122,14 @@ def show_reply(reply: str, *, ask: bool = False, compact: bool = False) -> None:
 
 def stream_reply(system: list[dict], messages: list[dict], effort: str,
                  proposals: list[dict], model: str = claude_client.MODEL,
-                 ask: bool = False, sources: bool = True) -> tuple[str, str | None]:
+                 ask: bool = False, sources: bool = True, feature: str = "other") -> tuple[str, str | None]:
     """
     Stream the coach's reply into the current container, running tools as needed.
     Workouts the coach proposes are appended to `proposals`. While the coach works, a
     spinner says what it is doing, so a pause for a tool doesn't look like the end of
     the reply. `ask` highlights the questions the reply ends with (the chat uses it).
-    `sources` leaves a "Looked at" line under the reply once it is done.
+    `sources` leaves a "Looked at" line under the reply once it is done. `feature` names the
+    caller in the usage log.
     Returns (reply_text, error_message_or_None).
     """
     status = st.empty()
@@ -139,7 +140,7 @@ def stream_reply(system: list[dict], messages: list[dict], effort: str,
     events = claude_client.stream_chat(
         system, messages, coach_tools.TOOLS,
         lambda name, args: coach_tools.run_tool(name, args, proposals),
-        effort=effort, model=model,
+        effort=effort, model=model, feature=feature,
     )
     writing = False
     for kind, value in events:
@@ -591,7 +592,7 @@ def report_block(kind: str, ref_key: str, title: str, prompt: str, *,
                 coach_context.system_blocks(coach_reports.REPORT_RULES),
                 [{"role": "user", "content": prompt}],
                 coach_reports.EFFORT.get(kind, "medium"), proposals,
-                coach_reports.MODEL.get(kind, claude_client.MODEL),
+                coach_reports.MODEL.get(kind, claude_client.MODEL), feature=kind,
             )
             if not error and reply.strip():
                 save_report(kind, ref_key, title, reply)
