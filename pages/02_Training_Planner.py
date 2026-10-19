@@ -778,6 +778,13 @@ def render_checkin() -> None:
                 st.divider()
 
 
+def split_latest(history: list) -> tuple[list, list]:
+    """Split the chat into (earlier, latest), where latest starts at the last question asked."""
+    starts = [i for i, m in enumerate(history) if m["role"] == "user"]
+    cut = starts[-1] if starts else 0
+    return history[:cut], history[cut:]
+
+
 def build_messages(images: list) -> list | None:
     """API messages for the reply. Attached images ride on the last user turn for this
     call only; the database keeps just the text. None when there is nothing to answer."""
@@ -820,11 +827,9 @@ def render_coach_tab(next_race) -> None:
     # The program card sits above the chat but is filled in after the reply streams, so a draft the
     # coach has just saved shows straight away.
     program_slot = st.container()
-    chat_box = st.container(height=520, border=True, autoscroll=True)
-    st.markdown("**Message your coach**")
-    st.caption("Enter sends. The paperclip attaches a screenshot of a workout or chart.")
-    prompt = st.chat_input("Type your message...", key="coach_input", accept_file="multiple",
-                           file_type=["png", "jpg", "jpeg", "gif", "webp"])
+    chat_box = st.container()
+    prompt = st.chat_input("Ask your coach. The paperclip adds a screenshot.", key="coach_input",
+                           accept_file="multiple", file_type=["png", "jpg", "jpeg", "gif", "webp"])
 
     # 1. Work out what was sent, and save the user's message before streaming so it is
     #    part of the saved history from the first draw.
@@ -851,6 +856,8 @@ def render_coach_tab(next_race) -> None:
 
     # 2. Draw the conversation, the streamed reply and the proposal card in one pass,
     #    with no rerun after, so what streams looks the same as what is saved next run.
+    #    Only the latest question and its reply show in full, with the reply right under the
+    #    question. Everything before is folded away.
     with chat_box:
         history = get_conversation_history(limit=20)
         if not history and not job:
@@ -859,14 +866,26 @@ def render_coach_tab(next_race) -> None:
             for i, q in enumerate(get_quick_questions(next_race)):
                 st.button(q, key=f"qq_{i}", on_click=queue_message, args=(q,),
                           width="stretch")
-        for i, msg in enumerate(history):
+        earlier, latest = split_latest(history)
+        if earlier:
+            with st.expander(f"Earlier in this chat ({len(earlier)} messages)", icon=":material/history:"):
+                for msg in earlier:
+                    with st.chat_message(msg["role"]):
+                        coach_ui.show_reply(msg["content"], compact=True)
+        if latest:
+            coach_ui.latest_anchor()
+        for i, msg in enumerate(latest):
             with st.chat_message(msg["role"]):
-                if job and job["images"] and i == len(history) - 1 and msg["role"] == "user":
+                if job and job["images"] and i == len(latest) - 1 and msg["role"] == "user":
                     for img in job["images"]:
                         st.image(img, width=320)
                 # Only the latest reply can still be waiting on an answer.
-                latest = i == len(history) - 1 and msg["role"] == "assistant" and not job
-                coach_ui.show_reply(msg["content"], ask=latest)
+                waiting = i == len(latest) - 1 and msg["role"] == "assistant" and not job
+                coach_ui.show_reply(msg["content"], ask=waiting)
+        # Bring the question to the top after a send, and when the tab first opens.
+        if latest and (job or not st.session_state.get("_coach_scrolled")):
+            st.session_state["_coach_scrolled"] = True
+            coach_ui.scroll_to_latest()
 
         if job:
             messages = build_messages(job["images"])
@@ -877,7 +896,8 @@ def render_coach_tab(next_race) -> None:
                     if program_ui.in_program_mode():
                         extra += "\n\n" + coach_context.program_rules(programs.load("draft"))
                     reply, error = coach_ui.stream_reply(
-                        coach_context.system_blocks(extra), messages, "medium", proposals, ask=True)
+                        coach_context.system_blocks(extra), messages, "medium", proposals, ask=True,
+                        sources=False)
                 if error or not reply.strip():
                     st.session_state["chat_error"] = error or "The coach sent back an empty reply."
                     if not error:
@@ -901,7 +921,7 @@ def render_coach_tab(next_race) -> None:
             st.button("Try again", key="chat_retry", icon=":material/refresh:",
                       on_click=queue_resend)
 
-        coach_ui.proposal_card("proposed_workouts", on_plan_page=True)
+        coach_ui.proposal_summary("proposed_workouts", on_plan_page=True)
 
     with program_slot:
         program_ui.draft_card(on_plan_page=True)
