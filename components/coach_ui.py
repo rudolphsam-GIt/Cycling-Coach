@@ -98,10 +98,12 @@ def streaming_view(reply: str) -> str:
                        else f"**{DETAILS_LABEL}**", reply)
 
 
-def show_reply(reply: str, *, ask: bool = False) -> None:
+def show_reply(reply: str, *, ask: bool = False, compact: bool = False) -> None:
     """
     Draw a coach reply: the answer, then the coach's questions, then any details folded
     away. With `ask` (the latest chat reply) the questions go in a highlighted box.
+    `compact` is for replies inside the folded history, where details go in a popover,
+    since an expander can't sit inside another.
     """
     answer, questions, details = split_reply(reply)
     if answer:
@@ -112,18 +114,21 @@ def show_reply(reply: str, *, ask: bool = False) -> None:
         else:
             st.markdown(questions)
     if details:
-        with st.expander(DETAILS_LABEL, icon=":material/notes:"):
+        box = (st.popover(DETAILS_LABEL, icon=":material/notes:") if compact
+               else st.expander(DETAILS_LABEL, icon=":material/notes:"))
+        with box:
             st.markdown(details)
 
 
 def stream_reply(system: list[dict], messages: list[dict], effort: str,
                  proposals: list[dict], model: str = claude_client.MODEL,
-                 ask: bool = False) -> tuple[str, str | None]:
+                 ask: bool = False, sources: bool = True) -> tuple[str, str | None]:
     """
     Stream the coach's reply into the current container, running tools as needed.
     Workouts the coach proposes are appended to `proposals`. While the coach works, a
     spinner says what it is doing, so a pause for a tool doesn't look like the end of
     the reply. `ask` highlights the questions the reply ends with (the chat uses it).
+    `sources` leaves a "Looked at" line under the reply once it is done.
     Returns (reply_text, error_message_or_None).
     """
     status = st.empty()
@@ -155,7 +160,7 @@ def stream_reply(system: list[dict], messages: list[dict], effort: str,
 
     with body.container():
         show_reply(reply, ask=ask)
-    if looked_up:
+    if looked_up and sources:
         status.caption("Looked at: " + ", ".join(
             l.replace("Checking your ", "").replace("Saving a note about you", "saved a note")
             for l in looked_up))
@@ -293,6 +298,75 @@ def _rerun(in_dialog: bool) -> None:
     st.rerun(scope="fragment" if in_dialog and ctx and ctx.fragment_ids_this_run else "app")
 
 
+def added_notice(state_key: str, wk: str, on_plan_page: bool) -> None:
+    """What was just added from a proposal, with a View on calendar button. `wk` prefixes the keys."""
+    added_key = f"{state_key}_added"
+    added = st.session_state.get(added_key)
+    if not added:
+        return
+    # Show this for the run that follows the add and one more, so a click on
+    # "View on calendar" in that second run still finds its button.
+    if added["shown"]:
+        st.session_state.pop(added_key)
+    else:
+        added["shown"] = True
+    parts = []
+    if added["rides"]:
+        parts.append(f"added {added['rides']} ride{'s' if added['rides'] > 1 else ''}")
+    if added["strength"]:
+        parts.append(f"added {added['strength']} strength session{'s' if added['strength'] > 1 else ''}")
+    for key, verb in (("moved", "moved"), ("updated", "edited"), ("removed", "removed")):
+        if added.get(key):
+            parts.append(f"{verb} {added[key]}")
+    if parts:
+        text = ", ".join(parts)
+        st.success(f"Done. {text[0].upper() + text[1:]}.")
+    for skipped in added.get("skipped", []):
+        st.warning(f"Skipped {skipped['name']}. {skipped['why']}.")
+    if parts and added.get("first"):
+        if st.button("View on calendar", key=f"{wk}_viewcal", icon=":material/calendar_month:"):
+            jump_to_calendar(added["first"], on_plan_page)
+
+
+def apply_proposal(state_key: str) -> None:
+    """Put the proposal in st.session_state[state_key] on the calendar and note what was added."""
+    proposed = st.session_state.get(state_key) or []
+    rides = [p for p in proposed if p.get("kind", "ride") == "ride"]
+    strength = [p for p in proposed if p.get("kind") == "strength"]
+    changes = [p for p in proposed if p.get("kind") == "change"]
+    for w in rides:
+        if w.get("save"):
+            add_my_workout({"name": w["name"], "workout_type": w["workout_type"],
+                            "description": w["description"], "steps": w["steps"],
+                            "tss": w["tss_planned"], "purpose": w.get("purpose"), "feel": w.get("feel")})
+        add_workout({
+            "date": w["date"], "name": w["name"], "workout_type": w["workout_type"],
+            "description": w["description"],
+            "structured_json": json.dumps(w["steps"]) if w.get("steps") else None,
+            "tss_planned": w["tss_planned"], "notes": "Planned by AI Coach",
+            "phase": w.get("phase"), "week_number": w.get("week_number"),
+            "purpose": w.get("purpose"), "feel": w.get("feel"),
+        })
+    save_phase_notes([{"name": w["phase"], **w["phase_note"]} for w in rides
+                      if w.get("phase") and w.get("phase_note")])
+    for s in strength:
+        add_strength_session({
+            "date": s["date"], "plan_week": s.get("week_number"),
+            "exercises_json": json.dumps(s["exercises"]),
+            "duration_minutes": s.get("duration_minutes"),
+            "notes": f"{s['name']} | Planned by AI Coach",
+            "phase": s.get("phase"), "purpose": s.get("purpose"),
+        })
+    outcome = plan_changes.apply_changes(changes) if changes else {}
+    dates = [p["date"] for p in rides + strength] + ([outcome["first"]] if outcome.get("first") else [])
+    st.session_state.pop(state_key)
+    st.session_state[f"{state_key}_added"] = {
+        "rides": len(rides), "strength": len(strength),
+        "moved": outcome.get("moved", 0), "updated": outcome.get("updated", 0),
+        "removed": outcome.get("removed", 0), "skipped": outcome.get("skipped", []),
+        "first": min(dates) if dates else None, "shown": False}
+
+
 def proposal_card(state_key: str, *, on_plan_page: bool = False, in_dialog: bool = False) -> None:
     """
     Show workouts and/or strength sessions proposed by the coach, stored in
@@ -311,31 +385,7 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False, in_dialog: bool
     the popup, so it stays open to say what was added.
     """
     wk = f"dlg_{state_key}" if in_dialog else state_key      # widget keys
-    added_key = f"{state_key}_added"
-    added = st.session_state.get(added_key)
-    if added:
-        # Show this for the run that follows the add and one more, so a click on
-        # "View on calendar" in that second run still finds its button.
-        if added["shown"]:
-            st.session_state.pop(added_key)
-        else:
-            added["shown"] = True
-        parts = []
-        if added["rides"]:
-            parts.append(f"added {added['rides']} ride{'s' if added['rides'] > 1 else ''}")
-        if added["strength"]:
-            parts.append(f"added {added['strength']} strength session{'s' if added['strength'] > 1 else ''}")
-        for key, verb in (("moved", "moved"), ("updated", "edited"), ("removed", "removed")):
-            if added.get(key):
-                parts.append(f"{verb} {added[key]}")
-        if parts:
-            text = ", ".join(parts)
-            st.success(f"Done. {text[0].upper() + text[1:]}.")
-        for skipped in added.get("skipped", []):
-            st.warning(f"Skipped {skipped['name']}. {skipped['why']}.")
-        if parts and added.get("first"):
-            if st.button("View on calendar", key=f"{wk}_viewcal", icon=":material/calendar_month:"):
-                jump_to_calendar(added["first"], on_plan_page)
+    added_notice(state_key, wk, on_plan_page)
 
     proposed = st.session_state.get(state_key)
     if not proposed:
@@ -415,46 +465,91 @@ def proposal_card(state_key: str, *, on_plan_page: bool = False, in_dialog: bool
             comment_footer(state_key, ckey, comments, what="the proposed plan", on_plan_page=on_plan_page)
 
         c1, c2 = st.columns(2)
-        adding = bool(rides or strength)
-        label = ("Add to Training Planner" if adding and not changes else
-                 "Apply changes" if changes and not adding else "Add and apply changes")
-        if c1.button(label, type="primary", width="stretch", key=f"{wk}_add"):
-            for w in rides:
-                if w.get("save"):
-                    add_my_workout({"name": w["name"], "workout_type": w["workout_type"],
-                                    "description": w["description"], "steps": w["steps"],
-                                    "tss": w["tss_planned"], "purpose": w.get("purpose"), "feel": w.get("feel")})
-                add_workout({
-                    "date": w["date"], "name": w["name"], "workout_type": w["workout_type"],
-                    "description": w["description"],
-                    "structured_json": json.dumps(w["steps"]) if w.get("steps") else None,
-                    "tss_planned": w["tss_planned"], "notes": "Planned by AI Coach",
-                    "phase": w.get("phase"), "week_number": w.get("week_number"),
-                    "purpose": w.get("purpose"), "feel": w.get("feel"),
-                })
-            save_phase_notes([{"name": w["phase"], **w["phase_note"]} for w in rides
-                              if w.get("phase") and w.get("phase_note")])
-            for s in strength:
-                add_strength_session({
-                    "date": s["date"], "plan_week": s.get("week_number"),
-                    "exercises_json": json.dumps(s["exercises"]),
-                    "duration_minutes": s.get("duration_minutes"),
-                    "notes": f"{s['name']} | Planned by AI Coach",
-                    "phase": s.get("phase"), "purpose": s.get("purpose"),
-                })
-            outcome = plan_changes.apply_changes(changes) if changes else {}
-            dates = [p["date"] for p in rides + strength] + ([outcome["first"]] if outcome.get("first") else [])
-            st.session_state.pop(state_key)
-            st.session_state[added_key] = {"rides": len(rides), "strength": len(strength),
-                                           "moved": outcome.get("moved", 0), "updated": outcome.get("updated", 0),
-                                           "removed": outcome.get("removed", 0),
-                                           "skipped": outcome.get("skipped", []),
-                                           "first": min(dates) if dates else None,
-                                           "shown": False}
+        if c1.button(_add_label(proposed), type="primary", width="stretch", key=f"{wk}_add"):
+            apply_proposal(state_key)
             _rerun(in_dialog)
         if c2.button("Discard", width="stretch", key=f"{wk}_discard"):
             st.session_state.pop(state_key)
             _rerun(in_dialog)
+
+
+def _add_label(proposed: list[dict]) -> str:
+    adding = any(p.get("kind", "ride") in ("ride", "strength") for p in proposed)
+    changing = any(p.get("kind") == "change" for p in proposed)
+    return ("Add to Training Planner" if adding and not changing else
+            "Apply changes" if changing and not adding else "Add and apply changes")
+
+
+def proposal_line(proposed: list[dict]) -> str:
+    """One line saying what a proposal holds, e.g. "12 rides · 640 TSS · 2 strength sessions"."""
+    rides = [p for p in proposed if p.get("kind", "ride") == "ride"]
+    strength = [p for p in proposed if p.get("kind") == "strength"]
+    changes = [p for p in proposed if p.get("kind") == "change"]
+    parts = []
+    if rides:
+        tss = sum(r.get("tss_planned") or 0 for r in rides)
+        parts.append(f"{len(rides)} ride{'s' if len(rides) != 1 else ''} · {tss:.0f} TSS")
+    if strength:
+        parts.append(f"{len(strength)} strength session{'s' if len(strength) != 1 else ''}")
+    if changes:
+        parts.append(f"{len(changes)} change{'s' if len(changes) != 1 else ''} to your plan")
+    return " · ".join(parts)
+
+
+@st.dialog("Review the proposal", width="large", on_dismiss="rerun")
+def _review_dialog(state_key: str, on_plan_page: bool) -> None:
+    # Add, Discard and Send comments rerun the whole page, which closes the popup, and the
+    # summary in the chat then says what was added.
+    proposal_card(state_key, on_plan_page=on_plan_page)
+
+
+def proposal_summary(state_key: str, *, on_plan_page: bool = False) -> None:
+    """
+    The chat's short form of proposal_card: one line saying what the coach drafted, with Review
+    (the full card with comment columns in a popup), Add and Discard. It keeps the chat short, so
+    the reply stays right under the question.
+    """
+    wk = f"sum_{state_key}"
+    added_notice(state_key, wk, on_plan_page)
+    proposed = st.session_state.get(state_key)
+    if not proposed:
+        return
+    with st.container(border=True):
+        changes_only = all(p.get("kind") == "change" for p in proposed)
+        st.markdown(f"**{'Proposed changes' if changes_only else 'Proposed plan'}** · {proposal_line(proposed)}")
+        st.caption("Not on your calendar yet. Review it to see each workout and send comments.")
+        c1, c2, c3 = st.columns(3)
+        if c1.button("Review", key=f"{wk}_review", icon=":material/visibility:", width="stretch"):
+            _review_dialog(state_key, on_plan_page)
+        if c2.button(_add_label(proposed), type="primary", key=f"{wk}_add", width="stretch"):
+            apply_proposal(state_key)
+            st.rerun()
+        if c3.button("Discard", key=f"{wk}_discard", width="stretch"):
+            st.session_state.pop(state_key)
+            st.rerun()
+
+
+LATEST_ANCHOR = "coach-latest"
+
+
+def latest_anchor() -> None:
+    """Mark where the latest question starts, so scroll_to_latest can bring it to the top."""
+    st.markdown(f'<div id="{LATEST_ANCHOR}" style="scroll-margin-top: 4.5rem"></div>',
+                unsafe_allow_html=True)
+
+
+def scroll_to_latest() -> None:
+    """
+    Scroll the page so the latest question sits at the top, and the reply streams in right under
+    it. Streamlit has no scroll call, so this is a small script. The counter makes each call new
+    content, so the script runs again on every send.
+    """
+    n = st.session_state.get("_coach_scroll_n", 0) + 1
+    st.session_state["_coach_scroll_n"] = n
+    st.html(f"""<script>/* {n} */
+      const el = document.getElementById("{LATEST_ANCHOR}");
+      if (el) el.scrollIntoView({{behavior: "smooth", block: "start"}});
+    </script>""", unsafe_allow_javascript=True)
 
 
 def report_block(kind: str, ref_key: str, title: str, prompt: str, *,
