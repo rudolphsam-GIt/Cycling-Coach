@@ -553,10 +553,12 @@ def scroll_to_latest() -> None:
 
 
 def report_block(kind: str, ref_key: str, title: str, prompt: str, *,
-                 button_label: str, auto: bool = False, on_plan_page: bool = False) -> None:
+                 button_label: str, auto: bool = False, on_plan_page: bool = False,
+                 in_dialog: bool = False) -> None:
     """
     Show a saved coach report, or write one when asked (or right away if auto).
-    Proposed workouts from the report get their own confirm card.
+    Proposed workouts from the report get their own confirm card. `in_dialog` keeps a popup
+    open across its clicks (the weekly check in on the Plan page).
     """
     import coach_context
     import coach_reports
@@ -579,7 +581,7 @@ def report_block(kind: str, ref_key: str, title: str, prompt: str, *,
             if action.button("Rewrite", key=f"rewrite_{kind}_{ref_key}", width="stretch",
                              help="Write this again with the latest data"):
                 st.session_state[run_key] = True
-                st.rerun()
+                _rerun(in_dialog)
             st.markdown(existing["content"])
             st.caption(f"Written {local_time(existing['created_at'])}")
         elif st.session_state.get(run_key) or auto:
@@ -595,10 +597,10 @@ def report_block(kind: str, ref_key: str, title: str, prompt: str, *,
                 save_report(kind, ref_key, title, reply)
                 if proposals:
                     st.session_state[state_key] = proposals
-                st.rerun()
+                _rerun(in_dialog)
         else:
             if st.button(button_label, type="primary", key=f"start_{kind}_{ref_key}"):
                 st.session_state[run_key] = True
-                st.rerun()
+                _rerun(in_dialog)
 
-    proposal_card(state_key, on_plan_page=on_plan_page)
+    proposal_card(state_key, on_plan_page=on_plan_page, in_dialog=in_dialog)

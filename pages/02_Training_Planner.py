@@ -742,8 +742,9 @@ def clear_chat() -> None:
 
 
 def render_memories() -> None:
-    with st.expander("What your coach remembers"):
-        notes = get_memories()
+    notes = get_memories()
+    label = f"What your coach remembers ({len(notes)})" if notes else "What your coach remembers"
+    with st.popover(label, icon=":material/psychology:", width="stretch"):
         if not notes:
             st.caption("Nothing yet. Tell the coach about injuries, your schedule or preferences "
                        "and it will remember them.")
@@ -756,26 +757,49 @@ def render_memories() -> None:
                 st.rerun()
 
 
-def render_checkin() -> None:
-    from db.queries import get_report, get_reports
+def checkin_due() -> bool:
+    """Saturday to Monday, until this week's check in has been run."""
+    from db.queries import get_report
+    key, _, _ = coach_reports.weekly_checkin(coach_reports.checkin_week())
+    return today.weekday() in (5, 6, 0) and not get_report("weekly", key)
+
+
+@st.dialog("Weekly check in", width="large", on_dismiss="rerun")
+def checkin_dialog() -> None:
+    from db.queries import get_reports
     start = coach_reports.checkin_week()
     key, title, prompt = coach_reports.weekly_checkin(start)
-    # Saturday to Monday, until it has been run, the check in sits open at the top.
-    due = today.weekday() in (5, 6, 0) and not get_report("weekly", key)
-    box = st.container(border=True) if due else st.expander("Weekly check in")
-    with box:
-        if due:
-            st.markdown(f"**Weekly check in for the week of {start:%b %-d} is ready**")
+    now, before = st.tabs(["This week", "Past check ins"])
+    with now:
         st.caption("Your coach reviews the week and drafts the next one.")
-        coach_ui.report_block("weekly", key, title, prompt,
-                              button_label="Run my weekly check in", on_plan_page=True)
-    past = [r for r in get_reports("weekly", limit=7) if r["ref_key"] != key]
-    if past:
-        with st.expander("Past check ins"):
-            for r in past:
-                st.markdown(f"**{r['title']}**")
-                st.markdown(r["content"])
-                st.divider()
+        coach_ui.report_block("weekly", key, title, prompt, button_label="Run my weekly check in",
+                              on_plan_page=True, in_dialog=True)
+    with before:
+        past = [r for r in get_reports("weekly", limit=7) if r["ref_key"] != key]
+        if not past:
+            st.caption("No earlier check ins yet.")
+        for r in past:
+            st.markdown(f"**{r['title']}**")
+            st.markdown(r["content"])
+            st.divider()
+
+
+def render_coach_bar():
+    """
+    One row above the chat for the check in, memories and program planning, so they don't push
+    the chat down the page. The check in button turns into a highlighted "ready" button when it is
+    due. Returns the column for program planning, filled after the chat so a draft the coach has
+    just saved hides the starters straight away.
+    """
+    c_check, c_mem, c_prog = st.columns(3)
+    due = checkin_due()
+    if c_check.button("Weekly check in ready" if due else "Weekly check in", key="bar_checkin",
+                      type="primary" if due else "secondary", icon=":material/fact_check:", width="stretch",
+                      help="Your coach reviews the week and drafts the next one."):
+        checkin_dialog()
+    with c_mem:
+        render_memories()
+    return c_prog.container()
 
 
 def split_latest(history: list) -> tuple[list, list]:
@@ -821,8 +845,8 @@ def render_coach_tab(next_race) -> None:
                      on_click=clear_chat):
             st.rerun()
 
-    render_checkin()
-    render_memories()
+    bar_program = render_coach_bar()
+    program_ui.mode_note()
 
     # The program card sits above the chat but is filled in after the reply streams, so a draft the
     # coach has just saved shows straight away.
@@ -925,8 +949,11 @@ def render_coach_tab(next_race) -> None:
 
     with program_slot:
         program_ui.draft_card(on_plan_page=True)
-        if not programs.load("draft"):
+        has_draft = programs.load("draft") is not None
+        if not has_draft:
             program_ui.active_card()
+    with bar_program:
+        if not has_draft:
             program_ui.start_card()
 
 
