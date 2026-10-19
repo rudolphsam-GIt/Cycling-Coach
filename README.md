@@ -54,6 +54,8 @@ The app opens as soon as the Anthropic key is in place. Garmin and Strava are co
 
 To stop the app, press Control and C in the terminal. Next time, you only need `bash start.sh`.
 
+The app only answers on the computer it runs on, so nobody else on your network can open it. This is set by `address = "localhost"` in `.streamlit/config.toml`.
+
 ## Getting an Anthropic API key
 
 The coach talks to Anthropic's API directly using your own key. It does not use a Claude subscription, so a Claude.ai plan will not work here and API use is billed to your key.
