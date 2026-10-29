@@ -10,6 +10,7 @@ from datetime import date
 import streamlit as st
 
 import planning
+from auth.fit_import import RIDE_FILE_HELP, RIDE_FILE_TYPES
 from components import onboarding
 from components.units import weight_input
 from db import profiles, schema
@@ -65,8 +66,8 @@ def save_athlete(answers: dict, fit_files=None) -> dict:
         planning.save_target_plan(answers.get("plan_start"), answers.get("plan_weeks"))
         imported, message = 0, ""
         if fit_files:
-            from auth.fit_import import import_fit_files
-            imported, message = import_fit_files(fit_files)
+            from auth.fit_import import import_ride_files
+            imported, message = import_ride_files(fit_files)
         apply_current_ctl(answers.get("current_ctl"))         # after the rides, which it accounts for
         days = history_days() if imported else 0
     return {**p, "imported": imported, "message": message, "history_days": days}
@@ -191,9 +192,9 @@ def render_athlete_form() -> None:
         st.markdown("**Their rides (optional)**")
         st.caption(HISTORY_ASK)
         fit_files = st.file_uploader(
-            "Ride files", type=["fit"], accept_multiple_files=True, key="af_fit",
+            "Ride files", type=RIDE_FILE_TYPES, accept_multiple_files=True, key="af_fit",
             label_visibility="collapsed",
-            help="They can export rides from Garmin Connect or Strava as .fit files. "
+            help=RIDE_FILE_HELP + " From a zip, only rides from the last year come in. "
                  "You can add more later in Settings.")
 
         go, cancel = st.columns(2)

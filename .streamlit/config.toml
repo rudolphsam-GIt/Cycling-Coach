@@ -2,6 +2,8 @@
 # Answer only on this Mac. Without this the app listens on every network address, so anyone on the
 # same Wi-Fi could open it, rides and health data included.
 address = "localhost"
+# Room for a whole Strava or Garmin export. Only the rides inside are read, not the photos.
+maxUploadSize = 1000
 
 [client]
 toolbarMode = "minimal"

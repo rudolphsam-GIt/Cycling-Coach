@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import csv
+import gzip
 import io
 import json
+import os
 import sports
-from datetime import datetime, timezone
+import zipfile
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta, timezone
 
 from db.queries import (get_setting, upsert_activity, save_peaks, save_hr_peaks, save_streams,
                         ftp_history_rows, ftp_on, hr_profile, rescore_from_streams)
@@ -44,6 +48,105 @@ def _save_file_peaks(activity_id, raw: bytes) -> None:
     except Exception:
         pass
     save_hr_peaks(activity_id, mean_max(hr, HR_DURATIONS, zero_is_missing=True))
+
+
+# What the ride uploaders take. A .fit.gz ends in .gz, which is how the uploader sees it.
+RIDE_FILE_TYPES = ["fit", "gz", "zip"]
+RIDE_FILE_HELP = ("Takes .fit files, .fit.gz files, or a .zip of either, such as a whole Strava or "
+                  "Garmin Connect export.")
+# A whole export can hold many years. Rides older than a year add little (HISTORY_ASK), so files
+# that come out of a zip and started before this are left out. Files picked one by one all import.
+ARCHIVE_DAYS = 365
+_OTHER_FORMATS = (".gpx", ".tcx", ".gpx.gz", ".tcx.gz")
+
+
+@dataclass
+class _RideFile:
+    """A ride unpacked from a .gz or .zip, shaped like an uploaded file for import_fit_files."""
+    name: str
+    data: bytes
+
+    def read(self) -> bytes:
+        return self.data
+
+
+def expand_ride_files(uploaded_files, today: date | None = None) -> tuple[list, dict]:
+    """The .fit files in an upload. Loose .fit files pass through, .fit.gz files are unpacked, and
+    a .zip is searched for both, including zips inside it as Garmin's export has. Returns the files
+    and counts of what was left out: older (from a zip, over ARCHIVE_DAYS old), other_format
+    (GPX or TCX, which this importer doesn't read) and unreadable."""
+    cutoff = (today or date.today()) - timedelta(days=ARCHIVE_DAYS)
+    files, counts = [], {"older": 0, "other_format": 0, "unreadable": 0}
+    for uf in uploaded_files:
+        _expand(uf.name, uf.read(), False, cutoff, files, counts)
+    return files, counts
+
+
+def _expand(name: str, data: bytes, from_zip: bool, cutoff: date, files: list, counts: dict) -> None:
+    low = name.lower()
+    if low.endswith(".zip"):
+        try:
+            z = zipfile.ZipFile(io.BytesIO(data))
+        except zipfile.BadZipFile:
+            counts["unreadable"] += 1
+            return
+        for info in z.infolist():
+            inner = info.filename.lower()
+            if info.is_dir() or "__macosx" in inner:
+                continue
+            if inner.endswith((".zip", ".fit", ".fit.gz")):
+                # Only rides are read out of the zip, so photos and the rest of an export never load.
+                _expand(info.filename, z.read(info), True, cutoff, files, counts)
+            elif inner.endswith(_OTHER_FORMATS):
+                counts["other_format"] += 1
+        return
+    if low.endswith(_OTHER_FORMATS):
+        counts["other_format"] += 1
+        return
+    if low.endswith(".gz"):
+        try:
+            data = gzip.decompress(data)
+        except (OSError, EOFError):
+            counts["unreadable"] += 1
+            return
+        name, low = name[:-3], low[:-3]
+    if not low.endswith(".fit"):
+        counts["unreadable"] += 1
+        return
+    started = _fit_created(data) if from_zip else None
+    if started and started < cutoff:
+        counts["older"] += 1
+        return
+    files.append(_RideFile(os.path.basename(name), data))
+
+
+def _fit_created(raw: bytes) -> date | None:
+    """When a FIT file was recorded, from its first message, without parsing the rest."""
+    try:
+        from fitparse import FitFile
+        for msg in FitFile(raw).get_messages("file_id"):
+            ts = _field(msg, "time_created")
+            return ts.date() if isinstance(ts, datetime) else None
+    except Exception:
+        return None
+    return None
+
+
+def import_ride_files(uploaded_files, today: date | None = None) -> tuple[int, str]:
+    """import_fit_files for anything the ride uploaders take, with a word on what was left out."""
+    files, counts = expand_ride_files(uploaded_files, today)
+    imported, message = import_fit_files(files) if files else (0, "No .fit files were found in the upload.")
+    def n(k, word):
+        return f"{counts[k]} {word}{'s' if counts[k] != 1 else ''}"
+    left_out = [text for k, text in (
+        ("older", n("older", "ride") + " from more than a year ago"),
+        ("other_format", n("other_format", "GPX or TCX file") + " the app can't read"),
+        ("unreadable", n("unreadable", "file") + " that couldn't be opened"),
+    ) if counts[k]]
+    if left_out:
+        listed = ", ".join(left_out[:-1]) + " and " + left_out[-1] if len(left_out) > 1 else left_out[0]
+        message = message.rstrip(".") + ". Left out " + listed + "."
+    return imported, message
 
 
 def import_fit_files(uploaded_files) -> tuple[int, str]:

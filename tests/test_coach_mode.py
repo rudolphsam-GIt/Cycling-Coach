@@ -132,7 +132,7 @@ class AthleteFormSaveTests(_TempOwner):
             return len(ride_days_ago or []), "Imported rides."
 
         with mock.patch.object(ftp_change, "apply_new_ftp", side_effect=apply), \
-                mock.patch("auth.fit_import.import_fit_files", side_effect=fake_import):
+                mock.patch("auth.fit_import.import_ride_files", side_effect=fake_import):
             result = athlete_form.save_athlete(_answers(**over), list(files) if files else None)
         return result, calls
 

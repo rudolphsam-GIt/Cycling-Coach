@@ -260,17 +260,20 @@ with tab_profile:
 def _import_files(label: str) -> None:
     from metrics.training_load import HISTORY_ASK, history_days, history_note
     st.caption(" ".join(t for t in (history_note(history_days()), HISTORY_ASK) if t))
-    import_files = st.file_uploader(label, type=["fit", "csv"], accept_multiple_files=True,
-                                    key="garmin_import")
+    from auth.fit_import import RIDE_FILE_HELP, RIDE_FILE_TYPES
+    import_files = st.file_uploader(label, type=RIDE_FILE_TYPES + ["csv"], accept_multiple_files=True,
+                                    key="garmin_import",
+                                    help=RIDE_FILE_HELP + " From a zip, only rides from the last year "
+                                         "come in. A Garmin Connect activities .csv works too.")
     imperial = st.radio("Units in the file", ["Miles and feet", "Kilometers and meters"],
                         horizontal=True, key="import_units") == "Miles and feet"
     if import_files and st.button("Import", width="stretch"):
-        from auth.fit_import import import_fit_files, import_csv_files
-        fit = [f for f in import_files if f.name.lower().endswith(".fit")]
+        from auth.fit_import import import_ride_files, import_csv_files
         csv = [f for f in import_files if f.name.lower().endswith(".csv")]
+        fit = [f for f in import_files if f not in csv]
         total, msgs = 0, []
         if fit:
-            n, m = import_fit_files(fit); total += n; msgs.append(m)
+            n, m = import_ride_files(fit); total += n; msgs.append(m)
         if csv:
             n, m = import_csv_files(csv, imperial=imperial); total += n; msgs.append(m)
         (st.success if total else st.error)(" · ".join(msgs))
@@ -453,8 +456,8 @@ if schema.is_owner():
                 msg = st.session_state.pop("garmin_sync_msg")
                 (st.success if msg.startswith("Synced") else st.error)(msg)
 
-            with st.expander("Import .fit or .csv files by hand"):
-                _import_files("Upload .fit or .csv from Garmin Connect")
+            with st.expander("Import ride files by hand"):
+                _import_files("Upload .fit, .fit.gz, .zip or a Garmin Connect .csv")
 
         # ── Plan export: intervals.icu and TrainingPeaks ─────────────────────────────
         st.divider()
@@ -575,9 +578,9 @@ else:
                 "so nobody else's passwords are stored here. Add this athlete's rides from files "
                 "they send you.", icon=":material/lock:")
         st.subheader("Import rides")
-        st.caption("They can export rides from Garmin Connect or Strava as .fit files. "
+        st.caption("They can send .fit files, or the whole zip from a Strava or Garmin Connect export. "
                    "Set their FTP and LTHR on the Profile tab first so each ride is scored right.")
-        _import_files("Upload .fit or .csv files")
+        _import_files("Upload .fit, .fit.gz, .zip or .csv files")
 
 
 def _usage_unlocked() -> bool:
