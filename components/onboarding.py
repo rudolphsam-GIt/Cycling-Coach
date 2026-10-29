@@ -280,6 +280,7 @@ def build_first_block_message() -> str:
         except (TypeError, ValueError):
             return None
 
+    from components import ftp_help
     from db import profiles, schema
     from planning import parse_days, target_plan
 
@@ -291,6 +292,7 @@ def build_first_block_message() -> str:
         hours=num("weekly_hours_target"), ftp=num("ftp_watts"),
         ftp_estimated=get_setting("ftp_estimated", "") == "1",
         skip_test=get_setting("ftp_choice", "") == "estimate",
+        retest=get_setting("ftp_choice", "") == "known_test" and ftp_help.wants_test_in_block(),
         race=races[0] if races else None, name=get_setting("athlete_name", "") or None,
         ride_days=parse_days(get_setting("available_days", "")),
         coach=None if schema.is_owner() else profiles.owner_name(), plan=target_plan())
@@ -413,4 +415,7 @@ def _coached_welcome() -> None:
         st.info("Their FTP is an estimate for now. "
                 + ("The first block will start with an FTP test." if get_setting("ftp_choice", "") == "test"
                    else "It will be refined from the rides you upload."), icon=":material/speed:")
+    elif get_setting("ftp_choice", "") == "known_test":
+        st.info("They start on the FTP they gave. The first block will start with an FTP test to check it.",
+                icon=":material/speed:")
     first_block_button("welcome_first_block")

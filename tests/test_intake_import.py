@@ -85,6 +85,14 @@ class ParseRowTests(unittest.TestCase):
         self.assertIsNone(i.answers["ftp_choice"])
         self.assertEqual(len(i.notes), 1)
 
+    def test_a_test_with_their_ftp_keeps_the_ftp(self):
+        a = ii.parse_row(_row(name="Jo", ftp_input="230", ftp_test="Yes, include a test"), today=TODAY).answers
+        self.assertEqual((a["ftp_choice"], a["ftp_input"]), ("known_test", 230))
+
+    def test_a_test_without_an_ftp_stays_an_estimate_and_test(self):
+        a = ii.parse_row(_row(name="Jo", ftp_test="Yes, include a test"), today=TODAY).answers
+        self.assertEqual((a["ftp_choice"], a["ftp_input"]), ("test", None))
+
     def test_past_dates_are_dropped_with_a_note(self):
         i = ii.parse_row(_row(name="Jo", race_date="2026-09-01", plan_start="2026-10-01"), today=TODAY)
         self.assertIsNone(i.answers["race_date"])

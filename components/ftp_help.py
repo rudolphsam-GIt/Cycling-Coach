@@ -37,6 +37,15 @@ def _upcoming_test(today: date) -> dict | None:
     return min(tests, key=lambda w: w["date"]) if tests else None
 
 
+def wants_test_in_block() -> bool:
+    """Whether a new block should get an FTP test: the FTP is only an estimate and they didn't ask
+    to skip testing, or they gave their FTP, asked for a test too, and none is on the plan yet."""
+    choice = get_setting("ftp_choice", "")
+    if choice == "known_test":
+        return not any(w["name"] == explain.FTP_TEST_NAME for w in get_workouts("0001-01-01", "9999-12-31"))
+    return get_setting("ftp_estimated", "") == "1" and choice != "estimate"
+
+
 def plan_test_in_block(block_dates: list[str]) -> int | None:
     """Add the FTP test on the first rest day among the block's first week, or
     None if every day that week is taken. Returns the new workout's id."""

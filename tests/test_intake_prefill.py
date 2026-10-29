@@ -72,6 +72,24 @@ class PrefillTests(unittest.TestCase):
         at, _ = self._run(ftp_input="", ftp_test="Not sure, you decide")
         self.assertEqual(_by_label(at.radio, "FTP").value, "Estimate it and put an FTP test in their first block")
 
+    def test_their_ftp_and_a_test_starts_them_on_their_ftp(self):
+        at, _ = self._run(ftp_input="230", ftp_test="Yes, include a test")
+        self.assertEqual(_by_label(at.radio, "FTP").value, "I know their FTP, and put a test in their first block")
+        self.assertEqual(_by_label(at.number_input, "FTP in watts").value, 230)
+        with mock.patch("ftp_change.apply_new_ftp") as apply:
+            _by_label(at.button, "Add athlete").click().run()
+        self.assertFalse(at.exception)
+        self.assertEqual(apply.call_args.args[0], 230)
+        slug = next(p["slug"] for p in profiles.list_profiles() if p["name"] == "Alex Rider")
+        with schema.use(profiles.path_for(slug)):
+            self.assertEqual(q.get_setting("ftp_choice"), "known_test")
+            self.assertEqual(q.get_setting("ftp_estimated"), "0")
+
+    def test_a_test_without_an_ftp_is_still_an_estimate(self):
+        at, _ = self._run(ftp_input="", ftp_test="Yes, include a test")
+        self.assertEqual(_by_label(at.radio, "FTP").value, "Estimate it and put an FTP test in their first block")
+        self.assertFalse([n for n in at.number_input if n.label == "FTP in watts"])
+
     def test_adding_them_saves_the_intake_with_the_profile(self):
         at, intake = self._run()
         with mock.patch("ftp_change.apply_new_ftp"):

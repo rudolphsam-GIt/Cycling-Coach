@@ -119,6 +119,8 @@ def _answers(x: dict, notes: list[str], today: date) -> dict:
     if ftp_choice == "known" and not ftp:
         notes.append("They asked to use their FTP but didn't give one. Pick an FTP option.")
         ftp_choice = None
+    elif ftp_choice == "test" and ftp:
+        ftp_choice = "known_test"       # start on their FTP, and test it in the first block
 
     race_date = _future(_date(x.get("race_date")), "Event date", notes, today)
     plan_start = _future(_date(x.get("plan_start")), "Plan start", notes, today)

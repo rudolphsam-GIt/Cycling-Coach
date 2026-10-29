@@ -388,6 +388,8 @@ def build_context() -> str:
         ftp_note = (f" (an estimate, not tested; typical for this athlete is "
                     f"{get_setting('ftp_range_low')} to {get_setting('ftp_range_high')}W for "
                     f"\"{get_setting('rider_type', '')}\")")
+    if not ftp_note and get_setting("ftp_choice", "") == "known_test":
+        ftp_note = " (the athlete's own number; they asked for an FTP test in their first block to check it)"
 
     metrics = get_current_metrics()
     activities = get_activities(days_back=14)

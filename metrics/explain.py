@@ -722,9 +722,11 @@ def checklist(state: dict) -> list[dict]:
 def first_block_message(*, goals: list[str], experience: str, hours: float | None,
                         ftp: float | None, ftp_estimated: bool, race: dict | None = None,
                         name: str | None = None, days: float | None = None,
-                        skip_test: bool = False, ride_days: list[str] | None = None,
+                        skip_test: bool = False, retest: bool = False,
+                        ride_days: list[str] | None = None,
                         coach: str | None = None, plan: dict | None = None) -> str:
-    """The first message sent to the coach for a new rider. With `coach`, it is written by
+    """The first message sent to the coach for a new rider. With `retest`, a rider who gave their
+    FTP also asked for a test. With `coach`, it is written by
     that coach about the rider instead of by the rider. With `plan` ({start, weeks, end}, from
     planning.target_plan) it asks for a plan of that length from that date instead of a four
     week first block."""
@@ -755,7 +757,9 @@ def first_block_message(*, goals: list[str], experience: str, hours: float | Non
     if ftp_estimated and skip_test:
         lines.append(f"{i.title()} would rather not do an FTP test, so please plan around the estimate and keep "
                      f"the first weeks forgiving. Say how the plan will be refined as {my} rides come in.")
-    elif ftp_estimated:
+    elif ftp_estimated or retest:
+        if retest:
+            lines.append(f"That FTP is {my} own number, and {i} would like an FTP test to check it.")
         lines.append("Please build a guided 20 minute FTP test into the first week, after a couple of easy "
                      "days, and tell me how the rest of the block will be adjusted once we know the result. "
                      "Keep the days before the test forgiving.")

@@ -30,7 +30,8 @@ assert tuple(DAY_NAMES.values()) == planning.WEEKDAYS
 UNIT_CHOICES = {"Pounds and miles": ("lb", "mi"), "Kilograms and kilometers": ("kg", "km")}
 
 # The rider's FTP test answer, as the Add athlete form's FTP choice (athlete_form.FTP_CHOICES).
-# None leaves it for Sam to pick when reviewing the import.
+# None leaves it for Sam to pick when reviewing the import. A test with an FTP given becomes
+# "known_test" in intake_import, so they start on their own number.
 FTP_TEST_CHOICES = {
     "Yes, include a test": "test",
     "No, use the FTP I gave above": "known",

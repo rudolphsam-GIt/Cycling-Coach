@@ -1071,7 +1071,7 @@ def render_quick_generate() -> None:
             }) for w in drafted]
             save_phase_notes([{"name": w["phase"], **w["phase_note"]}
                               for w in drafted if w.get("phase") and w.get("phase_note")])
-            if get_setting("ftp_estimated", "") == "1" and get_setting("ftp_choice", "") != "estimate":
+            if ftp_help.wants_test_in_block():
                 test_id = ftp_help.plan_test_in_block([w["date"] for w in drafted])
                 if test_id:
                     new_ids.append(test_id)

@@ -63,7 +63,39 @@ class FtpTestPlacementTests(unittest.TestCase):
         self.assertEqual(q.get_workouts("0001-01-01", "9999-12-31"), [])
 
 
+class WantsTestTests(FtpTestPlacementTests):
+    def wants(self, choice, estimated):
+        from components import ftp_help
+        q._settings_cache.clear()
+        q.set_setting("ftp_choice", choice)
+        q.set_setting("ftp_estimated", estimated)
+        return ftp_help.wants_test_in_block()
+
+    def test_who_gets_a_test_in_a_new_block(self):
+        self.assertTrue(self.wants("test", "1"))
+        self.assertFalse(self.wants("estimate", "1"))
+        self.assertFalse(self.wants("known", "0"))
+        self.assertTrue(self.wants("known_test", "0"))
+
+    def test_their_own_ftp_gets_one_test_only(self):
+        from components import ftp_help
+        start = date.today() + timedelta(days=7)
+        self.assertTrue(self.wants("known_test", "0"))
+        ftp_help.plan_test_in_block(self.week(start, [0, 1, 3]))
+        self.assertFalse(self.wants("known_test", "0"))
+        self.assertTrue(self.wants("test", "1"))        # an estimate still gets one each block until tested
+
+
 class OnboardingTests(unittest.TestCase):
+    def test_their_own_ftp_with_a_test(self):
+        from metrics import explain
+        text = explain.first_block_message(goals=["x"], experience="New", hours=5, days=4, ftp=230,
+                                           ftp_estimated=False, retest=True, coach="Sam", name="Jo")
+        self.assertIn("Their FTP is set to 230 W.", text)
+        self.assertIn("their own number, and they would like an FTP test to check it", text)
+        self.assertIn("guided 20 minute FTP test into the first week", text)
+        self.assertNotIn("only an estimate", text)
+
     def test_welcome_and_first_block_mention_the_test(self):
         from metrics import explain
         text = explain.first_block_message(goals=["x"], experience="New", hours=5, days=4, ftp=150,
