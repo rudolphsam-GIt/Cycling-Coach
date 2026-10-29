@@ -358,6 +358,12 @@ def _ski_line() -> str:
             "before writing ski heart rate targets)")
 
 
+def _intake_block() -> str:
+    """What a coached athlete said on the intake form, when they were added from one."""
+    import intake_import
+    return intake_import.coach_block(intake_import.from_setting(get_setting(intake_import.SETTING, "")))
+
+
 def build_context() -> str:
     ftp = get_setting("ftp_watts", "unknown")
     weight = get_setting("weight_kg", "unknown")
@@ -427,6 +433,7 @@ def build_context() -> str:
   Weekly training time available: {hours_str} over {days_str}. Fit plans inside this and say so if it is not enough for the goal.
 {_days_line()}
 {_plan_line()}
+{_intake_block()}
 
 Experience: {experience}{sex_note}
 Units: {units_note}

@@ -51,6 +51,32 @@ def from_setting(raw: str | None) -> dict:
         return {}
 
 
+# Answers the coach doesn't get from the intake: ones the app keeps as settings (and may have
+# changed since, like FTP or weight), contact details, and form housekeeping.
+_NOT_FOR_COACH = {"name", "email", "units", "weight", "age", "gender", "rider_type", "activity",
+                  "goal_text", "race_name", "race_date", "weekly_hours", "available_days", "plan_start",
+                  "plan_end", "ftp_input", "lthr_input", "max_hr", "resting_hr", "current_ctl",
+                  "ride_share", "consent"}
+
+
+def coach_block(saved: dict) -> str:
+    """The intake answers for the coach's athlete snapshot, health first. '' when there are none."""
+    answers = saved.get("answers") or {}
+    lines = [f"  {q.title} \"{answers[q.key]}\"" for q in QUESTIONS
+             if q.key in answers and q.key not in _NOT_FOR_COACH]
+    flags = saved.get("flags") or []
+    if not (lines or flags):
+        return ""
+    when = f" on {saved['submitted']}" if saved.get("submitted") else ""
+    out = [f"INTAKE FORM (the athlete's own answers{when}, before coaching started. The rest of this "
+           "snapshot and anything newer they tell you take priority):"]
+    if flags:
+        out.append("  Health flags. Apply the safety rules to these before any planning, and plan no hard "
+                   "training while chest pain, fainting or similar warning signs are unresolved:")
+        out += [f"    - {f}" for f in flags]
+    return "\n".join(out + lines)
+
+
 def read_responses(data: bytes | str) -> list[Intake]:
     """Every response in the downloaded sheet, newest first. Raises ValueError when the file
     isn't this form's responses."""
