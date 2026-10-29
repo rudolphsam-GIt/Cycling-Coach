@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
@@ -33,6 +34,21 @@ class Intake:
     @property
     def name(self) -> str:
         return self.answers["name"]
+
+
+SETTING = "intake_form"        # where the athlete's own copy of their answers is kept
+
+
+def to_setting(intake: Intake) -> str:
+    """The rider's answers as saved in their profile, for the coach to read."""
+    return json.dumps({"submitted": intake.submitted, "answers": intake.extras, "flags": intake.flags})
+
+
+def from_setting(raw: str | None) -> dict:
+    try:
+        return json.loads(raw) if raw else {}
+    except ValueError:
+        return {}
 
 
 def read_responses(data: bytes | str) -> list[Intake]:
@@ -67,7 +83,7 @@ def _answers(x: dict, notes: list[str], today: date) -> dict:
     if weight is not None:
         kg = to_kg(weight, unit)
         if WEIGHT_KG_MIN <= kg <= WEIGHT_KG_MAX:
-            weight = round(kg, 1)
+            weight = kg             # not rounded, so 165 lb still shows as 165 on Add athlete
         else:
             notes.append(f"Weight {x['weight']} {unit} looks wrong, so it was left blank.")
             weight = None
