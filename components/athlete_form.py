@@ -30,6 +30,7 @@ INTAKE_KEY, PREFILL_KEY, ROUND_KEY = "af_intake", "af_prefill", "af_round"
 
 FTP_CHOICES = {
     "I know their FTP": "known",
+    "I know their FTP, and put a test in their first block": "known_test",
     "Estimate it and put an FTP test in their first block": "test",
     "Estimate it and skip the test": "estimate",
 }
@@ -239,9 +240,11 @@ def render_athlete_form() -> None:
         ftp_choice = FTP_CHOICES[ftp_label]
         start = starting_ftp_range(weight, rider_type, activity, gender, age)
         ftp_in = None
-        if ftp_choice == "known":
+        if ftp_choice in ("known", "known_test"):
             ftp_in = st.number_input("FTP in watts", min_value=50, max_value=600,
                                      value=pre.get("ftp_input") or 200, step=5, key=k("ftp"))
+            if ftp_choice == "known_test":
+                st.caption("They start on this FTP, and the test checks it.")
         else:
             st.caption(f"Riders like them usually start between {start['low']:.0f} and {start['high']:.0f} "
                        f"watts. They will start at {start['start']:.0f} W, refined from their rides"
