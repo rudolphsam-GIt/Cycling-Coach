@@ -183,7 +183,8 @@ class DisplayTests(unittest.TestCase):
         w = {"id": 1, "date": SOON, "name": "Easy", "workout_type": "Endurance", "tss_planned": 40,
              "completed": 0, "description": "", "purpose": "Builds <b>base</b> & more",
              "feel": "3 out of 10 <script>"}
-        days = cal.build_month_data(date.today().year, date.today().month, [w], [], [], [], date.today())
+        soon = date.fromisoformat(SOON)      # three days out can be next month, so build that month
+        days = cal.build_month_data(soon.year, soon.month, [w], [], [], [], date.today())
         tip = cal.day_tooltip(next(d for d in days.values() if d.planned))
         self.assertIn("<b>Why.</b> Builds &lt;b&gt;base&lt;/b&gt; &amp; more", tip)
         self.assertIn("<b>Feel.</b> 3 out of 10 &lt;script&gt;", tip)
