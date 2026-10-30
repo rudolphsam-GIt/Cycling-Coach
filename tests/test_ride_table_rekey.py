@@ -7,9 +7,14 @@ AppTest doesn't carry a dataframe selection from one run to the next, so the tes
 """
 from __future__ import annotations
 
+import os
+import tempfile
 import unittest
+from unittest import mock
 
 from streamlit.testing.v1 import AppTest
+
+from db import schema
 
 
 def _ride(i: int, day: str, name: str) -> dict:
@@ -28,6 +33,16 @@ TWO = [_ride(2, "2026-10-15", "Tuesday tempo"), _ride(1, "2026-10-13", "Sunday l
 
 
 class RideTableRekeyTests(unittest.TestCase):
+    def setUp(self):
+        # The table reads the distance unit from settings, so give it a throwaway database
+        # rather than whatever sits at data/cycling.db.
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        p = mock.patch.object(schema, "DB_PATH", os.path.join(self.tmp.name, "t.db"))
+        p.start()
+        self.addCleanup(p.stop)
+        schema.run_migrations()
+
     def table_key(self, rides: list) -> str:
         at = AppTest.from_function(_app, default_timeout=30)
         at.session_state["ride_list"] = rides
