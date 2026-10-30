@@ -126,7 +126,7 @@ def build_html(program: dict, athlete_name: str = "", today: date | None = None)
                     f'<span class="tss">{mid * d["share"] / total:.0f} TSS</span></div>'
                     f'<p>{_e(d["description"])}</p>'
                     f'<p class="why">{_e(d["purpose"])}</p>'
-                    f'<p class="feel">Feels like {_e(d["feel"])}</p>'
+                    f'<p class="feel">{_e(d["feel"])}</p>'
                     f'<p class="ref">{_e(p["name"])}, {_e(d["day"])}</p></li>')
             out.append("</ol>")
         if p["strength"]:
