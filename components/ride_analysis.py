@@ -307,18 +307,19 @@ def _timeline(act: dict, streams: dict, ftp: float, lthr: float, window_range: t
     window = SMOOTHING[st.segmented_control("Smoothing", list(SMOOTHING), default="30 s",
                                             key=f"ra_smooth_{act['id']}") or "30 s"]
     kph_factor = 3.6 / (1.609344 if unit == "mi" else 1.0)
-    rows = [(k, label, color) for k, label, color in (
-        ("power", "Power (W)", theme.FATIGUE), ("hr", "Heart rate (bpm)", theme.BAD),
-        ("speed", f"Speed ({speed_unit(unit)})", theme.GOOD),
-        ("cad", "Cadence (rpm)", theme.ACCENT), ("alt", f"Elevation ({climb_unit(unit)})", theme.TEXT3))
+    rows = [(k, label, color, short) for k, label, color, short in (
+        ("power", "Power (W)", theme.FATIGUE, "W"), ("hr", "Heart rate (bpm)", theme.BAD, "bpm"),
+        ("speed", f"Speed ({speed_unit(unit)})", theme.GOOD, speed_unit(unit)),
+        ("cad", "Cadence (rpm)", theme.ACCENT, "rpm"),
+        ("alt", f"Elevation ({climb_unit(unit)})", theme.TEXT3, climb_unit(unit)))
         if streams.get(k)]
     if not rows:
         st.caption("This ride has no power, heart rate, speed or elevation data to chart.")
         return
     cum = sm.cumulative_distance(streams)
     fig = make_subplots(rows=len(rows), cols=1, shared_xaxes=True, vertical_spacing=0.04,
-                        row_heights=[2 if k == "power" else 1 for k, _, _ in rows])
-    for i, (key, label, color) in enumerate(rows, start=1):
+                        row_heights=[2 if k == "power" else 1 for k, _, _, _ in rows])
+    for i, (key, label, color, short) in enumerate(rows, start=1):
         raw = streams[key]
         if key == "speed":
             raw = [None if v is None else v * kph_factor for v in raw]
@@ -329,12 +330,19 @@ def _timeline(act: dict, streams: dict, ftp: float, lthr: float, window_range: t
         xs = [x + window_range[0] for x in xs]                         # keep the ride's own clock
         minutes = [x / 60 for x in xs]
         if i == 1:
-            first_x, first_y = minutes, ys
-        hover = [hover_label(x, cum, unit) for x in xs]
+            first_x, first_y, first_hover = minutes, ys, [hover_label(x, cum, unit) for x in xs]
+        # Each line gets its own small tag in its own color, just the rounded number and unit,
+        # so the four readings at one moment can be compared at a glance.
+        if key == "power" and ftp:
+            extra = [f"  {y / ftp:.0%} FTP" if y is not None else "" for y in ys]
+        else:
+            extra = [""] * len(ys)
         kwargs = dict(fill="tozeroy", fillcolor=charts_rgba(color, 0.12)) if key == "alt" else {}
         fig.add_trace(go.Scatter(x=minutes, y=ys, mode="lines", name=label, line=dict(color=color, width=1.6),
-                                 customdata=hover, connectgaps=False, selected=dict(marker=dict(opacity=0)),
-                                 hovertemplate="%{customdata}  %{y:.1f}<extra>" + label + "</extra>", **kwargs),
+                                 customdata=extra, connectgaps=False, selected=dict(marker=dict(opacity=0)),
+                                 hovertemplate="<b>%{y:.0f}</b> " + short + "%{customdata}<extra></extra>",
+                                 hoverlabel=dict(bgcolor=color, bordercolor=color,
+                                                 font=dict(color=theme.BG, size=13)), **kwargs),
                       row=i, col=1)
         fig.update_yaxes(title_text=label, row=i, col=1)
         if key == "alt":
@@ -350,15 +358,28 @@ def _timeline(act: dict, streams: dict, ftp: float, lthr: float, window_range: t
             fig.add_hline(y=lthr, line_dash="dash", line_color=theme.TEXT3, line_width=1, row=i, col=1)
     # Invisible markers on the first row give the drag something to land on, so Streamlit
     # reports the box that was dragged even though the lines themselves have no points.
+    # They also carry the one tag that says when and where on the road this moment is.
     fig.add_trace(go.Scatter(x=first_x, y=first_y, mode="markers", marker=dict(size=14, opacity=0),
-                             showlegend=False, hoverinfo="skip"), row=1, col=1)
+                             showlegend=False, customdata=first_hover,
+                             hovertemplate="%{customdata}<extra></extra>",
+                             hoverlabel=dict(bgcolor=theme.RAISED, bordercolor=theme.BORDER,
+                                             font=dict(color=theme.TEXT2, size=12))), row=1, col=1)
+    # Every line hangs off the first row's time axis, so one hover lights up all the rows at
+    # the same moment. The other rows' axes stay to draw their grid and match its range.
+    for trace in fig.data:
+        trace.xaxis = "x"
     charts.apply_theme(fig, height=200 + 140 * len(rows), legend="none")
     # apply_theme styles the first axes only, so give every row the same quiet grid
     fig.update_xaxes(gridcolor=theme.GRID, linecolor=theme.BORDER, zeroline=False,
                      tickfont=dict(size=12, color=theme.TEXT2))
     fig.update_yaxes(gridcolor=theme.GRID, linecolor=theme.BORDER, zeroline=False, automargin=True,
                      tickfont=dict(size=12, color=theme.TEXT2), title_font=dict(size=12, color=theme.TEXT2))
-    fig.update_layout(hovermode="x unified")
+    fig.update_layout(hovermode="x", hoversubplots="axis", hoverdistance=-1, spikedistance=-1)
+    fig.update_xaxes(showspikes=True, spikemode="across", spikesnap="cursor", spikethickness=1,
+                     spikedash="solid", spikecolor=theme.TEXT3)
+    # The other rows' axes have no lines of their own, which pulls an automatic range back
+    # toward zero, so pin the time axis to the part of the ride on show.
+    fig.update_xaxes(range=[window_range[0] / 60, window_range[1] / 60], autorange=False)
     cumulative = sm.cumulative_distance(streams)
     ticks = sm.distance_ticks(cumulative, window_range[0], window_range[1],
                               1609.344 if unit == "mi" else 1000.0) if cumulative else []
