@@ -6,7 +6,8 @@ A Streamlit training app that runs locally. It syncs rides from Garmin, Strava a
 
 - Run the app with the `cycling-coach` launch config (port 8599). Use `cycling-demo`, `cycling-empty` or `cycling-onboarding` to try changes against a throwaway database, never the real one.
 - Real training data lives in `data/cycling.db` (and `data/profiles/` for coached athletes). Back it up before any migration or bulk change, named like `data/cycling-before-<change>-<date>.db`.
-- Tests: `./venv/bin/python -m pytest tests`. pytest comes from `requirements-dev.txt`. Use `./venv/bin/python`, not the system Python. `venv-py39` is an old leftover.
+- Tests: `/Users/sam/cycling-coach/venv/bin/python -m pytest tests`, run from the folder you are working in. pytest comes from `requirements-dev.txt`. Use this venv, not the system Python. `venv-py39` is an old leftover.
+- Worktree sessions live in `.claude/worktrees/` and get `.env` and the launch configs copied in (see `.worktreeinclude`). They have no venv of their own, so use the full venv path above. They have no copy of `data/cycling.db` either, so the `cycling-coach` config there starts on an empty database. Use the demo configs to try changes, and only run against real data from the main checkout after merging.
 
 ## How Sam likes to work
 

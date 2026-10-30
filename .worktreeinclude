@@ -1,0 +1,4 @@
+# Ignored files copied into each new Claude Code worktree, so a session there can run the app.
+# The real database stays out on purpose. A worktree starts with no training data.
+.env
+.claude/launch.json
