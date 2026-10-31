@@ -37,7 +37,8 @@ def phase_load(p: dict) -> str:
         return "A break from structured riding. Ride for fun if you feel like it."
     out = f"About {p['weekly_hours']:g} hours a week. Training load {p['weekly_tss_start']:.0f}"
     if p["weekly_tss_start"] != p["weekly_tss_end"]:
-        out += f" rising to {p['weekly_tss_end']:.0f}"
+        way = "rising" if p["weekly_tss_end"] > p["weekly_tss_start"] else "easing"
+        out += f" {way} to {p['weekly_tss_end']:.0f}"
     out += " a week."
     if p["recovery_every"]:
         out += f" Every {_ordinal(p['recovery_every'])} week is lighter, about 60 percent."

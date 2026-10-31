@@ -52,6 +52,12 @@ class ProgramPageTests(unittest.TestCase):
         self.assertIn("Lighter week", html)
         self.assertIn("Set by hand", html)
 
+    def test_load_line_says_which_way_it_goes(self):
+        p = programs.validate(sample())["phases"][1]
+        self.assertIn("250 rising to 330", program_page.phase_load(p))
+        self.assertIn("330 easing to 250", program_page.phase_load(
+            {**p, "weekly_tss_start": 330, "weekly_tss_end": 250}))
+
     def test_no_owner_name_when_blank(self):
         p = programs.validate(sample())
         html = program_page.build_html(p)
