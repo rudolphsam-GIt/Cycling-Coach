@@ -1,0 +1,4266 @@
+{
+ "about": "Foods and recipe ingredients for fueling suggestions. Nutrient values are per 100 g exactly as USDA FoodData Central gives them (SR Legacy, looked up 2026-11-22), with the FDC ID and description for each. Serving sizes say where they came from: an FDC portion weight, or a common household measure set by the app. FDC has no allergen data: contains and may_contain are filled from the food itself for single ingredient foods, and allergens_checked is true only for those and plain dairy. Mixed foods stay unchecked until a labelled product is added. A null nutrient means FDC has no value for it.",
+ "allergens": [
+  "gluten",
+  "dairy",
+  "eggs",
+  "peanuts",
+  "tree_nuts",
+  "soy",
+  "fish_shellfish",
+  "sesame",
+  "caffeine"
+ ],
+ "foods": [
+  {
+   "id": "oats",
+   "name": "Rolled oats",
+   "serving": {
+    "label": "1/2 cup dry",
+    "g": 40,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 379.0,
+    "carbs_g": 67.7,
+    "protein_g": 13.15,
+    "fat_g": 6.52,
+    "fibre_g": 10.1,
+    "sodium_mg": 6.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [
+    "gluten"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label. Oats are often grown and milled next to wheat, so only oats labelled gluten free suit a gluten free diet.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 173904,
+    "description": "Cereals, oats, regular and quick, not fortified, dry"
+   }
+  },
+  {
+   "id": "white_rice_cooked",
+   "name": "White rice, cooked",
+   "serving": {
+    "label": "1 cup",
+    "g": 158,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 130.0,
+    "carbs_g": 28.17,
+    "protein_g": 2.69,
+    "fat_g": 0.28,
+    "fibre_g": 0.4,
+    "sodium_mg": 1.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 168878,
+    "description": "Rice, white, long-grain, regular, enriched, cooked"
+   }
+  },
+  {
+   "id": "white_rice_raw",
+   "name": "White rice, uncooked",
+   "serving": {
+    "label": "1/4 cup",
+    "g": 46,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 365.0,
+    "carbs_g": 79.95,
+    "protein_g": 7.13,
+    "fat_g": 0.66,
+    "fibre_g": 1.3,
+    "sodium_mg": 5.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 169756,
+    "description": "Rice, white, long-grain, regular, raw, unenriched"
+   }
+  },
+  {
+   "id": "brown_rice_cooked",
+   "name": "Brown rice, cooked",
+   "serving": {
+    "label": "1 cup",
+    "g": 195,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 112.0,
+    "carbs_g": 23.51,
+    "protein_g": 2.32,
+    "fat_g": 0.83,
+    "fibre_g": 1.8,
+    "sodium_mg": 1.0,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 168875,
+    "description": "Rice, brown, medium-grain, cooked (Includes foods for USDA's Food Distribution Program)"
+   }
+  },
+  {
+   "id": "quinoa_cooked",
+   "name": "Quinoa, cooked",
+   "serving": {
+    "label": "1 cup",
+    "g": 185,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 120.0,
+    "carbs_g": 21.3,
+    "protein_g": 4.4,
+    "fat_g": 1.92,
+    "fibre_g": 2.8,
+    "sodium_mg": 7.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [
+    "gluten"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label. Quinoa is often packed alongside wheat.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 168917,
+    "description": "Quinoa, cooked"
+   }
+  },
+  {
+   "id": "couscous_cooked",
+   "name": "Couscous, cooked",
+   "serving": {
+    "label": "1 cup",
+    "g": 157,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 112.0,
+    "carbs_g": 23.22,
+    "protein_g": 3.79,
+    "fat_g": 0.16,
+    "fibre_g": 1.4,
+    "sodium_mg": 5.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "gluten"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Couscous is made from wheat. Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 169700,
+    "description": "Couscous, cooked"
+   }
+  },
+  {
+   "id": "pasta_cooked",
+   "name": "Pasta, cooked",
+   "serving": {
+    "label": "1 cup",
+    "g": 140,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 158.0,
+    "carbs_g": 30.86,
+    "protein_g": 5.8,
+    "fat_g": 0.93,
+    "fibre_g": 1.8,
+    "sodium_mg": 1.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "gluten"
+   ],
+   "may_contain": [
+    "eggs"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Dried pasta is wheat and water. Some brands share lines with egg pasta. Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 168928,
+    "description": "Pasta, cooked, unenriched, without added salt"
+   }
+  },
+  {
+   "id": "pasta_dry",
+   "name": "Pasta, dry",
+   "serving": {
+    "label": "2 oz",
+    "g": 56,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 371.0,
+    "carbs_g": 74.67,
+    "protein_g": 13.04,
+    "fat_g": 1.51,
+    "fibre_g": 3.2,
+    "sodium_mg": 6.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "gluten"
+   ],
+   "may_contain": [
+    "eggs"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Dried pasta is wheat and water. Some brands share lines with egg pasta. Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 169736,
+    "description": "Pasta, dry, enriched"
+   }
+  },
+  {
+   "id": "rice_noodles_dry",
+   "name": "Rice noodles, dry",
+   "serving": {
+    "label": "2 oz",
+    "g": 56,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 364.0,
+    "carbs_g": 80.18,
+    "protein_g": 5.95,
+    "fat_g": 0.56,
+    "fibre_g": 1.6,
+    "sodium_mg": 182.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 169742,
+    "description": "Rice noodles, dry"
+   }
+  },
+  {
+   "id": "potato_baked",
+   "name": "Potato, baked with skin",
+   "serving": {
+    "label": "1 medium",
+    "g": 173,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 93.0,
+    "carbs_g": 21.15,
+    "protein_g": 2.5,
+    "fat_g": 0.13,
+    "fibre_g": 2.2,
+    "sodium_mg": 10.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170093,
+    "description": "Potatoes, baked, flesh and skin, without salt"
+   }
+  },
+  {
+   "id": "sweet_potato_baked",
+   "name": "Sweet potato, baked",
+   "serving": {
+    "label": "1 medium",
+    "g": 114,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 90.0,
+    "carbs_g": 20.71,
+    "protein_g": 2.01,
+    "fat_g": 0.15,
+    "fibre_g": 3.3,
+    "sodium_mg": 36.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 168483,
+    "description": "Sweet potato, cooked, baked in skin, flesh, without salt"
+   }
+  },
+  {
+   "id": "flour_all_purpose",
+   "name": "Flour, all purpose",
+   "serving": {
+    "label": "1/4 cup",
+    "g": 31,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 364.0,
+    "carbs_g": 76.31,
+    "protein_g": 10.33,
+    "fat_g": 0.98,
+    "fibre_g": 2.7,
+    "sodium_mg": 2.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "gluten"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Wheat flour. Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 169761,
+    "description": "Wheat flour, white, all-purpose, unenriched"
+   }
+  },
+  {
+   "id": "vital_wheat_gluten",
+   "name": "Vital wheat gluten (for seitan)",
+   "serving": {
+    "label": "1/4 cup",
+    "g": 30,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 370.0,
+    "carbs_g": 13.79,
+    "protein_g": 75.16,
+    "fat_g": 1.85,
+    "fibre_g": 0.6,
+    "sodium_mg": 29.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "gluten"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Seitan is made from wheat gluten. Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 168147,
+    "description": "Vital wheat gluten"
+   }
+  },
+  {
+   "id": "white_bread",
+   "name": "White bread",
+   "serving": {
+    "label": "1 slice",
+    "g": 29,
+    "unit": "piece",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 266.0,
+    "carbs_g": 49.42,
+    "protein_g": 8.85,
+    "fat_g": 3.33,
+    "fibre_g": 2.7,
+    "sodium_mg": 490.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "during",
+    "ingredient"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "gluten"
+   ],
+   "may_contain": [
+    "dairy",
+    "eggs",
+    "soy",
+    "sesame"
+   ],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 174924,
+    "description": "Bread, white, commercially prepared (includes soft bread crumbs)"
+   }
+  },
+  {
+   "id": "wholewheat_bread",
+   "name": "Whole wheat bread",
+   "serving": {
+    "label": "1 slice",
+    "g": 28,
+    "unit": "piece",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 252.0,
+    "carbs_g": 42.71,
+    "protein_g": 12.45,
+    "fat_g": 3.5,
+    "fibre_g": 6.0,
+    "sodium_mg": 455.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "gluten"
+   ],
+   "may_contain": [
+    "dairy",
+    "eggs",
+    "soy",
+    "sesame"
+   ],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 172688,
+    "description": "Bread, whole-wheat, commercially prepared"
+   }
+  },
+  {
+   "id": "bagel",
+   "name": "Bagel, plain",
+   "serving": {
+    "label": "1 medium bagel",
+    "g": 105,
+    "unit": "piece",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 264.0,
+    "carbs_g": 52.38,
+    "protein_g": 10.56,
+    "fat_g": 1.32,
+    "fibre_g": 1.6,
+    "sodium_mg": 422.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "gluten"
+   ],
+   "may_contain": [
+    "sesame",
+    "eggs",
+    "dairy"
+   ],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added. FDC's entry includes onion, poppy and sesame bagels.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 174899,
+    "description": "Bagels, plain, enriched, with calcium propionate (includes onion, poppy, sesame)"
+   }
+  },
+  {
+   "id": "pita",
+   "name": "Pita bread, white",
+   "serving": {
+    "label": "1 large pita",
+    "g": 60,
+    "unit": "piece",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 275.0,
+    "carbs_g": 55.7,
+    "protein_g": 9.1,
+    "fat_g": 1.2,
+    "fibre_g": 2.2,
+    "sodium_mg": 536.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "gluten"
+   ],
+   "may_contain": [
+    "sesame",
+    "dairy"
+   ],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 174915,
+    "description": "Bread, pita, white, enriched"
+   }
+  },
+  {
+   "id": "flour_tortilla",
+   "name": "Flour tortilla",
+   "serving": {
+    "label": "1 tortilla (7 to 8 in)",
+    "g": 49,
+    "unit": "piece",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 306.0,
+    "carbs_g": 49.38,
+    "protein_g": 8.2,
+    "fat_g": 7.99,
+    "fibre_g": 3.5,
+    "sodium_mg": 736.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "gluten"
+   ],
+   "may_contain": [
+    "soy",
+    "dairy"
+   ],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 175037,
+    "description": "Tortillas, ready-to-bake or -fry, flour, refrigerated"
+   }
+  },
+  {
+   "id": "corn_tortilla",
+   "name": "Corn tortilla",
+   "serving": {
+    "label": "1 tortilla",
+    "g": 24,
+    "unit": "piece",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 218.0,
+    "carbs_g": 44.64,
+    "protein_g": 5.7,
+    "fat_g": 2.85,
+    "fibre_g": 6.3,
+    "sodium_mg": 45.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [
+    "gluten"
+   ],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 175036,
+    "description": "Tortillas, ready-to-bake or -fry, corn"
+   }
+  },
+  {
+   "id": "granola",
+   "name": "Granola",
+   "serving": {
+    "label": "1/2 cup",
+    "g": 61,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 489.0,
+    "carbs_g": 53.88,
+    "protein_g": 13.67,
+    "fat_g": 24.31,
+    "fibre_g": 8.9,
+    "sodium_mg": 26.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "after",
+    "everyday"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "gluten",
+    "tree_nuts"
+   ],
+   "may_contain": [
+    "peanuts",
+    "sesame",
+    "soy",
+    "dairy"
+   ],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added. FDC's entry is a homemade recipe with nuts.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 171646,
+    "description": "Cereals ready-to-eat, granola, homemade"
+   }
+  },
+  {
+   "id": "fig_bar",
+   "name": "Fig bar",
+   "serving": {
+    "label": "1 bar",
+    "g": 16,
+    "unit": "piece",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 348.0,
+    "carbs_g": 70.9,
+    "protein_g": 3.7,
+    "fat_g": 7.3,
+    "fibre_g": 4.6,
+    "sodium_mg": 350.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "during"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "gluten"
+   ],
+   "may_contain": [
+    "dairy",
+    "eggs",
+    "soy",
+    "tree_nuts"
+   ],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 172721,
+    "description": "Cookies, fig bars"
+   }
+  },
+  {
+   "id": "rice_cake",
+   "name": "Rice cake, plain",
+   "serving": {
+    "label": "1 cake",
+    "g": 9,
+    "unit": "piece",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 387.0,
+    "carbs_g": 81.5,
+    "protein_g": 8.2,
+    "fat_g": 2.8,
+    "fibre_g": 4.2,
+    "sodium_mg": 26.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "during",
+    "before"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [
+    "sesame",
+    "gluten"
+   ],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added. Plain rice cakes are often made on lines with sesame or wheat versions.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170250,
+    "description": "Snacks, rice cakes, brown rice, plain, unsalted"
+   }
+  },
+  {
+   "id": "pretzels",
+   "name": "Pretzels, hard",
+   "serving": {
+    "label": "1 oz",
+    "g": 28,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 384.0,
+    "carbs_g": 80.39,
+    "protein_g": 10.04,
+    "fat_g": 2.93,
+    "fibre_g": 3.4,
+    "sodium_mg": 1240.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "during"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "gluten"
+   ],
+   "may_contain": [
+    "sesame",
+    "soy",
+    "dairy"
+   ],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 167555,
+    "description": "Snacks, pretzels, hard, plain, salted"
+   }
+  },
+  {
+   "id": "gummies",
+   "name": "Gummy sweets (starch jelly)",
+   "serving": {
+    "label": "10 gummies",
+    "g": 36,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 396.0,
+    "carbs_g": 98.9,
+    "protein_g": 0.0,
+    "fat_g": 0.0,
+    "fibre_g": 0.1,
+    "sodium_mg": 44.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "during"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added. Many gummies contain gelatin, so check the label if you eat vegetarian.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 167989,
+    "description": "Candies, gumdrops, starch jelly pieces"
+   }
+  },
+  {
+   "id": "honey",
+   "name": "Honey",
+   "serving": {
+    "label": "1 tbsp",
+    "g": 21,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 304.0,
+    "carbs_g": 82.4,
+    "protein_g": 0.3,
+    "fat_g": 0.0,
+    "fibre_g": 0.2,
+    "sodium_mg": 4.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "during",
+    "ingredient"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 169640,
+    "description": "Honey"
+   }
+  },
+  {
+   "id": "maple_syrup",
+   "name": "Maple syrup",
+   "serving": {
+    "label": "1 tbsp",
+    "g": 20,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 260.0,
+    "carbs_g": 67.04,
+    "protein_g": 0.04,
+    "fat_g": 0.06,
+    "fibre_g": 0.0,
+    "sodium_mg": 12.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "during",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 169661,
+    "description": "Syrups, maple"
+   }
+  },
+  {
+   "id": "sugar",
+   "name": "Sugar, white",
+   "serving": {
+    "label": "1 tbsp",
+    "g": 12.5,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 387.0,
+    "carbs_g": 99.98,
+    "protein_g": 0.0,
+    "fat_g": 0.0,
+    "fibre_g": 0.0,
+    "sodium_mg": 1.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label. Some vegans avoid cane sugar filtered with bone char.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 169655,
+    "description": "Sugars, granulated"
+   }
+  },
+  {
+   "id": "brown_sugar",
+   "name": "Brown sugar",
+   "serving": {
+    "label": "1 tbsp",
+    "g": 13.8,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 380.0,
+    "carbs_g": 98.09,
+    "protein_g": 0.12,
+    "fat_g": 0.0,
+    "fibre_g": 0.0,
+    "sodium_mg": 28.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 168833,
+    "description": "Sugars, brown"
+   }
+  },
+  {
+   "id": "jam",
+   "name": "Jam",
+   "serving": {
+    "label": "1 tbsp",
+    "g": 20,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 278.0,
+    "carbs_g": 68.86,
+    "protein_g": 0.37,
+    "fat_g": 0.07,
+    "fibre_g": 1.1,
+    "sodium_mg": 32.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "during",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 169641,
+    "description": "Jams and preserves"
+   }
+  },
+  {
+   "id": "peanut_butter",
+   "name": "Peanut butter, smooth",
+   "serving": {
+    "label": "2 tbsp",
+    "g": 32,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 598.0,
+    "carbs_g": 22.31,
+    "protein_g": 22.21,
+    "fat_g": 51.36,
+    "fibre_g": 5.0,
+    "sodium_mg": 17.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "peanuts"
+   ],
+   "may_contain": [
+    "tree_nuts"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Peanuts, sometimes salt. Many brands share lines with tree nut butters, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 172470,
+    "description": "Peanut butter, smooth style, without salt"
+   }
+  },
+  {
+   "id": "cocoa",
+   "name": "Cocoa powder, unsweetened",
+   "serving": {
+    "label": "1 tbsp",
+    "g": 5.4,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 228.0,
+    "carbs_g": 57.9,
+    "protein_g": 19.6,
+    "fat_g": 13.7,
+    "fibre_g": 37.0,
+    "sodium_mg": 21.0,
+    "caffeine_mg": 230.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [
+    "dairy",
+    "tree_nuts",
+    "peanuts"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label. Cocoa is often made alongside milk chocolate and nuts.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 169593,
+    "description": "Cocoa, dry powder, unsweetened"
+   }
+  },
+  {
+   "id": "banana",
+   "name": "Banana",
+   "serving": {
+    "label": "1 medium banana",
+    "g": 118,
+    "unit": "piece",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 89.0,
+    "carbs_g": 22.84,
+    "protein_g": 1.09,
+    "fat_g": 0.33,
+    "fibre_g": 2.6,
+    "sodium_mg": 1.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "during",
+    "after",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 173944,
+    "description": "Bananas, raw"
+   }
+  },
+  {
+   "id": "apple",
+   "name": "Apple",
+   "serving": {
+    "label": "1 medium apple",
+    "g": 182,
+    "unit": "piece",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 52.0,
+    "carbs_g": 13.81,
+    "protein_g": 0.26,
+    "fat_g": 0.17,
+    "fibre_g": 2.4,
+    "sodium_mg": 1.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 171688,
+    "description": "Apples, raw, with skin (Includes foods for USDA's Food Distribution Program)"
+   }
+  },
+  {
+   "id": "orange",
+   "name": "Orange",
+   "serving": {
+    "label": "1 orange",
+    "g": 131,
+    "unit": "piece",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 47.0,
+    "carbs_g": 11.75,
+    "protein_g": 0.94,
+    "fat_g": 0.12,
+    "fibre_g": 2.4,
+    "sodium_mg": 0.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 169097,
+    "description": "Oranges, raw, all commercial varieties"
+   }
+  },
+  {
+   "id": "blueberries",
+   "name": "Blueberries",
+   "serving": {
+    "label": "1 cup",
+    "g": 148,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 57.0,
+    "carbs_g": 14.49,
+    "protein_g": 0.74,
+    "fat_g": 0.33,
+    "fibre_g": 2.4,
+    "sodium_mg": 1.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 171711,
+    "description": "Blueberries, raw"
+   }
+  },
+  {
+   "id": "strawberries",
+   "name": "Strawberries",
+   "serving": {
+    "label": "1 cup halves",
+    "g": 152,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 32.0,
+    "carbs_g": 7.68,
+    "protein_g": 0.67,
+    "fat_g": 0.3,
+    "fibre_g": 2.0,
+    "sodium_mg": 1.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 167762,
+    "description": "Strawberries, raw"
+   }
+  },
+  {
+   "id": "raspberries",
+   "name": "Raspberries",
+   "serving": {
+    "label": "1 cup",
+    "g": 123,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 52.0,
+    "carbs_g": 11.94,
+    "protein_g": 1.2,
+    "fat_g": 0.65,
+    "fibre_g": 6.5,
+    "sodium_mg": 1.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 167755,
+    "description": "Raspberries, raw"
+   }
+  },
+  {
+   "id": "raspberries_frozen",
+   "name": "Raspberries, frozen",
+   "serving": {
+    "label": "1 cup",
+    "g": 140,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 56.0,
+    "carbs_g": 12.55,
+    "protein_g": 1.15,
+    "fat_g": 0.81,
+    "fibre_g": 4.3,
+    "sodium_mg": 4.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "after",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 168209,
+    "description": "Raspberries, frozen, red, unsweetened"
+   }
+  },
+  {
+   "id": "mango",
+   "name": "Mango",
+   "serving": {
+    "label": "1 cup pieces",
+    "g": 165,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 60.0,
+    "carbs_g": 14.98,
+    "protein_g": 0.82,
+    "fat_g": 0.38,
+    "fibre_g": 1.6,
+    "sodium_mg": 1.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 169910,
+    "description": "Mangos, raw"
+   }
+  },
+  {
+   "id": "raisins",
+   "name": "Raisins",
+   "serving": {
+    "label": "small box (1.5 oz)",
+    "g": 43,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 299.0,
+    "carbs_g": 79.32,
+    "protein_g": 3.3,
+    "fat_g": 0.25,
+    "fibre_g": 4.5,
+    "sodium_mg": 26.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "during",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 168165,
+    "description": "Raisins, dark, seedless (Includes foods for USDA's Food Distribution Program)"
+   }
+  },
+  {
+   "id": "medjool_dates",
+   "name": "Medjool dates",
+   "serving": {
+    "label": "1 date, pitted",
+    "g": 24,
+    "unit": "piece",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 277.0,
+    "carbs_g": 74.97,
+    "protein_g": 1.81,
+    "fat_g": 0.15,
+    "fibre_g": 6.7,
+    "sodium_mg": 1.0,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "before",
+    "during",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [
+    "tree_nuts"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label. Dates are often packed alongside nuts.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 168191,
+    "description": "Dates, medjool"
+   }
+  },
+  {
+   "id": "avocado",
+   "name": "Avocado",
+   "serving": {
+    "label": "1/2 avocado",
+    "g": 100,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 160.0,
+    "carbs_g": 8.53,
+    "protein_g": 2.0,
+    "fat_g": 14.66,
+    "fibre_g": 6.7,
+    "sodium_mg": 7.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 171705,
+    "description": "Avocados, raw, all commercial varieties"
+   }
+  },
+  {
+   "id": "applesauce",
+   "name": "Applesauce, unsweetened",
+   "serving": {
+    "label": "1/2 cup",
+    "g": 122,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 42.0,
+    "carbs_g": 11.3,
+    "protein_g": 0.17,
+    "fat_g": 0.1,
+    "fibre_g": 1.1,
+    "sodium_mg": 2.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "during",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Apples and water. Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 171695,
+    "description": "Applesauce, canned, unsweetened, without added ascorbic acid (Includes foods for USDA's Food Distribution Program)"
+   }
+  },
+  {
+   "id": "orange_juice",
+   "name": "Orange juice",
+   "serving": {
+    "label": "1 cup",
+    "g": 248,
+    "unit": "ml",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 45.0,
+    "carbs_g": 10.4,
+    "protein_g": 0.7,
+    "fat_g": 0.2,
+    "fibre_g": 0.2,
+    "sodium_mg": 1.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "after",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 169098,
+    "description": "Orange juice, raw (Includes foods for USDA's Food Distribution Program)"
+   }
+  },
+  {
+   "id": "lemon_juice",
+   "name": "Lemon juice",
+   "serving": {
+    "label": "1 tbsp",
+    "g": 15,
+    "unit": "ml",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 22.0,
+    "carbs_g": 6.9,
+    "protein_g": 0.35,
+    "fat_g": 0.24,
+    "fibre_g": 0.3,
+    "sodium_mg": 1.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 167747,
+    "description": "Lemon juice, raw"
+   }
+  },
+  {
+   "id": "egg",
+   "name": "Egg",
+   "serving": {
+    "label": "1 large egg",
+    "g": 50,
+    "unit": "piece",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 143.0,
+    "carbs_g": 0.72,
+    "protein_g": 12.56,
+    "fat_g": 9.51,
+    "fibre_g": 0.0,
+    "sodium_mg": 142.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "eggs"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 171287,
+    "description": "Egg, whole, raw, fresh"
+   }
+  },
+  {
+   "id": "egg_boiled",
+   "name": "Egg, hard boiled",
+   "serving": {
+    "label": "1 large egg",
+    "g": 50,
+    "unit": "piece",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 155.0,
+    "carbs_g": 1.12,
+    "protein_g": 12.58,
+    "fat_g": 10.61,
+    "fibre_g": 0.0,
+    "sodium_mg": 124.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "after",
+    "everyday"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "eggs"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 173424,
+    "description": "Egg, whole, cooked, hard-boiled"
+   }
+  },
+  {
+   "id": "milk_whole",
+   "name": "Milk, whole",
+   "serving": {
+    "label": "1 cup",
+    "g": 244,
+    "unit": "ml",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 61.0,
+    "carbs_g": 4.8,
+    "protein_g": 3.15,
+    "fat_g": 3.25,
+    "fibre_g": 0.0,
+    "sodium_mg": 43.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "dairy"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Plain dairy food made from milk. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 171265,
+    "description": "Milk, whole, 3.25% milkfat, with added vitamin D"
+   }
+  },
+  {
+   "id": "milk_2pct",
+   "name": "Milk, 2%",
+   "serving": {
+    "label": "1 cup",
+    "g": 244,
+    "unit": "ml",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 50.0,
+    "carbs_g": 4.8,
+    "protein_g": 3.3,
+    "fat_g": 1.98,
+    "fibre_g": 0.0,
+    "sodium_mg": 47.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "dairy"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Plain dairy food made from milk. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 171267,
+    "description": "Milk, reduced fat, fluid, 2% milkfat, with added vitamin A and vitamin D"
+   }
+  },
+  {
+   "id": "chocolate_milk",
+   "name": "Chocolate milk, reduced fat",
+   "serving": {
+    "label": "1 cup",
+    "g": 250,
+    "unit": "ml",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 78.0,
+    "carbs_g": 12.1,
+    "protein_g": 2.99,
+    "fat_g": 1.9,
+    "fibre_g": 0.7,
+    "sodium_mg": 66.0,
+    "caffeine_mg": 1.0
+   },
+   "phases": [
+    "after"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "dairy"
+   ],
+   "may_contain": [],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 173450,
+    "description": "Milk, chocolate, fluid, commercial, reduced fat, with added calcium"
+   }
+  },
+  {
+   "id": "greek_yogurt",
+   "name": "Greek yogurt, plain, lowfat",
+   "serving": {
+    "label": "3/4 cup",
+    "g": 170,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 73.0,
+    "carbs_g": 3.94,
+    "protein_g": 9.95,
+    "fat_g": 1.92,
+    "fibre_g": 0.0,
+    "sodium_mg": 34.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "dairy"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Plain dairy food made from milk. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170903,
+    "description": "Yogurt, Greek, plain, lowfat"
+   }
+  },
+  {
+   "id": "greek_yogurt_whole",
+   "name": "Greek yogurt, plain, whole milk",
+   "serving": {
+    "label": "3/4 cup",
+    "g": 170,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 97.0,
+    "carbs_g": 3.98,
+    "protein_g": 9.0,
+    "fat_g": 5.0,
+    "fibre_g": 0.0,
+    "sodium_mg": 35.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "dairy"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Plain dairy food made from milk. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 171304,
+    "description": "Yogurt, Greek, plain, whole milk"
+   }
+  },
+  {
+   "id": "cottage_cheese",
+   "name": "Cottage cheese, 1%",
+   "serving": {
+    "label": "1/2 cup",
+    "g": 113,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 72.0,
+    "carbs_g": 2.72,
+    "protein_g": 12.39,
+    "fat_g": 1.02,
+    "fibre_g": 0.0,
+    "sodium_mg": 406.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "dairy"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Plain dairy food made from milk. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 173417,
+    "description": "Cheese, cottage, lowfat, 1% milkfat"
+   }
+  },
+  {
+   "id": "cheddar",
+   "name": "Cheddar cheese",
+   "serving": {
+    "label": "1 oz",
+    "g": 28,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 403.0,
+    "carbs_g": 3.37,
+    "protein_g": 22.87,
+    "fat_g": 33.31,
+    "fibre_g": 0.0,
+    "sodium_mg": 653.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "dairy"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Plain dairy food made from milk. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 173414,
+    "description": "Cheese, cheddar (Includes foods for USDA's Food Distribution Program)"
+   }
+  },
+  {
+   "id": "mozzarella",
+   "name": "Mozzarella",
+   "serving": {
+    "label": "1 oz",
+    "g": 28,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 299.0,
+    "carbs_g": 2.4,
+    "protein_g": 22.17,
+    "fat_g": 22.14,
+    "fibre_g": 0.0,
+    "sodium_mg": 486.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "dairy"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Plain dairy food made from milk. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170845,
+    "description": "Cheese, mozzarella, whole milk"
+   }
+  },
+  {
+   "id": "cream_cheese",
+   "name": "Cream cheese",
+   "serving": {
+    "label": "1 tbsp",
+    "g": 14.5,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 350.0,
+    "carbs_g": 5.52,
+    "protein_g": 6.15,
+    "fat_g": 34.44,
+    "fibre_g": 0.0,
+    "sodium_mg": 314.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "before",
+    "ingredient"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "dairy"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Plain dairy food made from milk. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 173418,
+    "description": "Cheese, cream"
+   }
+  },
+  {
+   "id": "butter",
+   "name": "Butter, salted",
+   "serving": {
+    "label": "1 tbsp",
+    "g": 14,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 717.0,
+    "carbs_g": 0.06,
+    "protein_g": 0.85,
+    "fat_g": 81.11,
+    "fibre_g": 0.0,
+    "sodium_mg": 643.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "dairy"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Plain dairy food made from milk. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 173410,
+    "description": "Butter, salted"
+   }
+  },
+  {
+   "id": "tofu_firm",
+   "name": "Tofu, firm",
+   "serving": {
+    "label": "1/2 cup",
+    "g": 126,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 144.0,
+    "carbs_g": 2.78,
+    "protein_g": 17.27,
+    "fat_g": 8.72,
+    "fibre_g": 2.3,
+    "sodium_mg": 14.0,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "soy"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Soybeans, water and a calcium coagulant. Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 172475,
+    "description": "Tofu, raw, firm, prepared with calcium sulfate"
+   }
+  },
+  {
+   "id": "tempeh",
+   "name": "Tempeh",
+   "serving": {
+    "label": "100 g",
+    "g": 100,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 192.0,
+    "carbs_g": 7.64,
+    "protein_g": 20.29,
+    "fat_g": 10.8,
+    "fibre_g": null,
+    "sodium_mg": 9.0,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "soy"
+   ],
+   "may_contain": [
+    "gluten"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Fermented soybeans. Some tempeh adds barley or other grains, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 174272,
+    "description": "Tempeh"
+   }
+  },
+  {
+   "id": "edamame",
+   "name": "Edamame",
+   "serving": {
+    "label": "1 cup shelled",
+    "g": 155,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 121.0,
+    "carbs_g": 8.91,
+    "protein_g": 11.91,
+    "fat_g": 5.2,
+    "fibre_g": 5.2,
+    "sodium_mg": 6.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "soy"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 168411,
+    "description": "Edamame, frozen, prepared"
+   }
+  },
+  {
+   "id": "soy_milk",
+   "name": "Soy milk, unsweetened",
+   "serving": {
+    "label": "1 cup",
+    "g": 243,
+    "unit": "ml",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 33.0,
+    "carbs_g": 1.74,
+    "protein_g": 2.86,
+    "fat_g": 1.61,
+    "fibre_g": 0.5,
+    "sodium_mg": 37.0,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "before",
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "soy"
+   ],
+   "may_contain": [],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 175215,
+    "description": "Soymilk (all flavors), unsweetened, with added calcium, vitamins A and D"
+   }
+  },
+  {
+   "id": "soy_yogurt",
+   "name": "Soy yogurt, plain (Silk)",
+   "serving": {
+    "label": "1 container (6 oz)",
+    "g": 170,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 66.0,
+    "carbs_g": 9.69,
+    "protein_g": 2.64,
+    "fat_g": 1.76,
+    "fibre_g": 0.4,
+    "sodium_mg": 13.0,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "soy"
+   ],
+   "may_contain": [],
+   "allergens_checked": false,
+   "allergen_source": "Branded food (Silk) in FDC's SR Legacy set. The label has not been read yet, so allergens are not checked.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 175227,
+    "description": "SILK Plain soy yogurt"
+   }
+  },
+  {
+   "id": "lentils",
+   "name": "Lentils, cooked",
+   "serving": {
+    "label": "1 cup",
+    "g": 198,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 116.0,
+    "carbs_g": 20.13,
+    "protein_g": 9.02,
+    "fat_g": 0.38,
+    "fibre_g": 7.9,
+    "sodium_mg": 2.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [
+    "gluten"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label. Lentils can carry stray grains of wheat or barley.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 172421,
+    "description": "Lentils, mature seeds, cooked, boiled, without salt"
+   }
+  },
+  {
+   "id": "chickpeas",
+   "name": "Chickpeas, cooked",
+   "serving": {
+    "label": "1 cup",
+    "g": 164,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 164.0,
+    "carbs_g": 27.42,
+    "protein_g": 8.86,
+    "fat_g": 2.59,
+    "fibre_g": 7.6,
+    "sodium_mg": 7.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 173757,
+    "description": "Chickpeas (garbanzo beans, bengal gram), mature seeds, cooked, boiled, without salt"
+   }
+  },
+  {
+   "id": "black_beans",
+   "name": "Black beans, cooked",
+   "serving": {
+    "label": "1 cup",
+    "g": 172,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 132.0,
+    "carbs_g": 23.71,
+    "protein_g": 8.86,
+    "fat_g": 0.54,
+    "fibre_g": 8.7,
+    "sodium_mg": 1.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 173735,
+    "description": "Beans, black, mature seeds, cooked, boiled, without salt"
+   }
+  },
+  {
+   "id": "pinto_beans",
+   "name": "Pinto beans, cooked",
+   "serving": {
+    "label": "1 cup",
+    "g": 171,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 143.0,
+    "carbs_g": 26.22,
+    "protein_g": 9.01,
+    "fat_g": 0.65,
+    "fibre_g": 9.0,
+    "sodium_mg": 1.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 175200,
+    "description": "Beans, pinto, mature seeds, cooked, boiled, without salt"
+   }
+  },
+  {
+   "id": "kidney_beans",
+   "name": "Kidney beans, canned",
+   "serving": {
+    "label": "1/2 cup",
+    "g": 128,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 84.0,
+    "carbs_g": 14.5,
+    "protein_g": 5.22,
+    "fat_g": 0.6,
+    "fibre_g": 4.3,
+    "sodium_mg": 296,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Beans, water and salt. Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 173741,
+    "description": "Beans, kidney, all types, mature seeds, canned"
+   }
+  },
+  {
+   "id": "hummus",
+   "name": "Hummus",
+   "serving": {
+    "label": "2 tbsp",
+    "g": 30,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 237.0,
+    "carbs_g": 15.0,
+    "protein_g": 7.78,
+    "fat_g": 17.82,
+    "fibre_g": 5.5,
+    "sodium_mg": 426.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "sesame"
+   ],
+   "may_contain": [],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added. Hummus is usually made with tahini.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 174289,
+    "description": "Hummus, commercial"
+   }
+  },
+  {
+   "id": "peanuts",
+   "name": "Peanuts",
+   "serving": {
+    "label": "1 oz",
+    "g": 28,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 567.0,
+    "carbs_g": 16.13,
+    "protein_g": 25.8,
+    "fat_g": 49.24,
+    "fibre_g": 8.5,
+    "sodium_mg": 18.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "peanuts"
+   ],
+   "may_contain": [
+    "tree_nuts"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 172430,
+    "description": "Peanuts, all types, raw"
+   }
+  },
+  {
+   "id": "almonds",
+   "name": "Almonds",
+   "serving": {
+    "label": "1 oz",
+    "g": 28,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 579.0,
+    "carbs_g": 21.55,
+    "protein_g": 21.15,
+    "fat_g": 49.93,
+    "fibre_g": 12.5,
+    "sodium_mg": 1.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "tree_nuts"
+   ],
+   "may_contain": [
+    "peanuts"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170567,
+    "description": "Nuts, almonds"
+   }
+  },
+  {
+   "id": "walnuts",
+   "name": "Walnuts",
+   "serving": {
+    "label": "1 oz",
+    "g": 28,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 654.0,
+    "carbs_g": 13.71,
+    "protein_g": 15.23,
+    "fat_g": 65.21,
+    "fibre_g": 6.7,
+    "sodium_mg": 2.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "tree_nuts"
+   ],
+   "may_contain": [
+    "peanuts"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170187,
+    "description": "Nuts, walnuts, english"
+   }
+  },
+  {
+   "id": "cashews",
+   "name": "Cashews",
+   "serving": {
+    "label": "1 oz",
+    "g": 28,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 553.0,
+    "carbs_g": 30.19,
+    "protein_g": 18.22,
+    "fat_g": 43.85,
+    "fibre_g": 3.3,
+    "sodium_mg": 12.0,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "tree_nuts"
+   ],
+   "may_contain": [
+    "peanuts"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170162,
+    "description": "Nuts, cashew nuts, raw"
+   }
+  },
+  {
+   "id": "sunflower_seeds",
+   "name": "Sunflower seeds",
+   "serving": {
+    "label": "1 oz",
+    "g": 28,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 584.0,
+    "carbs_g": 20.0,
+    "protein_g": 20.78,
+    "fat_g": 51.46,
+    "fibre_g": 8.6,
+    "sodium_mg": 9.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [
+    "peanuts",
+    "tree_nuts",
+    "sesame"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label. Seeds are often packed with nuts.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170562,
+    "description": "Seeds, sunflower seed kernels, dried"
+   }
+  },
+  {
+   "id": "pumpkin_seeds",
+   "name": "Pumpkin seeds",
+   "serving": {
+    "label": "1 oz",
+    "g": 28,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 559.0,
+    "carbs_g": 10.71,
+    "protein_g": 30.23,
+    "fat_g": 49.05,
+    "fibre_g": 6.0,
+    "sodium_mg": 7.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [
+    "peanuts",
+    "tree_nuts",
+    "sesame"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label. Seeds are often packed with nuts.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170556,
+    "description": "Seeds, pumpkin and squash seed kernels, dried"
+   }
+  },
+  {
+   "id": "chia_seeds",
+   "name": "Chia seeds",
+   "serving": {
+    "label": "1 tbsp",
+    "g": 12,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 486.0,
+    "carbs_g": 42.12,
+    "protein_g": 16.54,
+    "fat_g": 30.74,
+    "fibre_g": 34.4,
+    "sodium_mg": 16.0,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [
+    "peanuts",
+    "tree_nuts",
+    "sesame"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label. Seeds are often packed with nuts.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170554,
+    "description": "Seeds, chia seeds, dried"
+   }
+  },
+  {
+   "id": "flaxseed",
+   "name": "Flaxseed",
+   "serving": {
+    "label": "1 tbsp",
+    "g": 10,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 534.0,
+    "carbs_g": 28.88,
+    "protein_g": 18.29,
+    "fat_g": 42.16,
+    "fibre_g": 27.3,
+    "sodium_mg": 30.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [
+    "peanuts",
+    "tree_nuts",
+    "sesame"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label. Seeds are often packed with nuts.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 169414,
+    "description": "Seeds, flaxseed"
+   }
+  },
+  {
+   "id": "sesame_seeds",
+   "name": "Sesame seeds",
+   "serving": {
+    "label": "1 tbsp",
+    "g": 9,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 573.0,
+    "carbs_g": 23.45,
+    "protein_g": 17.73,
+    "fat_g": 49.67,
+    "fibre_g": 11.8,
+    "sodium_mg": 11.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "sesame"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170150,
+    "description": "Seeds, sesame seeds, whole, dried"
+   }
+  },
+  {
+   "id": "tahini",
+   "name": "Tahini",
+   "serving": {
+    "label": "1 tbsp",
+    "g": 15,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 592.0,
+    "carbs_g": 21.5,
+    "protein_g": 17.4,
+    "fat_g": 53.01,
+    "fibre_g": 4.7,
+    "sodium_mg": 35.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "sesame"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Ground sesame. Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 168604,
+    "description": "Seeds, sesame butter, tahini, type of kernels unspecified"
+   }
+  },
+  {
+   "id": "chicken_breast",
+   "name": "Chicken breast, roasted",
+   "serving": {
+    "label": "100 g",
+    "g": 100,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 165.0,
+    "carbs_g": 0.0,
+    "protein_g": 31.02,
+    "fat_g": 3.57,
+    "fibre_g": 0.0,
+    "sodium_mg": 74.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 171477,
+    "description": "Chicken, broilers or fryers, breast, meat only, cooked, roasted"
+   }
+  },
+  {
+   "id": "ground_beef",
+   "name": "Ground beef, 80% lean, raw",
+   "serving": {
+    "label": "4 oz raw",
+    "g": 113,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 254.0,
+    "carbs_g": 0.0,
+    "protein_g": 17.17,
+    "fat_g": 20.0,
+    "fibre_g": 0.0,
+    "sodium_mg": 66.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 174036,
+    "description": "Beef, ground, 80% lean meat / 20% fat, raw"
+   }
+  },
+  {
+   "id": "salmon",
+   "name": "Salmon, cooked",
+   "serving": {
+    "label": "100 g",
+    "g": 100,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 206.0,
+    "carbs_g": 0.0,
+    "protein_g": 22.1,
+    "fat_g": 12.35,
+    "fibre_g": 0.0,
+    "sodium_mg": 61.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "pescatarian"
+   ],
+   "contains": [
+    "fish_shellfish"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 175168,
+    "description": "Fish, salmon, Atlantic, farmed, cooked, dry heat"
+   }
+  },
+  {
+   "id": "tuna_canned",
+   "name": "Tuna, canned in water",
+   "serving": {
+    "label": "1 can drained (about 140 g)",
+    "g": 140,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 116.0,
+    "carbs_g": 0.0,
+    "protein_g": 25.51,
+    "fat_g": 0.82,
+    "fibre_g": 0.0,
+    "sodium_mg": 50.0,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "pescatarian"
+   ],
+   "contains": [
+    "fish_shellfish"
+   ],
+   "may_contain": [
+    "soy"
+   ],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added. Some brands add vegetable broth made with soy.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 171986,
+    "description": "Fish, tuna, light, canned in water, without salt, drained solids"
+   }
+  },
+  {
+   "id": "spinach",
+   "name": "Spinach",
+   "serving": {
+    "label": "1 cup",
+    "g": 30,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 23.0,
+    "carbs_g": 3.63,
+    "protein_g": 2.86,
+    "fat_g": 0.39,
+    "fibre_g": 2.2,
+    "sodium_mg": 79.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 168462,
+    "description": "Spinach, raw"
+   }
+  },
+  {
+   "id": "kale",
+   "name": "Kale",
+   "serving": {
+    "label": "1 cup chopped",
+    "g": 21,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 35.0,
+    "carbs_g": 4.42,
+    "protein_g": 2.92,
+    "fat_g": 1.49,
+    "fibre_g": 4.1,
+    "sodium_mg": 53.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 168421,
+    "description": "Kale, raw"
+   }
+  },
+  {
+   "id": "broccoli",
+   "name": "Broccoli",
+   "serving": {
+    "label": "1 cup chopped",
+    "g": 91,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 34.0,
+    "carbs_g": 6.64,
+    "protein_g": 2.82,
+    "fat_g": 0.37,
+    "fibre_g": 2.6,
+    "sodium_mg": 33.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170379,
+    "description": "Broccoli, raw"
+   }
+  },
+  {
+   "id": "carrots",
+   "name": "Carrots",
+   "serving": {
+    "label": "1 medium",
+    "g": 61,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 41.0,
+    "carbs_g": 9.58,
+    "protein_g": 0.93,
+    "fat_g": 0.24,
+    "fibre_g": 2.8,
+    "sodium_mg": 69.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170393,
+    "description": "Carrots, raw"
+   }
+  },
+  {
+   "id": "tomatoes",
+   "name": "Tomatoes",
+   "serving": {
+    "label": "1 medium",
+    "g": 123,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 18.0,
+    "carbs_g": 3.89,
+    "protein_g": 0.88,
+    "fat_g": 0.2,
+    "fibre_g": 1.2,
+    "sodium_mg": 5.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170457,
+    "description": "Tomatoes, red, ripe, raw, year round average"
+   }
+  },
+  {
+   "id": "onion",
+   "name": "Onion",
+   "serving": {
+    "label": "1 medium",
+    "g": 110,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 40.0,
+    "carbs_g": 9.34,
+    "protein_g": 1.1,
+    "fat_g": 0.1,
+    "fibre_g": 1.7,
+    "sodium_mg": 4.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170000,
+    "description": "Onions, raw"
+   }
+  },
+  {
+   "id": "garlic",
+   "name": "Garlic",
+   "serving": {
+    "label": "1 clove",
+    "g": 3,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 149.0,
+    "carbs_g": 33.06,
+    "protein_g": 6.36,
+    "fat_g": 0.5,
+    "fibre_g": 2.1,
+    "sodium_mg": 17.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 169230,
+    "description": "Garlic, raw"
+   }
+  },
+  {
+   "id": "red_pepper",
+   "name": "Red bell pepper",
+   "serving": {
+    "label": "1 medium",
+    "g": 119,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 26.0,
+    "carbs_g": 6.03,
+    "protein_g": 0.99,
+    "fat_g": 0.3,
+    "fibre_g": 2.1,
+    "sodium_mg": 4.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170108,
+    "description": "Peppers, sweet, red, raw"
+   }
+  },
+  {
+   "id": "peas_frozen",
+   "name": "Peas, frozen",
+   "serving": {
+    "label": "1/2 cup",
+    "g": 67,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 77.0,
+    "carbs_g": 13.6,
+    "protein_g": 5.22,
+    "fat_g": 0.4,
+    "fibre_g": 4.5,
+    "sodium_mg": 108,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170016,
+    "description": "Peas, green, frozen, unprepared (Includes foods for USDA's Food Distribution Program)"
+   }
+  },
+  {
+   "id": "cucumber",
+   "name": "Cucumber",
+   "serving": {
+    "label": "1/2 cup slices",
+    "g": 52,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 15.0,
+    "carbs_g": 3.63,
+    "protein_g": 0.65,
+    "fat_g": 0.11,
+    "fibre_g": 0.5,
+    "sodium_mg": 2.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 168409,
+    "description": "Cucumber, with peel, raw"
+   }
+  },
+  {
+   "id": "romaine",
+   "name": "Romaine lettuce",
+   "serving": {
+    "label": "1 cup shredded",
+    "g": 47,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 17.0,
+    "carbs_g": 3.29,
+    "protein_g": 1.23,
+    "fat_g": 0.3,
+    "fibre_g": 2.1,
+    "sodium_mg": 8.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 169247,
+    "description": "Lettuce, cos or romaine, raw"
+   }
+  },
+  {
+   "id": "olive_oil",
+   "name": "Olive oil",
+   "serving": {
+    "label": "1 tbsp",
+    "g": 13.5,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 884.0,
+    "carbs_g": 0.0,
+    "protein_g": 0.0,
+    "fat_g": 100.0,
+    "fibre_g": 0.0,
+    "sodium_mg": 2.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 171413,
+    "description": "Oil, olive, salad or cooking"
+   }
+  },
+  {
+   "id": "canola_oil",
+   "name": "Canola oil",
+   "serving": {
+    "label": "1 tbsp",
+    "g": 14,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 884.0,
+    "carbs_g": 0.0,
+    "protein_g": 0.0,
+    "fat_g": 100.0,
+    "fibre_g": 0.0,
+    "sodium_mg": 0.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 172336,
+    "description": "Oil, canola"
+   }
+  },
+  {
+   "id": "coconut_milk",
+   "name": "Coconut milk, canned",
+   "serving": {
+    "label": "1/4 cup",
+    "g": 60,
+    "unit": "ml",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 197.0,
+    "carbs_g": 2.81,
+    "protein_g": 2.02,
+    "fat_g": 21.33,
+    "fibre_g": null,
+    "sodium_mg": 13.0,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [
+    "tree_nuts"
+   ],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added. Coconut is no longer listed as a tree nut by the FDA, but some people with nut allergies react to it.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170173,
+    "description": "Nuts, coconut milk, canned (liquid expressed from grated meat and water)"
+   }
+  },
+  {
+   "id": "salt",
+   "name": "Salt",
+   "serving": {
+    "label": "1/4 tsp",
+    "g": 1.5,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 0.0,
+    "carbs_g": 0.0,
+    "protein_g": 0.0,
+    "fat_g": 0.0,
+    "fibre_g": 0.0,
+    "sodium_mg": 38758.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 173468,
+    "description": "Salt, table"
+   }
+  },
+  {
+   "id": "cinnamon",
+   "name": "Cinnamon, ground",
+   "serving": {
+    "label": "1 tsp",
+    "g": 2.6,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 247.0,
+    "carbs_g": 80.59,
+    "protein_g": 3.99,
+    "fat_g": 1.24,
+    "fibre_g": 53.1,
+    "sodium_mg": 10.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 171320,
+    "description": "Spices, cinnamon, ground"
+   }
+  },
+  {
+   "id": "cumin",
+   "name": "Cumin seed",
+   "serving": {
+    "label": "1 tsp",
+    "g": 2.1,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 375.0,
+    "carbs_g": 44.24,
+    "protein_g": 17.81,
+    "fat_g": 22.27,
+    "fibre_g": 10.5,
+    "sodium_mg": 168.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170923,
+    "description": "Spices, cumin seed"
+   }
+  },
+  {
+   "id": "paprika",
+   "name": "Paprika",
+   "serving": {
+    "label": "1 tsp",
+    "g": 2.3,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 282.0,
+    "carbs_g": 53.99,
+    "protein_g": 14.14,
+    "fat_g": 12.89,
+    "fibre_g": 34.9,
+    "sodium_mg": 68.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 171329,
+    "description": "Spices, paprika"
+   }
+  },
+  {
+   "id": "ginger_ground",
+   "name": "Ginger, ground",
+   "serving": {
+    "label": "1 tsp",
+    "g": 1.8,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 335.0,
+    "carbs_g": 71.62,
+    "protein_g": 8.98,
+    "fat_g": 4.24,
+    "fibre_g": 14.1,
+    "sodium_mg": 27.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170926,
+    "description": "Spices, ginger, ground"
+   }
+  },
+  {
+   "id": "curry_powder",
+   "name": "Curry powder",
+   "serving": {
+    "label": "1 tsp",
+    "g": 2,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 325.0,
+    "carbs_g": 55.83,
+    "protein_g": 14.29,
+    "fat_g": 14.01,
+    "fibre_g": 53.2,
+    "sodium_mg": 52.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added. Spice blends can contain mustard or wheat.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170924,
+    "description": "Spices, curry powder"
+   }
+  },
+  {
+   "id": "chili_powder",
+   "name": "Chili powder",
+   "serving": {
+    "label": "1 tsp",
+    "g": 2.7,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 282.0,
+    "carbs_g": 49.7,
+    "protein_g": 13.46,
+    "fat_g": 14.28,
+    "fibre_g": 34.8,
+    "sodium_mg": 2867.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added. Spice blends can contain wheat.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 171319,
+    "description": "Spices, chili powder"
+   }
+  },
+  {
+   "id": "soy_sauce",
+   "name": "Soy sauce",
+   "serving": {
+    "label": "1 tbsp",
+    "g": 16,
+    "unit": "ml",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 53.0,
+    "carbs_g": 4.93,
+    "protein_g": 8.14,
+    "fat_g": 0.57,
+    "fibre_g": 0.8,
+    "sodium_mg": 5493.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "soy",
+    "gluten"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Shoyu is brewed from soy and wheat. Tamari is the usual wheat free swap.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 174277,
+    "description": "Soy sauce made from soy and wheat (shoyu)"
+   }
+  },
+  {
+   "id": "vanilla",
+   "name": "Vanilla extract",
+   "serving": {
+    "label": "1 tsp",
+    "g": 4.2,
+    "unit": "ml",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 288.0,
+    "carbs_g": 12.65,
+    "protein_g": 0.06,
+    "fat_g": 0.06,
+    "fibre_g": 0.0,
+    "sodium_mg": 9.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Vanilla and alcohol. Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 173471,
+    "description": "Vanilla extract"
+   }
+  },
+  {
+   "id": "baking_powder",
+   "name": "Baking powder",
+   "serving": {
+    "label": "1 tsp",
+    "g": 4.6,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 51.0,
+    "carbs_g": 24.1,
+    "protein_g": 0.1,
+    "fat_g": 0.0,
+    "fibre_g": 0.2,
+    "sodium_mg": 7893.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [
+    "gluten"
+   ],
+   "allergens_checked": false,
+   "allergen_source": "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added. Some use wheat starch.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 172804,
+    "description": "Leavening agents, baking powder, double-acting, straight phosphate"
+   }
+  },
+  {
+   "id": "baking_soda",
+   "name": "Baking soda",
+   "serving": {
+    "label": "1 tsp",
+    "g": 4.6,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 0.0,
+    "carbs_g": 0.0,
+    "protein_g": 0.0,
+    "fat_g": 0.0,
+    "fibre_g": 0.0,
+    "sodium_mg": 27360.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 175040,
+    "description": "Leavening agents, baking soda"
+   }
+  },
+  {
+   "id": "coffee",
+   "name": "Coffee, brewed",
+   "serving": {
+    "label": "1 cup",
+    "g": 237,
+    "unit": "ml",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 1.0,
+    "carbs_g": 0.0,
+    "protein_g": 0.12,
+    "fat_g": 0.02,
+    "fibre_g": 0.0,
+    "sodium_mg": 2.0,
+    "caffeine_mg": 40.0
+   },
+   "phases": [
+    "before"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "caffeine"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 171890,
+    "description": "Beverages, coffee, brewed, prepared with tap water"
+   }
+  }
+ ]
+}

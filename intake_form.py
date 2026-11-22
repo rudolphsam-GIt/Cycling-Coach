@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 import planning
 from components.onboarding import GOAL_EXAMPLES
+from metrics import diet
 from metrics.explain import ACTIVITY_DETAILS, ACTIVITY_LEVEL, GENDER_LABELS, RIDER_TYPES
 
 FORM_TITLE = "Cycling coaching intake"
@@ -160,6 +161,24 @@ SECTIONS = (
         Question("enjoy", "What do you enjoy about riding?", "paragraph"),
         Question("dislike", "Anything you'd rather avoid?", "paragraph"),
         Question("past_training", "What has worked, or not worked, for you before?", "paragraph"),
+    )),
+    Section("How you eat", "So food ideas and recipes fit you. All optional.", (
+        Question("diet", "How do you eat?", "choice", tuple(diet.DIETS)),
+        Question("avoid_foods", "Foods you avoid", "checkbox", tuple(diet.AVOID),
+                 help="For allergies, intolerances or choice. These are never suggested to you."),
+        Question("gut_sensitive", "Does your stomach get upset on rides?", "choice", YES_NO),
+        Question("nutrition_referral", diet.REFERRAL_QUESTION, "choice", YES_NO,
+                 help="If yes, I'll suggest checking with a doctor or registered sports dietitian before "
+                      "changing what you eat."),
+        Question("height", "Your height", "number", bounds=(48, 230),
+                 help="In inches if you picked pounds and miles, or centimeters if you picked kilograms. "
+                      "Used only for a rough calorie estimate."),
+        Question("energy_sex", "Sex for energy estimates", "list", tuple(diet.ENERGY_SEX),
+                 help="The calorie formula has a female and a male version. Prefer not to say gives a "
+                      "range that covers both."),
+        Question("usual_ride_time", "When do you usually ride?", "choice", tuple(diet.RIDE_TIMES)),
+        Question("cooking_time", "How much do you like to cook?", "choice", tuple(diet.COOKING)),
+        Question("diet_notes", "Anything else about how you eat?", "paragraph"),
     )),
     Section("Your ride history", "", (
         Question("ride_share", "How can you share your ride history?", "choice",

@@ -4,8 +4,10 @@ import re
 import streamlit as st
 from datetime import date, timedelta
 
+from components import diet_form
 from components.units import distance_switch, unit_switch, weight_input
 import ftp_change
+from metrics import diet
 from db.queries import set_setting, add_race
 from metrics.training_load import apply_current_ctl
 from metrics.explain import (ACTIVITY_DETAILS, ACTIVITY_LEVEL, DEFAULT_ACTIVITY, RIDER_TYPES,
@@ -191,6 +193,10 @@ def render_onboarding():
         race_date = st.date_input("Race date", value=None, min_value=date.today(),
                                   help="Leave blank if you are not training for a specific race.")
 
+        with st.expander("How you eat (optional)", icon=":material/restaurant:"):
+            st.caption("So food ideas and recipes fit you. You can skip this and fill it in later in Settings.")
+            eating = diet_form.render(key="onb_eat", unit=unit)
+
         submitted = st.button("Get Started", type="primary", width="stretch")
 
         if submitted and not goal_text.strip():
@@ -202,6 +208,7 @@ def render_onboarding():
                 age=age, weekly_hours=weekly_hours, days_per_week=days_per_week, weight=weight, unit=unit,
                 dist_unit=dist_unit, ftp_choice=ftp_choice, ftp_input=ftp_in, lthr_input=lthr_in,
                 race_name=race_name, race_date=race_date)
+            diet.save(eating)
             apply_current_ctl(ctl_in)
             set_setting("onboarding_complete", "1")
             st.session_state["onboarding_just_finished"] = goal_key_list

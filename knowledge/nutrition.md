@@ -1,8 +1,8 @@
 ---
 topic: nutrition
 title: Fueling, hydration and sports nutrition for cyclists
-keywords: [carbohydrate, fueling, g/kg, g/h, carb loading, pre-ride meal, recovery, protein, train low, periodized carbohydrate, sleep low, ketogenic, LCHF, hydration, sweat rate, sodium, caffeine, nitrate, beetroot, energy availability, RED-S, gut training, hyponatremia, gut distress]
-last_reviewed: 2026-10-10
+keywords: [carbohydrate, fueling, g/kg, g/h, carb loading, pre-ride meal, recovery, protein, train low, periodized carbohydrate, sleep low, ketogenic, LCHF, hydration, sweat rate, sodium, caffeine, nitrate, beetroot, energy availability, RED-S, gut training, hyponatremia, gut distress, vegetarian, vegan, plant protein, leucine, B12, iron]
+last_reviewed: 2026-11-22
 ---
 
 # Fueling, Hydration and Sports Nutrition for Cyclists
@@ -88,6 +88,11 @@ Energy availability is the energy left after exercise. Early studies in women li
 **Pool: equation built on 498 healthy adults (251 men, 247 women); validation review N not checked in full text**
 Resting energy can be estimated with the Mifflin St Jeor equation, built on 498 healthy adults (Mifflin et al., 1990). A systematic review found it landed within 10% of measured resting energy for more people than other common equations, but errors for one person can still be large (Frankenfield et al., 2005). The joint FAO/WHO/UNU report puts sedentary or light lifestyles, without regular exercise, at 1.40 to 1.69 times resting energy (FAO/WHO/UNU, 2004). Training energy is best counted from power, since kJ of work is about equal to kcal burned at 20 to 25% efficiency. A rider's own known base beats any equation. Lean, muscular athletes and older adults are less well represented in the equation's data.
 
+### Vegetarian and vegan riders
+**Evidence: Moderate (performance and protein), Moderate (B12 and iron status, observational), expert consensus (omega 3)**
+**Pool: 8 studies comparing diets on performance, N not reported in abstract; 9 trials with 266 people for soy versus animal protein (mostly men, resistance training, not cyclists); 18 studies on B12 and 30 on iron (24 pooled), N not checked in full text, cross-sectional**
+Well planned vegetarian and vegan diets suit athletes, according to the Academy of Nutrition and Dietetics position paper (Melina et al., 2016). A systematic review of 8 studies found no difference in performance between vegetarian and mixed diets, though the studies were few and varied (Craddock et al., 2016). In 9 trials with 266 people, soy protein built strength and lean mass as well as whey or other animal protein alongside resistance training (Messina et al., 2018). Plant proteins usually carry less leucine, the amino acid that triggers muscle protein synthesis, so a little more total protein, or soy or pea protein, helps reach the same dose (van Vliet et al., 2015; Rogerson, 2017); this is mechanism and expert advice rather than trials in cyclists. Vegetarians often run low on B12, and more so vegans (Pawlak et al., 2013, 18 studies with differing cutoffs). Vegetarian adults have lower iron stores (serum ferritin) than meat eaters across 24 pooled studies (Haider et al., 2018). Omega 3 (EPA and DHA) intake is low without fish, and the position paper suggests checking it (Melina et al., 2016). These are observational findings in general populations, not riders.
+
 ## Rules for the coach
 - Set a daily carbohydrate band from the planned training load: rest or easy skill day 3 to 5 g/kg; about 1 h moderate 5 to 7 g/kg; 1 to 3 h moderate to hard 6 to 10 g/kg; 4 to 5 h or stage race days 8 to 12 g/kg.
 - Daily energy: base for daily life (the rider's own number, or Mifflin St Jeor times about 1.4, up to 1.69 for active jobs) plus training kJ from power. Never set a target below base plus training, and never lower it on long or hard days.
@@ -116,6 +121,7 @@ Resting energy can be estimated with the Mifflin St Jeor equation, built on 498 
 - Supplements in general: suggest third party tested products for any rider subject to anti doping rules.
 - Energy availability red flags: unplanned weight loss, missed or irregular periods, recurrent bone stress injuries, frequent illness, persistent fatigue, low libido, or falling performance. If any appear, say this may signal low energy availability, stop any weight loss or train low plan, and refer to a doctor and a registered sports dietitian. Do not diagnose REDs.
 - Any rider with diabetes, a history of disordered eating, kidney disease, high blood pressure medication, pregnancy, or gut disease: refer to a doctor or registered dietitian before changing carbohydrate, protein, sodium or supplement intake.
+- Vegetarian and vegan riders: protein targets are the same and easy to reach from eggs, dairy, soy and legumes. Vegans may need a little more total protein, or soy or pea protein, to match the leucine of animal protein. Suggest they ask their doctor about B12, iron and omega 3. Never suggest a food outside the rider's diet or avoid list.
 - The coach gives general fueling targets, not meal plans or medical nutrition therapy. Personalized plans belong with a registered dietitian.
 
 ## Where evidence is thin or disputed
@@ -129,6 +135,8 @@ Resting energy can be estimated with the Mifflin St Jeor equation, built on 498 
 - Energy availability thresholds came mainly from studies in women, field measurement is imprecise, and pooled data are cross-sectional (Mountjoy et al., 2023; Han et al., 2026).
 - Gut training rests on one small trial (Cox et al., 2010).
 - Daily carbohydrate bands are consensus; pooled data are on glycogen, not performance (Jones et al., 2026).
+- Plant versus animal protein trials are in resistance training, mostly in men; the leucine argument rests on mechanism studies, and no trial has tested vegan cyclists (Messina et al., 2018; van Vliet et al., 2015).
+- B12 and iron data in vegetarians are cross-sectional, in general populations, and use differing cutoffs (Pawlak et al., 2013; Haider et al., 2018).
 
 ## References
 1. Thomas DT, Erdman KA, Burke LM (2016). American College of Sports Medicine Joint Position Statement. Nutrition and Athletic Performance. *Medicine & Science in Sports & Exercise*, 48(3), 543-568. https://doi.org/10.1249/MSS.0000000000000852 (also published in *Journal of the Academy of Nutrition and Dietetics*, 116(3), 501-528, https://doi.org/10.1016/j.jand.2015.12.006)
@@ -187,3 +195,10 @@ Resting energy can be estimated with the Mifflin St Jeor equation, built on 498 
 54. Mifflin MD, St Jeor ST, Hill LA, Scott BJ, Daugherty SA, Koh YO (1990). A new predictive equation for resting energy expenditure in healthy individuals. *American Journal of Clinical Nutrition*, 51(2), 241-247. https://doi.org/10.1093/ajcn/51.2.241
 55. Frankenfield D, Roth-Yousey L, Compher C (2005). Comparison of predictive equations for resting metabolic rate in healthy nonobese and obese adults: a systematic review. *Journal of the American Dietetic Association*, 105(5), 775-789. https://doi.org/10.1016/j.jada.2005.02.005
 56. FAO/WHO/UNU (2004). Human energy requirements: report of a joint FAO/WHO/UNU expert consultation. *FAO Food and Nutrition Technical Report Series 1*. Rome. https://www.fao.org/3/y5686e/y5686e00.htm
+57. Melina V, Craig W, Levin S (2016). Position of the Academy of Nutrition and Dietetics: Vegetarian diets. *Journal of the Academy of Nutrition and Dietetics*, 116(12), 1970-1980. https://doi.org/10.1016/j.jand.2016.09.025
+58. Craddock JC, Probst YC, Peoples GE (2016). Vegetarian and omnivorous nutrition: comparing physical performance. *International Journal of Sport Nutrition and Exercise Metabolism*, 26(3), 212-220. https://doi.org/10.1123/ijsnem.2015-0231
+59. Messina M, Lynch H, Dickinson JM, Reed KE (2018). No difference between the effects of supplementing with soy protein versus animal protein on gains in muscle mass and strength in response to resistance exercise. *International Journal of Sport Nutrition and Exercise Metabolism*, 28(6), 674-685. https://doi.org/10.1123/ijsnem.2018-0071
+60. van Vliet S, Burd NA, van Loon LJC (2015). The skeletal muscle anabolic response to plant- versus animal-based protein consumption. *Journal of Nutrition*, 145(9), 1981-1991. https://doi.org/10.3945/jn.114.204305
+61. Pawlak R, Parrott SJ, Raj S, Cullum-Dugan D, Lucus D (2013). How prevalent is vitamin B12 deficiency among vegetarians? *Nutrition Reviews*, 71(2), 110-117. https://doi.org/10.1111/nure.12001
+62. Haider LM, Schwingshackl L, Hoffmann G, Ekmekcioglu C (2018). The effect of vegetarian diets on iron status in adults: a systematic review and meta-analysis. *Critical Reviews in Food Science and Nutrition*, 58(8), 1359-1374. https://doi.org/10.1080/10408398.2016.1259210
+63. Rogerson D (2017). Vegan diets: practical advice for athletes and exercisers. *Journal of the International Society of Sports Nutrition*, 14, 36. https://doi.org/10.1186/s12970-017-0192-9
