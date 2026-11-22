@@ -17,7 +17,8 @@ import auth.garmin as garmin_auth
 import auth.intervals as intervals_auth
 import auth.trainingpeaks as tp_auth
 from auth import tp_login
-from components import ftp_help, ftp_review
+from components import diet_form, ftp_help, ftp_review
+from metrics import diet
 from components.units import distance_switch, unit_switch, weight_input
 from metrics.explain import (DEFAULT_GENDER, GENDER_LABELS, GENDER_PROFILE_TABLE,
                              age_from_birth_year, birth_year_for)
@@ -253,6 +254,27 @@ with tab_profile:
         st.caption("Updating your upcoming workouts on Garmin for the new FTP…")
     elif resend:
         (st.caption if resend.get("ok") else st.warning)(resend["text"])
+
+    st.divider()
+    _owner = schema.is_owner()
+    st.subheader("How you eat" if _owner else "How they eat")
+    st.caption("Food ideas, recipes and the coach follow these answers. Everything stays on this computer, "
+               "and only the coach prompt ever sees it.")
+    with st.form("settings_diet"):
+        eating = diet_form.render(key="settings_eat", unit=unit, saved=diet.load(),
+                                  whose="you" if _owner else "they")
+        _base = get_setting("base_kcal", "")
+        base_kcal = st.number_input(
+            "Daily base calories (kcal)", min_value=800, max_value=5000, step=50, key="settings_base_kcal",
+            value=int(float(_base)) if _base else None, placeholder="Optional",
+            help="Calories for a normal day without training. Training is added on top from the day's "
+                 "power, since kJ of work is about equal to kcal burned. A registered dietitian can "
+                 "measure or estimate it, or use what you ate during a few weeks when your weight held "
+                 "steady. Leave it empty to use an estimate from height, age and sex instead.")
+        if st.form_submit_button("Save eating answers", icon=":material/save:"):
+            diet.save(eating)
+            set_setting("base_kcal", int(base_kcal) if base_kcal else "")
+            st.success("Eating answers saved.")
 
 # ── Tab 2: Connections ────────────────────────────────────────────────────────
 

@@ -13,6 +13,7 @@ from datetime import date, datetime
 
 import planning
 from intake_form import DAY_NAMES, FTP_TEST_CHOICES, QUESTIONS, UNIT_CHOICES
+from metrics import diet
 from metrics.explain import DEFAULT_GENDER, GENDER_LABELS
 from metrics.units import to_kg
 
@@ -56,7 +57,8 @@ def from_setting(raw: str | None) -> dict:
 _NOT_FOR_COACH = {"name", "email", "units", "weight", "age", "gender", "rider_type", "activity",
                   "goal_text", "race_name", "race_date", "weekly_hours", "available_days", "plan_start",
                   "plan_end", "ftp_input", "lthr_input", "max_hr", "resting_hr", "current_ctl",
-                  "ride_share", "consent"}
+                  "ride_share", "consent", "diet", "avoid_foods", "gut_sensitive", "nutrition_referral",
+                  "height", "energy_sex", "usual_ride_time", "cooking_time", "diet_notes"}
 
 
 def coach_block(saved: dict) -> str:
@@ -148,6 +150,29 @@ def _answers(x: dict, notes: list[str], today: date) -> dict:
         "plan_weeks": plan_weeks,
         "race_name": x.get("race_name", ""),
         "race_date": race_date,
+        "eating": _eating(x, unit, notes),
+    }
+
+
+def _eating(x: dict, unit: str, notes: list[str]) -> dict:
+    """The How you eat answers, in metrics.diet's shape, for the Add athlete form."""
+    height = None
+    if x.get("height"):
+        height = diet.cm_from_height(_number(x["height"]), unit)
+        if not height or not diet.HEIGHT_CM_MIN <= height <= diet.HEIGHT_CM_MAX:
+            notes.append(f"Height {x['height']} {'in' if unit == 'lb' else 'cm'} looks wrong, so it was left blank.")
+            height = None
+    yes_no = {"Yes": True, "No": False}
+    return {
+        "diet": diet.DIETS.get(x.get("diet"), "none"),
+        "avoid_foods": [v for k, v in diet.AVOID.items() if k in x.get("avoid_foods", "")],
+        "gut_sensitive": yes_no.get(x.get("gut_sensitive")),
+        "nutrition_referral": yes_no.get(x.get("nutrition_referral")),
+        "height_cm": height,
+        "energy_sex": diet.ENERGY_SEX.get(x.get("energy_sex")),
+        "usual_ride_time": diet.RIDE_TIMES.get(x.get("usual_ride_time")),
+        "cooking_time": diet.COOKING.get(x.get("cooking_time")),
+        "diet_notes": x.get("diet_notes", ""),
     }
 
 
@@ -164,6 +189,10 @@ def health_flags(x: dict) -> list[str]:
     elif x.get("hr_meds") == "Not sure":
         flags.append("They aren't sure whether a medicine changes their heart rate. Check before "
                      "trusting heart rate zones.")
+    if x.get("nutrition_referral") == "Yes":
+        flags.append("They said yes to the nutrition health check (diabetes, kidney disease, disordered "
+                     "eating, blood pressure medication, pregnancy or gut disease). Suggest a doctor or "
+                     "registered sports dietitian before changing what they eat.")
     if x.get("injuries"):
         flags.append(f'Injuries or pain, in their words. "{x["injuries"]}"')
     if x.get("conditions"):

@@ -14,10 +14,11 @@ import streamlit as st
 import intake_import
 import planning
 from auth.fit_import import RIDE_FILE_HELP, RIDE_FILE_TYPES
-from components import onboarding
+from components import diet_form, onboarding
 from components.units import weight_input
 from db import profiles, schema
 from db.queries import get_setting, set_setting
+from metrics import diet
 from metrics.explain import (ACTIVITY_DETAILS, ACTIVITY_LEVEL, DEFAULT_ACTIVITY, DEFAULT_GENDER,
                              GENDER_LABELS, RIDER_TYPES, starting_ftp_range)
 from metrics.units import DISTANCE_UNITS, UNITS
@@ -74,6 +75,7 @@ def save_athlete(answers: dict, fit_files=None, intake: intake_import.Intake | N
         set_setting("onboarding_complete", "1")
         if intake:
             set_setting(intake_import.SETTING, intake_import.to_setting(intake))
+        diet.save(answers.get("eating") or {})
         planning.save_target_plan(answers.get("plan_start"), answers.get("plan_weeks"))
         imported, message = 0, ""
         if fit_files:
@@ -154,7 +156,7 @@ def _render_intake_review(intake: intake_import.Intake) -> None:
         st.info("\n".join(f"- {n}" for n in intake.notes))
     if (share := intake.extras.get("ride_share")):
         st.caption(f'Ride history. They said "{share}".')
-    shown = set(intake.answers) | {"units", "plan_end", "ftp_test", "ride_share", "consent"}
+    shown = set(intake.answers) | {"units", "plan_end", "ftp_test", "ride_share", "consent", "height"} | set(diet.KEYS)
     others = [(q.title, intake.extras[q.key]) for q in intake_import.QUESTIONS
               if q.key in intake.extras and q.key not in shown]
     if others:
@@ -266,6 +268,9 @@ def render_athlete_form() -> None:
         resting_hr = h3.number_input("Resting HR", min_value=0, max_value=120, value=pre.get("resting_hr"),
                                      step=1, placeholder="Optional", key=k("rest_hr"))
 
+        st.markdown("**How they eat (optional)**")
+        eating = diet_form.render(key=k("eat"), unit=unit, saved=pre.get("eating"), whose="they")
+
         st.markdown("**Goal race (optional)**")
         r1, r2 = st.columns([3, 2])
         race_name = r1.text_input("Race name", value=pre.get("race_name", ""),
@@ -317,7 +322,7 @@ def render_athlete_form() -> None:
                     "ftp_choice": ftp_choice, "ftp_input": ftp_in, "lthr_input": lthr_in,
                     "max_hr": max_hr, "resting_hr": resting_hr, "current_ctl": ctl_in,
                     "plan_start": plan_start, "plan_weeks": plan_weeks,
-                    "race_name": race_name, "race_date": race_date,
+                    "race_name": race_name, "race_date": race_date, "eating": eating,
                 }, fit_files, st.session_state.get(INTAKE_KEY))
             from components import profile_switcher
             profile_switcher.switch_to(result["slug"])      # also closes this form
