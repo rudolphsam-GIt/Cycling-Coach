@@ -83,8 +83,14 @@ Nitrate lowers the oxygen cost of submaximal exercise; protocols used about 5 to
 **Pool: 11 cross-sectional studies, about 1,006 athletes (about half women)**
 Energy availability is the energy left after exercise. Early studies in women linked about 45 kcal per kg fat free mass per day with health and below about 30 with impaired function (Thomas et al., 2016). The 2023 IOC consensus on REDs describes harms in women and men, highlights low carbohydrate availability, and gives clinicians an assessment tool (Mountjoy et al., 2023). In 1,006 athletes, those with low energy availability had lower body weight and bone density scores and altered hormones (Han et al., 2026); these are cross-sectional associations. Cyclists, as a weight sensitive sport, are a group where this matters.
 
+### Daily energy: a base for daily life plus training
+**Evidence: Moderate (resting energy equation), expert consensus (activity factor)**
+**Pool: equation built on 498 healthy adults (251 men, 247 women); validation review N not checked in full text**
+Resting energy can be estimated with the Mifflin St Jeor equation, built on 498 healthy adults (Mifflin et al., 1990). A systematic review found it landed within 10% of measured resting energy for more people than other common equations, but errors for one person can still be large (Frankenfield et al., 2005). The joint FAO/WHO/UNU report puts sedentary or light lifestyles, without regular exercise, at 1.40 to 1.69 times resting energy (FAO/WHO/UNU, 2004). Training energy is best counted from power, since kJ of work is about equal to kcal burned at 20 to 25% efficiency. A rider's own known base beats any equation. Lean, muscular athletes and older adults are less well represented in the equation's data.
+
 ## Rules for the coach
 - Set a daily carbohydrate band from the planned training load: rest or easy skill day 3 to 5 g/kg; about 1 h moderate 5 to 7 g/kg; 1 to 3 h moderate to hard 6 to 10 g/kg; 4 to 5 h or stage race days 8 to 12 g/kg.
+- Daily energy: base for daily life (the rider's own number, or Mifflin St Jeor times about 1.4, up to 1.69 for active jobs) plus training kJ from power. Never set a target below base plus training, and never lower it on long or hard days.
 - Per ride fueling by duration and intensity:
   - Under 45 min, any intensity: water only; no carbohydrate needed.
   - 45 to 75 min, hard (intervals, race, threshold): optional small amount or a carbohydrate mouth rinse; 0 to 30 g total.
@@ -178,3 +184,6 @@ Energy availability is the energy left after exercise. Early studies in women li
 51. Grgic J, Grgic I, Pickering C, Schoenfeld BJ, Bishop DJ, Pedisic Z (2020). Wake up and smell the coffee: caffeine supplementation and exercise performance, an umbrella review of 21 published meta-analyses. *British Journal of Sports Medicine*, 54(11), 681-688. https://doi.org/10.1136/bjsports-2018-100278
 52. Gao C, Gupta S, Adli T, Hou W, Coolsaet R, Hayes A, et al. (2021). The effects of dietary nitrate supplementation on endurance exercise performance and cardiorespiratory measures in healthy adults: a systematic review and meta-analysis. *Journal of the International Society of Sports Nutrition*, 18(1), 55. https://doi.org/10.1186/s12970-021-00450-4
 53. Han S, Kim J, Kim M, Oh T (2026). A study for markers of low energy availability in athletes: a meta-analysis of cross-sectional studies. *European Journal of Clinical Nutrition*, online ahead of print. https://doi.org/10.1038/s41430-026-01811-5
+54. Mifflin MD, St Jeor ST, Hill LA, Scott BJ, Daugherty SA, Koh YO (1990). A new predictive equation for resting energy expenditure in healthy individuals. *American Journal of Clinical Nutrition*, 51(2), 241-247. https://doi.org/10.1093/ajcn/51.2.241
+55. Frankenfield D, Roth-Yousey L, Compher C (2005). Comparison of predictive equations for resting metabolic rate in healthy nonobese and obese adults: a systematic review. *Journal of the American Dietetic Association*, 105(5), 775-789. https://doi.org/10.1016/j.jada.2005.02.005
+56. FAO/WHO/UNU (2004). Human energy requirements: report of a joint FAO/WHO/UNU expert consultation. *FAO Food and Nutrition Technical Report Series 1*. Rome. https://www.fao.org/3/y5686e/y5686e00.htm
