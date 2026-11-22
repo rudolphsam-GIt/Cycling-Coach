@@ -28,6 +28,8 @@ venv-py39/
 data/tp_browser/
 data/backups/
 data/profiles/
+# Plan pages for athletes to comment on, published as Claude artifacts
+data/plan_pages/
 
 # Machine-local Claude Code config
 .claude/launch.json

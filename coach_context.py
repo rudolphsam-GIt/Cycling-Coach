@@ -485,7 +485,17 @@ def active_program_line() -> str:
 
 
 def system_blocks(extra: str = "") -> list[dict]:
-    """System prompt plus the athlete snapshot, ready to send to Claude."""
+    """System prompt plus the athlete snapshot, ready to send to Claude.
+
+    Ordered from most to least stable so the prompt cache can reuse each part. The
+    instructions never change, the snapshot changes about once a day, and `extra`
+    (report rules or a program draft) varies by feature. The first two get their own
+    cache points so every feature on the same model shares them. Caches never carry
+    across models, so ride reviews on Sonnet keep their own."""
     core = knowledge.principles()
-    text = SYSTEM_PROMPT + (f"\n\n{core}" if core else "") + (f"\n\n{extra}" if extra else "")
-    return [{"type": "text", "text": text}, {"type": "text", "text": build_context()}]
+    text = SYSTEM_PROMPT + (f"\n\n{core}" if core else "")
+    blocks = [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}},
+              {"type": "text", "text": build_context(), "cache_control": {"type": "ephemeral"}}]
+    if extra:
+        blocks.append({"type": "text", "text": extra})
+    return blocks

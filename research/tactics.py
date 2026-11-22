@@ -99,8 +99,9 @@ Please provide:
 
     # Tactics call for real reasoning about the field, so use high effort.
     return claude_client.ask(
-        [{"type": "text", "text": TACTICS_SYSTEM}],
+        claude_client.cached_system(TACTICS_SYSTEM),
         [{"role": "user", "content": prompt}],
         effort="high",
         feature="tactics",
+        cache_tail=False,
     )

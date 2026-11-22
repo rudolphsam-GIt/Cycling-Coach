@@ -44,19 +44,27 @@ def _client() -> anthropic.Anthropic:
 
 
 def _request(system: list[dict], messages: list[dict], effort: str, max_tokens: int,
-             model: str = MODEL) -> dict:
-    return dict(
+             model: str = MODEL, cache_tail: bool = True) -> dict:
+    request = dict(
         model=model,
         max_tokens=max_tokens,
         system=system,
         messages=messages,
         output_config={"effort": effort},
-        # Caches the tools, system prompt and conversation so far; later turns reuse it.
-        cache_control={"type": "ephemeral"},
         # If a safety check wrongly declines a request, retry on a fallback model.
         betas=["server-side-fallback-2026-07-01"],
         fallbacks="default",
     )
+    if cache_tail:
+        # Caches the conversation so far; the next turn reuses it. One shot calls skip this,
+        # since writing a prompt that is never sent again costs 25% more than not caching it.
+        request["cache_control"] = {"type": "ephemeral"}
+    return request
+
+
+def cached_system(system: str) -> list[dict]:
+    """A fixed system prompt with a cache point, so repeat calls reuse it."""
+    return [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
 
 
 def cost(model: str, input_tokens: int, cache_read: int, cache_write_5m: int, cache_write_1h: int,
@@ -99,12 +107,13 @@ def _error_message(e: anthropic.APIError) -> str:
 
 
 def ask(system: list[dict], messages: list[dict], effort: str = "medium", model: str = MODEL,
-        feature: str = "other") -> str:
+        feature: str = "other", cache_tail: bool = True) -> str:
     """Send a request and return the reply text. Raises ClaudeError with a readable message
     when there's no usable reply, so an error is never mistaken for an answer. `feature` names
-    the caller in the usage log."""
+    the caller in the usage log. Pass cache_tail=False for a one shot question."""
     try:
-        response = _client().beta.messages.create(**_request(system, messages, effort, MAX_TOKENS, model))
+        response = _client().beta.messages.create(
+            **_request(system, messages, effort, MAX_TOKENS, model, cache_tail))
     except anthropic.APIError as e:
         raise ClaudeError(_error_message(e)) from e
     _log(response, feature)
@@ -209,8 +218,8 @@ def structured(system: str, prompt: str, schema: dict, effort: str = "low",
     """Ask for JSON that matches `schema` and return it parsed. Raises ClaudeError."""
     import json
 
-    request = _request([{"type": "text", "text": system}],
-                       [{"role": "user", "content": prompt}], effort, MAX_TOKENS, model)
+    request = _request(cached_system(system), [{"role": "user", "content": prompt}], effort,
+                       MAX_TOKENS, model, cache_tail=False)
     request["output_config"] = {**request["output_config"],
                                 "format": {"type": "json_schema", "schema": schema}}
     try:
