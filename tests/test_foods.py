@@ -152,6 +152,17 @@ class BrandedFoodTests(unittest.TestCase):
         for carbs in (25, 50, 60, 75, 100):
             self.assertNotIn("maurten_gel_100_caf", _suggested_ids(foods.suggest("during", carbs, 0, rider)))
 
+    def test_caffeinated_foods_stay_out_of_combos_unless_asked_for(self):
+        caf = "maurten_gel_100_caf"
+        for carbs in (25, 50, 60, 75, 100):
+            self.assertNotIn(caf, _suggested_ids(foods.suggest("during", carbs, 0, {})))
+        asked = set()
+        for carbs in (25, 50, 75, 100):
+            asked |= _suggested_ids(foods.suggest("during", carbs, 0, {}, caffeine=True))
+        self.assertIn(caf, asked)
+        self.assertTrue(foods.has_caffeine(foods.by_id(LIB)["coffee"]))
+        self.assertFalse(foods.has_caffeine(foods.by_id(LIB)["maurten_gel_100"]))
+
     def test_dairy_and_soy_avoiders(self):
         by = foods.by_id(LIB)
         self.assertFalse(foods.allowed(by["whey_protein"], {"avoid_foods": ["dairy"]}))
