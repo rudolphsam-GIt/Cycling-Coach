@@ -199,8 +199,8 @@ class RidePlanTests(unittest.TestCase):
         self.assertEqual(before["timing"], "2 to 3 hours before")
         self.assertFalse(before["early"])
         self.assertTrue(before["why"])
-        self.assertTrue(2 <= len(before["ideas"]) <= 3)
-        self.assertEqual(before["ideas"][0]["kind"], "recipe")
+        self.assertEqual([i["kind"] for i in before["ideas"]], ["recipe", "food"])
+        self.assertIn("a serving sized to", before["ideas"][0]["text"])
 
     def test_short_easy_ride_needs_nothing_before_but_short_hard_one_gets_a_snack(self):
         self.assertEqual(fueling.ride_plan(45, 70, 0.70)["before"]["g"], 0)
@@ -228,8 +228,10 @@ class RidePlanTests(unittest.TestCase):
     def test_early_snack_ideas_are_gut_friendly(self):
         from metrics import foods
         before = fueling.ride_plan(150, 70, 0.75, start_time="06:00")["before"]
-        combos = foods.suggest("before", 70, 0, {"gut_sensitive": True})["combos"]
-        self.assertEqual([c["text"] for c in combos], [i["text"] for i in before["ideas"]])
+        gentle = foods.suggest("before", 70, 0, {"gut_sensitive": True}, n=10)["combos"]
+        texts = {c["text"] for c in gentle}
+        self.assertEqual(len(before["ideas"]), 2)
+        self.assertTrue(all(i["text"] in texts for i in before["ideas"]))
 
     def test_fasted_option_only_on_easy_short_rides_with_the_health_question_answered_no(self):
         self.assertIsNotNone(fueling.ride_plan(60, 70, "Recovery", settings=ASKED)["fasted"])
@@ -289,7 +291,8 @@ class RidePlanTests(unittest.TestCase):
         self.assertEqual(after["carbs_g"], 84)                    # the recovery share of the day
         self.assertIsNone(after["refuel"])
         self.assertIn("repair", after["why"])
-        self.assertTrue(2 <= len(after["ideas"]) <= 3)
+        self.assertEqual(len(after["ideas"]), 2)
+        self.assertEqual(after["ideas"][0]["kind"], "recipe")
         self.assertIn("1.25 to 1.5 L", after["rehydrate"])
 
     def test_refuel_when_the_next_hard_session_is_under_8_hours_away(self):
@@ -321,6 +324,31 @@ class RidePlanTests(unittest.TestCase):
                 self.assertIn(plan["before"]["night_before"]["id"], allowed_recipes)
             for combo in plan["during"]["ideas"].get("combos", []):
                 self.assertTrue(all(foods.allowed(lib[p["id"]], vegan_nut_free) for p in combo["items"]))
+
+
+class RideIdeaTests(unittest.TestCase):
+    def test_a_scaled_recipe_lands_within_20_percent_of_each_target(self):
+        from metrics import recipes as rec
+        idea = fueling.scaled_recipe_idea("recovery", 84, 21, {})
+        self.assertIsNotNone(idea)
+        self.assertTrue(fueling.SCALE_RANGE[0] <= idea["factor"] <= fueling.SCALE_RANGE[1])
+        recipe = rec.recipe_by_id(idea["id"])
+        p = rec.scale(recipe, carbs_g=84, protein_g=21)["per_serving"]
+        self.assertLessEqual(abs(p["carbs_g"] - 84) / 84, fueling.SCALE_MISS)
+        self.assertLessEqual(abs(p["protein_g"] - 21) / 21, fueling.SCALE_MISS)
+
+    def test_no_recipe_when_none_can_be_sized_to_fit(self):
+        self.assertIsNone(fueling.scaled_recipe_idea("recovery", 1000, 5, {}))
+        self.assertIsNone(fueling.scaled_recipe_idea("recovery", None, None, {}))
+
+    def test_food_backup_is_the_simplest_combination(self):
+        ideas = fueling._food_ideas("before", 140, 0, {}, 5)
+        sizes = [i["text"].count(" plus ") for i in ideas]
+        self.assertEqual(sizes, sorted(sizes))
+
+    def test_without_a_fitting_recipe_two_food_ideas(self):
+        ideas = fueling._ideas("after", "recovery", 84, 21, {"diet": "vegan"})
+        self.assertEqual(len(ideas), 2)
 
 
 class TodayPageTests(unittest.TestCase):
@@ -371,7 +399,7 @@ class TodayPageTests(unittest.TestCase):
         self.assertFalse(at.exception)
         self.assertEqual([m.label for m in at.metric], ["Carbs", "Protein", "Calories"])
         text = self._markdown(at)
-        self.assertIn("A sample day", text)
+        self.assertIn("A sample day", [e.label for e in at.expander])
         self.assertNotIn("**Before**", text)
         self.assertTrue(any(b.label == "Set a base" for b in at.button))
 
@@ -385,8 +413,8 @@ class TodayPageTests(unittest.TestCase):
         at = self._run()
         self.assertFalse(at.exception)
         text = self._markdown(at)
-        for part in ("**Before**", "**During**", "**After**", "60 g carbs an hour", "21 g protein",
-                     "A sample day"):
+        self.assertIn("A sample day", [e.label for e in at.expander])
+        for part in ("**Before**", "**During**", "**After**", "60 g carbs an hour", "21 g protein"):
             self.assertIn(part, text)
         self.assertIn("Tomorrow is 2.5 hours", text)
         self.assertTrue(any(m.label == "Calories" and m.value.replace(",", "").isdigit() for m in at.metric))
