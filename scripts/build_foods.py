@@ -188,13 +188,14 @@ ITEMS = [
     # branded, from the maker's label (scripts/food_labels.json)
     ("maurten_gel_100", "maurten_gel_100", "Maurten Gel 100", ("1 sachet", 40, "piece"), "BD", "V", [], [], True,
      LABEL + " No may contain text. The maker says the gel is not certified gluten free."),
-    ("maurten_gel_100_caf", "maurten_gel_100_caf_100", "Maurten Gel 100 Caf 100 (100 mg caffeine)", ("1 sachet", 40, "piece"),
+    ("maurten_gel_100_caf", "maurten_gel_100_caf_100", "Maurten Gel 100 Caf 100", ("1 sachet", 40, "piece"),
      "BD", "V", ["caffeine"], [], True,
      LABEL + " No may contain text. The maker says the gel is not certified gluten free."),
     ("skratch_hydration", "skratch_sport_hydration_lemon_lime", "Skratch Sport Hydration mix, Lemon + Lime",
      ("1 scoop", 22, "g"), "D", "V", [], [], True,
      LABEL + " The label says dairy free, gluten free and nut free, with no may contain text."),
-    ("maltodextrin", "now_carbo_gain_maltodextrin", "Maltodextrin powder (NOW Carbo Gain)", ("1/4 cup", 31.5, "g"), "DI", "V",
+    ("maltodextrin", "now_carbo_gain_maltodextrin", "Maltodextrin, mixed in your bottles (NOW Carbo Gain)",
+     ("1/4 cup", 31.5, "g"), "DI", "V",
      [], ["gluten", "soy", "dairy", "eggs", "fish_shellfish", "tree_nuts", "sesame"], True,
      LABEL + " Pure maltodextrin, made in a facility that also handles wheat, soy, milk, egg, fish, shellfish, "
      "tree nuts and sesame. Peanuts are not named."),

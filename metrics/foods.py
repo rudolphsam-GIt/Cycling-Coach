@@ -105,6 +105,10 @@ def blocked_by(item: dict, settings) -> str | None:
     return None
 
 
+def has_caffeine(item: dict) -> bool:
+    return "caffeine" in (item.get("contains") or []) or (item.get("per_100g", {}).get("caffeine_mg") or 0) > 0
+
+
 def allowed(item: dict, settings) -> bool:
     """True when the food fits the rider's diet and avoid list. A firm safety rule."""
     return blocked_by(item, settings) is None
@@ -145,8 +149,11 @@ def _pulls_weight(part: dict, carbs: float, protein: float) -> bool:
 
 
 def suggest(phase: str, carbs_g: float | None, protein_g: float | None, settings, n: int = 3,
-            library: list[dict] | None = None) -> dict:
+            library: list[dict] | None = None, caffeine: bool = False) -> dict:
     """A few food combinations that reach the targets, each within 10 percent.
+
+    Caffeinated foods are left out unless caffeine is True, so caffeine is never repeated hour after
+    hour. caffeine_option() offers it on its own, within the rider's limit.
 
     Returns {"ok", "combos", "message"}. Each combo has items (with amounts), carbs_g, protein_g,
     kcal and a text like "2 × banana plus 1 × fig bar = 75 g carbs". When nothing fits, ok is False and
@@ -161,7 +168,8 @@ def suggest(phase: str, carbs_g: float | None, protein_g: float | None, settings
         raise ValueError(f"phase must be one of {PHASES}")
 
     r = _rider(settings)
-    pool = [f for f in library if phase in f.get("phases", []) and allowed(f, settings)]
+    pool = [f for f in library if phase in f.get("phases", []) and allowed(f, settings)
+            and (caffeine or not has_caffeine(f))]
     if not pool:
         message = "No foods in the library fit your diet and avoid list for this part of the day."
         if r["avoid"]:
@@ -217,6 +225,44 @@ def _combo(parts, c_total, p_total, carbs, protein) -> dict:
     return {"items": parts, "carbs_g": round(c_total, 1), "protein_g": round(p_total, 1),
             "kcal": round(sum(p["kcal"] for p in parts)),
             "text": " plus ".join(p["text"] for p in parts) + " = " + " and ".join(sums)}
+
+
+def caffeine_option(settings, weight_kg: float | None, key_session: bool,
+                    library: list[dict] | None = None) -> dict:
+    """At most one caffeinated food for the ride, within 3 mg/kg, and never over 6 mg/kg (a firm limit).
+
+    Returns {"ok", "message", plus item, servings, mg, mg_per_kg, start_mg, max_mg and evidence when ok}.
+    Nothing is offered to riders who avoid caffeine, on rides that aren't key sessions or races, or when
+    the rider's weight is unknown, since the limit depends on it."""
+    from metrics import fueling
+    if "caffeine" in _rider(settings)["avoid"]:
+        return {"ok": False, "message": "You avoid caffeine, so none is suggested."}
+    if not key_session:
+        return {"ok": False, "message": "Caffeine is kept for races and hard sessions, so none is suggested "
+                                        "for this ride."}
+    limits = fueling.caffeine_limits(weight_kg)
+    if not limits:
+        return {"ok": False, "message": "Add your weight to see a caffeine amount, since the safe amount "
+                                        "depends on it."}
+    library = load_library() if library is None else library
+    picks = []
+    for f in library:
+        if not (has_caffeine(f) and allowed(f, settings) and {"before", "during"} & set(f.get("phases", []))):
+            continue
+        mg = (f.get("per_100g", {}).get("caffeine_mg") or 0) * f["serving"]["g"] / 100
+        if 0 < mg <= limits["start_mg"]:
+            picks.append((-(per_serving(f)["carbs_g"]), f["id"], f, mg))
+    if not picks:
+        return {"ok": False, "message": "No caffeinated food in the library fits your settings and your "
+                                        f"limit of {limits['start_mg']} mg."}
+    _, _, item, mg = sorted(picks)[0]             # the one that also brings the most carbs
+    assert mg <= limits["max_mg"]                 # the firm ceiling, checked again
+    return {"ok": True, "item": item, "servings": 1, "mg": round(mg), "mg_per_kg": round(mg / weight_kg, 1),
+            "start_mg": limits["start_mg"], "max_mg": limits["max_mg"], "evidence": limits["evidence"],
+            "message": (f"Optional: 1 × {item['name'].lower()} ({round(mg)} mg caffeine) about 60 minutes before "
+                        f"the hardest part. Keep the whole ride under {limits['start_mg']} mg (3 mg/kg) to start, "
+                        f"and never over {limits['max_mg']} mg (6 mg/kg). Skip it within about 6 hours of "
+                        "bedtime, and try it in training before a race.")}
 
 
 def plant_note(settings) -> dict | None:
