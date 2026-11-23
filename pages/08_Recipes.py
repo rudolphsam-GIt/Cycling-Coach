@@ -64,11 +64,11 @@ def _star(recipe_id: str) -> None:
     rec.toggle_favorite(recipe_id)
 
 
-def _card(r: dict) -> None:
+def _card(r: dict, expanded: bool = False) -> None:
     p = r["per_serving"]
     star = "★ " if r["id"] in stars else ""
     with st.expander(f"{star}{r['name']}  ·  {p['carbs_g']:.0f} g carbs, {p['protein_g']:.0f} g protein, "
-                     f"{p['kcal']:.0f} kcal per serving"):
+                     f"{p['kcal']:.0f} kcal per serving", expanded=expanded):
         st.markdown(f"_{r['why']}_")
         meta = [", ".join(rec.SLOT_LABELS[s] for s in r["slots"]),
                 f"{r['servings']} serving" + ("s" if r["servings"] != 1 else ""),
@@ -117,8 +117,19 @@ def _card(r: dict) -> None:
             st.caption("Swaps: " + "; ".join(others) + ".")
 
 
+# A recipe opened from the Today page's sample day shows first, open.
+opened = next((r for r in pool if r["id"] == st.session_state.get("rec_open")), None)
+if opened:
+    o1, o2 = st.columns([4, 1], vertical_alignment="center")
+    o1.caption("Opened from the Today page")
+    if o2.button("Close", key="rec_open_close", type="tertiary"):
+        st.session_state.pop("rec_open", None)
+        st.rerun()
+    _card(opened, expanded=True)
+
 for r in shown:
-    _card(r)
+    if not opened or r["id"] != opened["id"]:
+        _card(r)
 
 # ── Cook ahead ───────────────────────────────────────────────────────────────
 ahead = rec.prep_ahead(rec.week_loads(), settings)

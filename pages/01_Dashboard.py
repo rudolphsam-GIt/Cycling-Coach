@@ -166,6 +166,10 @@ with col_feel:
             st.toast("Logged.")
             st.rerun()
 
+# ── Fuel today: targets, today's ride before, during and after, a sample day ─
+from components import fuel_today
+fuel_today.render(owner=_owner)
+
 # ── Key numbers ───────────────────────────────────────────────────────────────
 _gap, _help = st.columns([3, 2])
 with _help:
