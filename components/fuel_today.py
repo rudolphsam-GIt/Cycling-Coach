@@ -210,7 +210,11 @@ def _ride(ride: dict, plan: dict) -> None:
 def _sample_day(day: Date, settings: dict, targets: dict, has_ride: bool) -> None:
     picks = rec.for_day(day, settings, n=1, targets=targets)
     slots = RIDE_SLOTS if has_ride else REST_SLOTS
-    st.markdown("**A sample day**")
+    with st.expander("A sample day"):
+        _sample_rows(picks, slots)
+
+
+def _sample_rows(picks: dict, slots) -> None:
     st.caption("An example of how today could look, not a meal plan. Swap in anything you like.")
     # One row per meal, so long recipe names have room and don't get cut off.
     for slot in slots:
@@ -265,11 +269,11 @@ def render(day: Date | None = None, owner: bool = True) -> None:
         elif ride:
             st.caption(f"{ride['name']} has no length yet, so there is no ride fuel plan for it.")
 
-        st.divider()
-        _sample_day(day, settings, targets, has_ride=bool(ride and ride["minutes"]))
         tomorrow = tomorrow_line(nutrition_day.day_load(day + timedelta(days=1)), settings)
         if tomorrow:
             st.markdown(tomorrow["text"])
         for tip in rec.prep_ahead(rec.week_loads(day + timedelta(days=1)), settings):
             st.caption(f"Cook ahead: {tip['text']}")
+        # The sample day and the explainer stay folded, so the tile is quick to scan.
+        _sample_day(day, settings, targets, has_ride=bool(ride and ride["minutes"]))
         _basics()

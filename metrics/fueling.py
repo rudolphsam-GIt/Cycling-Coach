@@ -232,9 +232,13 @@ def _referral(settings) -> bool | None:
     return raw if isinstance(raw, bool) else diet_mod._flag(raw)
 
 
-def recipe_ideas(slot: str, carbs_g: float | None, protein_g: float | None, settings, n: int,
-                  recipes=None, library=None, prefer_carbs: bool = False) -> list[dict]:
-    """Recipes for this slot that the rider can have, closest to the target first. Favourites first."""
+SCALE_RANGE = (0.5, 2.0)      # a recipe is offered when one serving needs half to double its size
+SCALE_MISS = 0.20             # and the sized serving lands within 20 percent of each target
+
+
+def _ranked_recipes(slot, carbs_g, protein_g, settings, recipes=None, library=None,
+                    prefer_carbs: bool = False) -> list[dict]:
+    """Recipes for this slot that the rider can have, favourites first, then closest to the target."""
     from metrics import recipes as rec
     pool = [r for r in rec.allowed_recipes(settings, recipes, library) if slot in (r.get("slots") or [])]
     stars = set(rec.favorites(settings))
@@ -247,24 +251,64 @@ def recipe_ideas(slot: str, carbs_g: float | None, protein_g: float | None, sett
             close = sum(abs(p[k] - t) / t for k, t in (("carbs_g", carbs_g), ("protein_g", protein_g)) if t)
         return (r["id"] not in stars, close, r["id"])
 
-    return [{"kind": "recipe", "id": r["id"], "name": r["name"],
-             "text": f"{r['name']} ({r['per_serving']['carbs_g']:.0f} g carbs, "
-                     f"{r['per_serving']['protein_g']:.0f} g protein a serving)"}
-            for r in sorted(pool, key=rank)[:n]]
+    return sorted(pool, key=rank)
+
+
+def _recipe_idea(r: dict) -> dict:
+    return {"kind": "recipe", "id": r["id"], "name": r["name"],
+            "text": f"{r['name']} ({r['per_serving']['carbs_g']:.0f} g carbs, "
+                    f"{r['per_serving']['protein_g']:.0f} g protein a serving)"}
+
+
+def recipe_ideas(slot: str, carbs_g: float | None, protein_g: float | None, settings, n: int,
+                 recipes=None, library=None, prefer_carbs: bool = False) -> list[dict]:
+    """Recipes for this slot that the rider can have, closest to the target first. Favourites first."""
+    return [_recipe_idea(r) for r in
+            _ranked_recipes(slot, carbs_g, protein_g, settings, recipes, library, prefer_carbs)[:n]]
+
+
+def scaled_recipe_idea(slot, carbs_g, protein_g, settings, recipes=None, library=None) -> dict | None:
+    """The closest recipe for this slot, with one serving sized to the target, or None.
+
+    A recipe that would need under half or over double a serving, or that can't get within 20 percent
+    of each target (a drink with little carbs for its protein), is skipped for the next one."""
+    from metrics import recipes as rec
+    if not (carbs_g or protein_g):
+        return None
+    for r in _ranked_recipes(slot, carbs_g, protein_g, settings, recipes, library):
+        res = rec.scale(r, carbs_g=carbs_g, protein_g=protein_g, library=library)
+        if not SCALE_RANGE[0] <= res["factor"] <= SCALE_RANGE[1]:
+            continue
+        p = res["per_serving"]
+        want = {k: t for k, t in (("carbs_g", carbs_g), ("protein_g", protein_g)) if t}
+        if any(abs(p[k] - t) / t > SCALE_MISS for k, t in want.items()):
+            continue
+        amounts = " and ".join(x for x in (f"{p['carbs_g']:.0f} g carbs" if carbs_g else "",
+                                           f"{p['protein_g']:.0f} g protein" if protein_g else "") if x)
+        return {"kind": "recipe", "id": r["id"], "name": r["name"], "factor": res["factor"],
+                "text": f"{r['name']}, a serving sized to {amounts}"}
+    return None
 
 
 def _food_ideas(phase: str, carbs_g, protein_g, settings, n: int, library=None) -> list[dict]:
+    """The simplest food combinations: fewest foods first, then fewest servings."""
     from metrics import foods
-    res = foods.suggest(phase, carbs_g, protein_g, settings, n=n, library=library)
-    return [{"kind": "food", "text": c["text"]} for c in res["combos"]]
+    res = foods.suggest(phase, carbs_g, protein_g, settings, n=max(n, 5), library=library)
+    combos = sorted(res["combos"], key=lambda c: (len(c["items"]), sum(p["count"] for p in c["items"])))
+    return [{"kind": "food", "text": c["text"]} for c in combos[:n]]
 
 
-def _ideas(phase, slot, carbs_g, protein_g, settings, library=None, recipes=None, recipe_lib=None,
-           n: int = 3) -> list[dict]:
-    """2 or 3 ideas: one recipe, then food combinations from the library."""
-    out = recipe_ideas(slot, carbs_g, protein_g, settings, 1, recipes, recipe_lib) if slot else []
-    out += _food_ideas(phase, carbs_g, protein_g, settings, n - len(out), library)
-    return out[:n]
+def _ideas(phase, slot, carbs_g, protein_g, settings, library=None, recipes=None, recipe_lib=None) -> list[dict]:
+    """A recipe sized to the target, then one simple food combination as a backup.
+
+    Without a recipe that fits, two food combinations."""
+    out = []
+    if slot:
+        idea = scaled_recipe_idea(slot, carbs_g, protein_g, settings, recipes, recipe_lib)
+        if idea:
+            out.append(idea)
+    out += _food_ideas(phase, carbs_g, protein_g, settings, 2 - len(out), library)
+    return out
 
 
 def _before(minutes, weight, effort, when, settings, library, recipes, recipe_lib) -> dict:
@@ -280,7 +324,7 @@ def _before(minutes, weight, effort, when, settings, library, recipes, recipe_li
         out.update(g=snack, low=snack, high=snack, timing="30 to 60 minutes before")
         # Low fibre and low fat foods only. Recipes carry no such check, so none are offered here.
         gentle = dict(settings or {}, gut_sensitive=True)
-        out["ideas"] = _food_ideas("before", snack, 0, gentle, 3, library)
+        out["ideas"] = _food_ideas("before", snack, 0, gentle, 2, library)
         if minutes <= PRE_RIDE_MIN:
             out["why"] = ("A short hard session still goes better with a small carb snack, so you start "
                           "the efforts topped up. Keep it low in fibre so it sits well.")
