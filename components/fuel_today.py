@@ -130,9 +130,11 @@ def _targets(t: dict) -> None:
     m2.metric("Protein", f"{p['g']} g", help=f"A range of {p['low']} to {p['high']} g. {p['source']}")
     m2.caption(f"about {p['per_meal_g']} g in each of {p['meals']} meals")
     if k.get("kcal"):
-        m3.metric("Calories", f"{k['kcal']:,} kcal",
+        # The unit sits in the caption so the number fits a narrow column.
+        m3.metric("Calories", f"{k['kcal']:,}",
                   help=f"{k['why']} Range {k['low']:,} to {k['high']:,} kcal. {k['note']} {k['source']}")
-        m3.caption("an estimate" if k.get("estimated") else f"base {k['base']:,} plus training {k['training']:,}")
+        m3.caption("kcal, an estimate" if k.get("estimated")
+                   else f"kcal, base {k['base']:,} plus training {k['training']:,}")
     else:
         m3.metric("Calories", "No base yet", help=f"{k['note']} {k['source']}")
         with m3:
@@ -210,11 +212,12 @@ def _sample_day(day: Date, settings: dict, targets: dict, has_ride: bool) -> Non
     slots = RIDE_SLOTS if has_ride else REST_SLOTS
     st.markdown("**A sample day**")
     st.caption("An example of how today could look, not a meal plan. Swap in anything you like.")
-    cols = st.columns(len(slots))
-    for col, slot in zip(cols, slots):
+    # One row per meal, so long recipe names have room and don't get cut off.
+    for slot in slots:
         options = picks["slots"].get(slot) or []
-        with col:
-            st.caption(rec.SLOT_LABELS[slot])
+        label, pick = st.columns([1, 4], vertical_alignment="center")
+        label.caption(rec.SLOT_LABELS[slot])
+        with pick:
             if options:
                 r = options[0]
                 if st.button(r["name"], key=f"fuel_rec_{slot}", type="tertiary",
@@ -223,7 +226,7 @@ def _sample_day(day: Date, settings: dict, targets: dict, has_ride: bool) -> Non
                     st.session_state["rec_open"] = r["id"]
                     st.switch_page(RECIPES_PAGE)
             else:
-                st.markdown("None that fit your settings yet")
+                st.caption("None that fit your settings yet")
 
 
 def _basics() -> None:

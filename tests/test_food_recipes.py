@@ -212,6 +212,27 @@ class SafetyTests(unittest.TestCase):
         self.assertEqual(len(rec.allowed_recipes({}, [r], lib, caffeine=True)), 1)
 
 
+class SwapNameTests(unittest.TestCase):
+    def test_a_swap_of_the_named_food_renames_the_recipe(self):
+        veg = {"diet": "vegetarian"}
+        got = {r["id"]: r for r in rec.allowed_recipes(veg)}
+        self.assertEqual(got["salmon_rice_greens"]["name"], "Tempeh with rice and greens")
+        self.assertNotIn("salmon", got["salmon_rice_greens"]["why"].lower())
+        vegan = {r["id"]: r["name"] for r in rec.allowed_recipes({"diet": "vegan"})}
+        self.assertEqual(vegan.get("rice_cakes_savoury"), "Savoury rice cakes with tofu")
+        self.assertEqual(vegan.get("greek_yogurt_bowl"), "Soy yogurt bowl")
+        self.assertEqual(vegan.get("rice_egg_bowl"), "Savoury rice and tofu bowl")
+
+    def test_no_swap_keeps_the_name(self):
+        got = {r["id"]: r for r in rec.allowed_recipes({})}
+        self.assertEqual(got["salmon_rice_greens"]["name"], "Salmon with rice and greens")
+        self.assertEqual(got["eggs_on_toast"]["name"], "Scrambled eggs on toast")
+
+    def test_a_swap_that_leaves_the_named_food_keeps_the_name(self):
+        got = {r["id"]: r["name"] for r in rec.allowed_recipes({"avoid_foods": "gluten"})}
+        self.assertNotIn("Tempeh", got.get("salmon_rice_greens", ""))
+
+
 class ScaleTests(unittest.TestCase):
     def test_scaling_hits_the_target_within_10_percent(self):
         for r in rec.allowed_recipes({}):
