@@ -90,6 +90,8 @@ else:
                     url_path="progress"),
             st.Page("pages/04_Strength_Training.py", title="Strength",
                     icon=":material/fitness_center:", url_path="strength"),
+            st.Page("pages/08_Recipes.py", title="Recipes", icon=":material/restaurant:",
+                    url_path="recipes"),
         ],
         "Race": [
             st.Page("pages/03_Race_Prep.py", title="Races", icon=":material/flag:",
