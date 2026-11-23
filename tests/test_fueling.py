@@ -389,7 +389,8 @@ class TodayPageTests(unittest.TestCase):
                      "A sample day"):
             self.assertIn(part, text)
         self.assertIn("Tomorrow is 2.5 hours", text)
-        self.assertTrue(any(m.label == "Calories" and "kcal" in m.value for m in at.metric))
+        self.assertTrue(any(m.label == "Calories" and m.value.replace(",", "").isdigit() for m in at.metric))
+        self.assertTrue(any(c.value.startswith("kcal, base 2,000 plus training") for c in at.caption))
 
     def test_sample_day_opens_the_recipe(self):
         self.q.set_setting("weight_kg", "70")

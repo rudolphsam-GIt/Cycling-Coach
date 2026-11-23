@@ -134,7 +134,7 @@
       "storage": {"fridge_days": 1, "freezes": false},
       "why": "A savoury start for riders who don't like sweet breakfasts, using rice cooked the day before.",
       "swaps": [
-        {"text": "Use crumbled firm tofu for eggs", "replace": "egg", "with": [{"food": "tofu_firm", "g": 150}]},
+        {"text": "Use crumbled firm tofu for eggs", "name": "Savoury rice and tofu bowl", "replace": "egg", "with": [{"food": "tofu_firm", "g": 150}]},
         {"text": "Use a pinch of salt for soy sauce (or a gluten free tamari)", "replace": "soy_sauce", "with": [{"food": "salt", "g": 1}]},
         {"text": "Leave out the sesame seeds", "replace": "sesame_seeds", "with": []}
       ]
@@ -186,7 +186,7 @@
       "storage": {"fridge_days": 2, "freezes": true},
       "why": "A salty break from sweet food on long days, with a little protein.",
       "swaps": [
-        {"text": "Use crumbled firm tofu for eggs", "replace": "egg", "with": [{"food": "tofu_firm", "g": 150}]},
+        {"text": "Use crumbled firm tofu for eggs", "name": "Savoury rice cakes with tofu", "replace": "egg", "with": [{"food": "tofu_firm", "g": 150}]},
         {"text": "Use a pinch more salt for soy sauce (or a gluten free tamari)", "replace": "soy_sauce", "with": [{"food": "salt", "g": 1.5}]}
       ]
     },
@@ -308,7 +308,7 @@
       "storage": {"fridge_days": 0, "freezes": false},
       "why": "Carbs, protein and fluid in one bottle, ready the moment you get home.",
       "swaps": [
-        {"text": "Use soy chocolate milk for dairy free or vegan", "replace": "chocolate_milk", "with": [{"food": "soy_chocolate_milk", "ml": 500}]}
+        {"text": "Use soy chocolate milk for dairy free or vegan", "name": "Soy chocolate milk", "replace": "chocolate_milk", "with": [{"food": "soy_chocolate_milk", "ml": 500}]}
       ]
     },
     {
@@ -380,7 +380,7 @@
       "storage": {"fridge_days": 0, "freezes": false},
       "why": "A high protein bowl for after rides, with fruit to refill carbs.",
       "swaps": [
-        {"text": "Use soy yogurt for dairy free or vegan", "replace": "greek_yogurt", "with": [{"food": "soy_yogurt", "g": 250}]},
+        {"text": "Use soy yogurt for dairy free or vegan", "name": "Soy yogurt bowl", "replace": "greek_yogurt", "with": [{"food": "soy_yogurt", "g": 250}]},
         {"text": "Use maple syrup for honey", "replace": "honey", "with": [{"food": "maple_syrup", "g": 20}]},
         {"text": "Leave out the seeds", "replace": "pumpkin_seeds", "with": []}
       ]
@@ -407,7 +407,7 @@
       "storage": {"fridge_days": 0, "freezes": false},
       "why": "Quick protein after a ride. Add a glass of juice or a banana on big days for more carbs.",
       "swaps": [
-        {"text": "Scramble 150 g crumbled firm tofu instead of eggs", "replace": "egg", "with": [{"food": "tofu_firm", "g": 150}]},
+        {"text": "Scramble 150 g crumbled firm tofu instead of eggs", "name": "Scrambled tofu on toast", "replace": "egg", "with": [{"food": "tofu_firm", "g": 150}]},
         {"text": "Use olive oil for butter", "replace": "butter", "with": [{"food": "olive_oil", "g": 7}]}
       ]
     },
@@ -593,7 +593,7 @@
       "storage": {"fridge_days": 2, "freezes": false},
       "why": "Protein and omega 3 fats from the salmon, with rice to refill after training.",
       "swaps": [
-        {"text": "Use tempeh for salmon", "replace": "salmon", "with": [{"food": "tempeh", "g": 250}]},
+        {"text": "Use tempeh for salmon", "name": "Tempeh with rice and greens", "why": "Protein from the tempeh, with rice to refill after training.", "replace": "salmon", "with": [{"food": "tempeh", "g": 250}]},
         {"text": "Use a pinch of salt for soy sauce (or a gluten free tamari)", "replace": "soy_sauce", "with": [{"food": "salt", "g": 1}]}
       ]
     },

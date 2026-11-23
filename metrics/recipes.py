@@ -188,6 +188,11 @@ def resolve(recipe: dict, settings, library: dict | None = None, caffeine: bool 
         used.append(fix)
         ingredients.extend(fix.get("with", []))
     out = dict(recipe, ingredients=ingredients)
+    # A swap of the food the recipe is named after (tempeh for salmon) renames it, and may change why.
+    for swap in used:
+        for key in ("name", "why"):
+            if swap.get(key):
+                out[key] = swap[key]
     # Checked again on the finished list, so a swap can never bring back a blocked food.
     for ing in ingredients:
         why = _blocked(ing, settings, lib)
