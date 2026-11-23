@@ -7,22 +7,31 @@ The folder holds the API's answers as fetched: b*.json from
 and s*.json from
   GET https://api.nal.usda.gov/fdc/v1/foods/search?dataType=SR Legacy&query=...
 Nutrient values are copied exactly as FDC gives them. Never type a value or an FDC ID by hand:
-look it up, save the response, and add a line to ITEMS."""
+look it up, save the response, and add a line to ITEMS.
+
+Branded foods come from the maker's label instead. scripts/food_labels.json holds what the label
+prints (values per serving or per 100 g, the ingredients and the allergen statement, copied verbatim)
+with the page it was read from. An ITEMS line names its label by key, in place of an FDC ID, and the
+build turns the label's numbers into per 100 g values. Set checked to True for a label only when both
+the ingredients and the allergen statement were read, and copy any may contain text into may_contain."""
 import json
 import sys
 from pathlib import Path
 
 HERE = Path(sys.argv[1])
 OUT = Path(sys.argv[2])
+LABELS = Path(__file__).resolve().parent / "food_labels.json"
+SODIUM_PER_G_SALT = 400       # mg sodium in 1 g salt, since salt = sodium x 2.5 (EU Regulation 1169/2011, Annex I)
 
 NUTRIENTS = {"208": "kcal", "205": "carbs_g", "203": "protein_g", "204": "fat_g", "291": "fibre_g",
              "307": "sodium_mg", "262": "caffeine_mg"}
 
 SINGLE = "Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label."
 DAIRY = "Plain dairy food made from milk. Cross contact varies by brand, so check the label."
+LABEL = "Read from the maker's label: ingredients and allergen statement below."
 MIXED = "Ingredients vary by brand and FDC has no ingredient list, so allergens are not checked. Hidden from riders with an avoid list until a labelled product is added."
 
-# id, fdc, name, serving (label, grams, unit), phases, diet, contains, may_contain, checked
+# id, fdc (an FDC ID, or a key in food_labels.json), name, serving (label, grams, unit), phases, diet, contains, may_contain, checked
 # diet: V vegan, L vegetarian (eggs, dairy, honey), F pescatarian (fish), M meat
 # phases: B before, D during, A after, E everyday protein or meal, I recipe ingredient
 ITEMS = [
@@ -119,6 +128,8 @@ ITEMS = [
     ("pinto_beans", 175200, "Pinto beans, cooked", ("1 cup", 171, "g"), "EI", "V", [], [], True, SINGLE),
     ("kidney_beans", 173741, "Kidney beans, canned", ("1/2 cup", 128, "g"), "EI", "V", [], [], True,
      "Beans, water and salt. " + SINGLE),
+    ("white_beans", 175204, "White beans, canned", ("1/2 cup", 131, "g"), "EI", "V", [], [], True,
+     "Beans, water and salt. " + SINGLE),
     ("hummus", 174289, "Hummus", ("2 tbsp", 30, "g"), "EI", "V", ["sesame"], [], False, MIXED + " Hummus is usually made with tahini."),
     # nuts and seeds
     ("peanuts", 172430, "Peanuts", ("1 oz", 28, "g"), "EI", "V", ["peanuts"], ["tree_nuts"], True, SINGLE),
@@ -147,6 +158,8 @@ ITEMS = [
     ("broccoli", 170379, "Broccoli", ("1 cup chopped", 91, "g"), "I", "V", [], [], True, SINGLE),
     ("carrots", 170393, "Carrots", ("1 medium", 61, "g"), "I", "V", [], [], True, SINGLE),
     ("tomatoes", 170457, "Tomatoes", ("1 medium", 123, "g"), "I", "V", [], [], True, SINGLE),
+    ("tomatoes_canned", 170051, "Tomatoes, canned in juice", ("1 can (190 g)", 190, "g"), "I", "V", [], [], True,
+     "Tomatoes and tomato juice. " + SINGLE),
     ("onion", 170000, "Onion", ("1 medium", 110, "g"), "I", "V", [], [], True, SINGLE),
     ("garlic", 169230, "Garlic", ("1 clove", 3, "g"), "I", "V", [], [], True, SINGLE),
     ("red_pepper", 170108, "Red bell pepper", ("1 medium", 119, "g"), "I", "V", [], [], True, SINGLE),
@@ -172,6 +185,31 @@ ITEMS = [
     ("baking_soda", 175040, "Baking soda", ("1 tsp", 4.6, "g"), "I", "V", [], [], True, SINGLE),
     # drinks
     ("coffee", 171890, "Coffee, brewed", ("1 cup", 237, "ml"), "B", "V", ["caffeine"], [], True, SINGLE),
+    # branded, from the maker's label (scripts/food_labels.json)
+    ("maurten_gel_100", "maurten_gel_100", "Maurten Gel 100", ("1 sachet", 40, "piece"), "BD", "V", [], [], True,
+     LABEL + " No may contain text. The maker says the gel is not certified gluten free."),
+    ("maurten_gel_100_caf", "maurten_gel_100_caf_100", "Maurten Gel 100 Caf 100 (100 mg caffeine)", ("1 sachet", 40, "piece"),
+     "BD", "V", ["caffeine"], [], True,
+     LABEL + " No may contain text. The maker says the gel is not certified gluten free."),
+    ("skratch_hydration", "skratch_sport_hydration_lemon_lime", "Skratch Sport Hydration mix, Lemon + Lime",
+     ("1 scoop", 22, "g"), "D", "V", [], [], True,
+     LABEL + " The label says dairy free, gluten free and nut free, with no may contain text."),
+    ("maltodextrin", "now_carbo_gain_maltodextrin", "Maltodextrin powder (NOW Carbo Gain)", ("1/4 cup", 31.5, "g"), "DI", "V",
+     [], ["gluten", "soy", "dairy", "eggs", "fish_shellfish", "tree_nuts", "sesame"], True,
+     LABEL + " Pure maltodextrin, made in a facility that also handles wheat, soy, milk, egg, fish, shellfish, "
+     "tree nuts and sesame. Peanuts are not named."),
+    ("pea_protein", "now_pea_protein_unflavored", "Pea protein powder, unflavored (NOW)", ("1 scoop", 33, "g"), "AEI", "V",
+     [], ["gluten", "soy", "dairy", "eggs", "fish_shellfish", "tree_nuts", "sesame"], True,
+     LABEL + " Pea protein isolate, made in a facility that also handles wheat, soy, milk, egg, fish, shellfish, "
+     "tree nuts and sesame. Peanuts are not named."),
+    ("whey_protein", "on_gold_standard_whey_drc", "Whey protein powder, chocolate (Optimum Nutrition)", ("1 scoop", 31, "g"),
+     "AEI", "L", ["dairy", "soy"], [], True,
+     LABEL + " Contains milk and soy (lecithin). No may contain text."),
+    ("soy_chocolate_milk", "silk_chocolate_soymilk", "Soy chocolate milk (Silk)", ("1 cup", 240, "ml"), "AE", "V",
+     ["soy"], [], True, LABEL + " Contains soy. No may contain text."),
+    ("gnocchi", "de_cecco_gnocchi_di_patate", "Potato gnocchi, shelf stable (De Cecco)", ("100 g", 100, "g"), "EI", "V",
+     ["gluten"], ["soy"], True,
+     LABEL + " Contains wheat. May contain soy and mustard (mustard is not on the app's avoid list)."),
 ]
 
 DIETS = {"V": ["vegan", "vegetarian", "pescatarian"], "L": ["vegetarian", "pescatarian"], "F": ["pescatarian"], "M": []}
@@ -199,34 +237,67 @@ def load_fdc():
     return out
 
 
+def load_labels():
+    """Label values as per 100 g, with a source block that records the brand and the page."""
+    out = {}
+    for key, lab in json.loads(LABELS.read_text())["labels"].items():
+        vals = dict(lab["values"])
+        if "salt_g" in vals:
+            salt = vals.pop("salt_g")
+            vals["sodium_mg"] = None if salt is None else round(salt * SODIUM_PER_G_SALT, 1)
+        scale = 1.0 if lab["per"] == "100g" else 100 / lab["serving_g"]
+        per_100g = {k: (None if vals.get(k) is None else round(vals[k] * scale, 2)) for k in NUTRIENTS.values()}
+        source = {"database": "Maker's label", "brand": lab["brand"], "product": lab["product"],
+                  "url": lab["url"], "read": lab["read"], "label_serving": lab["label_serving"],
+                  "label_per": "100 g" if lab["per"] == "100g" else f"{lab['serving_g']:g} g serving",
+                  "label_values": lab["values"], "ingredients": lab["ingredients"],
+                  "allergen_statement": lab["allergen_statement"]}
+        for extra in ("nutrition_url", "allergen_url", "value_notes"):
+            if extra in lab:
+                source[extra] = lab[extra]
+        out[key] = (per_100g, lab.get("serving_g"), source)
+    return out
+
+
 def main():
     fdc = load_fdc()
+    labels = load_labels()
     items, seen = [], set()
     for (iid, fid, name, serving, phases, diet, contains, may, checked, note) in ITEMS:
         assert iid not in seen, iid
         seen.add(iid)
-        desc, dtype, vals = fdc[fid]
         label, grams, unit = serving
+        if isinstance(fid, str):
+            per_100g, label_g, source = labels[fid]
+            served_from = "label" if grams == label_g else "app"
+        else:
+            desc, dtype, vals = fdc[fid]
+            per_100g = {k: vals.get(k) for k in NUTRIENTS.values()}
+            served_from = "FDC portion" if grams in PORTIONS.get(fid, []) else "app"
+            source = {"database": "USDA FoodData Central", "data_type": dtype, "fdc_id": fid, "description": desc}
         items.append({
             "id": iid, "name": name,
-            "serving": {"label": label, "g": grams, "unit": unit,
-                        "from": "FDC portion" if grams in PORTIONS.get(fid, []) else "app"},
-            "per_100g": {k: vals.get(k) for k in NUTRIENTS.values()},
+            "serving": {"label": label, "g": grams, "unit": unit, "from": served_from},
+            "per_100g": per_100g,
             "phases": [PHASES[c] for c in phases],
             "diets": DIETS[diet],
             "contains": contains, "may_contain": may, "allergens_checked": checked,
             "allergen_source": note,
-            "source": {"database": "USDA FoodData Central", "data_type": dtype, "fdc_id": fid,
-                       "description": desc},
+            "source": source,
         })
     doc = {
         "about": ("Foods and recipe ingredients for fueling suggestions. Nutrient values are per 100 g "
-                  "exactly as USDA FoodData Central gives them (SR Legacy, looked up 2026-11-22), with "
-                  "the FDC ID and description for each. Serving sizes say where they came from: an FDC "
-                  "portion weight, or a common household measure set by the app. FDC has no allergen data: contains and may_contain are filled from "
-                  "the food itself for single ingredient foods, and allergens_checked is true only for "
-                  "those and plain dairy. Mixed foods stay unchecked until a labelled product is added. "
-                  "A null nutrient means FDC has no value for it."),
+                  "exactly as USDA FoodData Central gives them (SR Legacy, looked up 2026-11-22 and "
+                  "2026-11-23), with the FDC ID and description for each. Branded foods come from the "
+                  "maker's label instead (read 2026-11-23), scaled from the label serving to 100 g, with "
+                  "the brand, page, label values, ingredients and allergen statement in source. Serving "
+                  "sizes say where they came from: an FDC portion weight, the label serving, or a common "
+                  "household measure set by the app. FDC has no allergen data: contains and may_contain "
+                  "are filled from the food itself for single ingredient foods, and from the label's "
+                  "contains and may contain text for branded foods. allergens_checked is true only for "
+                  "those, plain dairy, and labels where both the ingredients and allergen statement were "
+                  "read. Mixed foods stay unchecked until a labelled product is added. A null nutrient "
+                  "means the source has no value for it."),
         "allergens": ["gluten", "dairy", "eggs", "peanuts", "tree_nuts", "soy", "fish_shellfish", "sesame", "caffeine"],
         "foods": items,
     }

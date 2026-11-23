@@ -1,0 +1,86 @@
+{
+ "about": "Branded foods read from the maker's own label page, for scripts/build_foods.py. Values are copied exactly as the label prints them, per the label's serving (or per 100 g where the label gives that). A nutrient the label does not print is null. ingredients and allergen_statement are copied verbatim. allergen_url is where the allergen statement was read when it is not on the product page.",
+ "labels": {
+  "maurten_gel_100": {
+   "brand": "Maurten", "product": "Gel 100",
+   "url": "https://www.maurten.com/products/gel-100-box",
+   "nutrition_url": "https://maurten.imgix.net/photos/Products/Nutrition-Facts/GEL100_US.jpg",
+   "allergen_url": "https://www.maurten.com/faq/general-product",
+   "read": "2026-11-23",
+   "per": "serving", "label_serving": "1 sachet 1.4oz. (40g)", "serving_g": 40,
+   "values": {"kcal": 100, "carbs_g": 25, "protein_g": 0, "fat_g": 0, "fibre_g": 0, "sodium_mg": 20, "caffeine_mg": null},
+   "ingredients": "Water, glucose, fructose, sodium alginate, gluconic acid, calcium carbonate.",
+   "allergen_statement": "While Maurten Gels are made using ingredients that are free from gluten and other common allergens, the final product is not certified as gluten-free."
+  },
+  "maurten_gel_100_caf_100": {
+   "brand": "Maurten", "product": "Gel 100 Caf 100",
+   "url": "https://www.maurten.com/products/gel-100-caf-100-box",
+   "nutrition_url": "https://maurten.imgix.net/photos/Products/Nutrition-Facts/GEL100_CAF_US.jpg",
+   "allergen_url": "https://www.maurten.com/faq/general-product",
+   "read": "2026-11-23",
+   "per": "serving", "label_serving": "1 sachet (40g)", "serving_g": 40,
+   "values": {"kcal": 100, "carbs_g": 25, "protein_g": 0, "fat_g": 0, "fibre_g": 0, "sodium_mg": 22, "caffeine_mg": 100},
+   "ingredients": "Water, glucose, fructose, sodium alginate, gluconic acid, calcium carbonate, caffeine. Contains caffeine 100mg/serving.",
+   "allergen_statement": "While Maurten Gels are made using ingredients that are free from gluten and other common allergens, the final product is not certified as gluten-free."
+  },
+  "skratch_sport_hydration_lemon_lime": {
+   "brand": "Skratch Labs", "product": "Sport Hydration Drink Mix, Lemon + Lime",
+   "url": "https://www.skratchlabs.com/products/hydration-sport-drink-mix?variant=32766105157703",
+   "nutrition_url": "https://www.skratchlabs.com/cdn/shop/files/SDM-LL-440g_032124_OL_NFP.svg",
+   "read": "2026-11-23",
+   "per": "serving", "label_serving": "1 scoop (22g)", "serving_g": 22,
+   "values": {"kcal": 80, "carbs_g": 20, "protein_g": 0, "fat_g": 0, "fibre_g": 0, "sodium_mg": 400, "caffeine_mg": null},
+   "ingredients": "Cane Sugar, Sodium Citrate, Dextrose, Citric Acid, Calcium Citrate, Magnesium Carbonate, Potassium Citrate, Lemon Oil, Lime Oil, Lemon Juice, Lime Juice, Ascorbic Acid (Vitamin C).",
+   "allergen_statement": "Dairy-free. Gluten-free. Nut-free. Kosher. Vegan. Non-GMO."
+  },
+  "now_carbo_gain_maltodextrin": {
+   "brand": "NOW Sports", "product": "Carbo Gain Powder (maltodextrin)",
+   "url": "https://www.nowfoods.com/products/sports-nutrition/carbo-gain-powder",
+   "read": "2026-11-23",
+   "per": "serving", "label_serving": "1/2 cup (63g)", "serving_g": 63,
+   "values": {"kcal": 240, "carbs_g": 60, "protein_g": 0, "fat_g": 0, "fibre_g": 0, "sodium_mg": 45, "caffeine_mg": null},
+   "ingredients": "Pure Maltodextrin (from Non-GMO corn).",
+   "allergen_statement": "Not manufactured with yeast, wheat, gluten, soy, milk, egg, fish, shellfish, tree nut or sesame ingredients. Produced in a GMP facility that processes other ingredients containing these allergens."
+  },
+  "now_pea_protein_unflavored": {
+   "brand": "NOW Sports", "product": "Pea Protein, Unflavored",
+   "url": "https://www.nowfoods.com/products/sports-nutrition/pea-protein-unflavored-powder",
+   "read": "2026-11-23",
+   "per": "serving", "label_serving": "1 level scoop (33g)", "serving_g": 33,
+   "values": {"kcal": 120, "carbs_g": 1, "protein_g": 24, "fat_g": 2, "fibre_g": 0, "sodium_mg": 320, "caffeine_mg": null},
+   "ingredients": "Yellow Pea Protein Isolate.",
+   "allergen_statement": "Not manufactured with wheat, gluten, soy, corn, milk, egg, fish, shellfish, tree nut or sesame ingredients. Produced in a GMP facility that processes other ingredients containing these allergens."
+  },
+  "on_gold_standard_whey_drc": {
+   "brand": "Optimum Nutrition", "product": "Gold Standard 100% Whey, Double Rich Chocolate",
+   "url": "https://www.optimumnutrition.com/en-us/products/gold-standard-100-whey-protein-powder",
+   "nutrition_url": "https://www.optimumnutrition.com/cdn/shop/files/GSW_DRC_2lb_NFP.jpg",
+   "read": "2026-11-23",
+   "per": "serving", "label_serving": "31g (About 1 Scoop)", "serving_g": 31,
+   "values": {"kcal": 120, "carbs_g": 3, "protein_g": 24, "fat_g": 1.5, "fibre_g": null, "sodium_mg": 130, "caffeine_mg": null},
+   "value_notes": "The label prints dietary fiber as <1g, so fibre is left null.",
+   "ingredients": "Protein Blend (Whey Protein Isolate, Whey Protein Concentrate, Hydrolyzed Whey Protein), Cocoa Powder (Processed with Alkali), Sunflower and/or Soy Lecithin, Natural and Artificial Flavor, Acesulfame Potassium.",
+   "allergen_statement": "CONTAINS: MILK, SOY."
+  },
+  "silk_chocolate_soymilk": {
+   "brand": "Silk", "product": "Chocolate Soymilk (refrigerated)",
+   "url": "https://www.silk.com/plant-based-products/soymilk/chocolate-soymilk/",
+   "read": "2026-11-23",
+   "per": "serving", "label_serving": "1 Cup (240ml)", "serving_g": 240,
+   "value_notes": "The label serving is 240 ml. Like the other drinks in the library, 1 ml is counted as 1 g, so per_100g is per 100 ml.",
+   "values": {"kcal": 150, "carbs_g": 17, "protein_g": 8, "fat_g": 5, "fibre_g": 3, "sodium_mg": 80, "caffeine_mg": null},
+   "ingredients": "Soymilk (Water, Soybeans), Cane Sugar, Cocoa (Processed with Alkali), Contains 2% or Less of: Vitamin and Mineral Blend (Calcium Carbonate, Vitamin A Palmitate, Vitamin E Acetate, Vitamin D2, Riboflavin [B2], Vitamin B12, Potassium Iodide), Sea Salt, Gellan Gum, Ascorbic Acid (Vitamin C To Protect Freshness), Natural Flavor.",
+   "allergen_statement": "Contains Soy."
+  },
+  "de_cecco_gnocchi_di_patate": {
+   "brand": "De Cecco", "product": "Gnocchi di Patate (500 g, shelf stable)",
+   "url": "https://shop.dececco.com/en-ie/product/gnocchi-di-patate-pasta-shop-de-cecco",
+   "read": "2026-11-23",
+   "per": "100g", "label_serving": "per 100 g (EU label)",
+   "value_notes": "The EU label gives salt, not sodium. Sodium is salt divided by 2.5 (EU Regulation 1169/2011, Annex I).",
+   "values": {"kcal": 155, "carbs_g": 32, "protein_g": 3.3, "fat_g": 1, "fibre_g": 2.6, "salt_g": 1.28, "caffeine_mg": null},
+   "ingredients": "potato puree 80%[water, dehytrated potato flakes 24%(potatoes 99%,spices)],potato starch, WHEAT flour, rice flour, spices, salt, acidity regulator: lactic acid, preservative: potassium sorbate.",
+   "allergen_statement": "May contain SOY and MUSTARD"
+  }
+ }
+}

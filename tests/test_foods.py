@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 import unittest
 from unittest import mock
@@ -43,15 +44,20 @@ def _food(**over) -> dict:
 
 
 class LibraryDataTests(unittest.TestCase):
-    def test_about_120_items_each_with_an_fdc_id(self):
+    def test_about_120_items_each_with_an_fdc_id_or_a_label(self):
         self.assertGreaterEqual(len(LIB), 100)
         ids = [f["id"] for f in LIB]
         self.assertEqual(len(ids), len(set(ids)))
         for f in LIB:
             with self.subTest(food=f["id"]):
-                self.assertIsInstance(f["source"]["fdc_id"], int)
-                self.assertEqual(f["source"]["database"], "USDA FoodData Central")
-                self.assertTrue(f["source"]["description"])
+                if f["source"]["database"] == "Maker's label":
+                    for key in ("brand", "product", "url", "read", "ingredients", "allergen_statement"):
+                        self.assertTrue(f["source"][key], key)
+                    self.assertTrue(f["source"]["url"].startswith("https://"))
+                else:
+                    self.assertIsInstance(f["source"]["fdc_id"], int)
+                    self.assertEqual(f["source"]["database"], "USDA FoodData Central")
+                    self.assertTrue(f["source"]["description"])
                 self.assertGreater(f["serving"]["g"], 0)
                 self.assertIn(f["serving"]["unit"], ("g", "ml", "piece"))
                 self.assertIsNotNone(f["per_100g"]["carbs_g"])
@@ -76,8 +82,84 @@ class LibraryDataTests(unittest.TestCase):
     def test_raw_ingredients_are_there_for_recipes(self):
         ids = set(foods.by_id(LIB))
         for need in ("oats", "white_rice_raw", "pasta_dry", "flour_all_purpose", "sugar", "maple_syrup",
-                     "olive_oil", "cinnamon", "raspberries_frozen", "kidney_beans", "salt"):
+                     "olive_oil", "cinnamon", "raspberries_frozen", "kidney_beans", "salt",
+                     "tomatoes_canned", "white_beans", "gnocchi", "maltodextrin"):
             self.assertIn(need, ids)
+
+
+class BrandedFoodTests(unittest.TestCase):
+    """Branded foods come from the maker's label, and the label's allergen text is a firm rule."""
+    BRANDED = [f for f in LIB if f["source"]["database"] == "Maker's label"]
+
+    def test_there_are_gels_a_drink_mix_and_protein_powders(self):
+        ids = {f["id"] for f in self.BRANDED}
+        self.assertLessEqual({"maurten_gel_100", "maurten_gel_100_caf", "skratch_hydration", "maltodextrin",
+                              "whey_protein", "pea_protein", "soy_chocolate_milk", "gnocchi"}, ids)
+
+    def test_label_values_scale_to_100_g(self):
+        for f in self.BRANDED:
+            src = f["source"]
+            grams = 100 if src["label_per"] == "100 g" else float(src["label_per"].split()[0])
+            for key, value in src["label_values"].items():
+                with self.subTest(food=f["id"], nutrient=key):
+                    if key == "salt_g":
+                        self.assertAlmostEqual(f["per_100g"]["sodium_mg"], value * 400 * 100 / grams, places=1)
+                    elif value is None:
+                        self.assertIsNone(f["per_100g"][key])
+                    else:
+                        self.assertAlmostEqual(f["per_100g"][key] * grams / 100, value, places=1)
+        self.assertAlmostEqual(foods.per_serving(foods.by_id(LIB)["maurten_gel_100"])["carbs_g"], 25, places=2)
+        self.assertAlmostEqual(foods.per_serving(foods.by_id(LIB)["whey_protein"])["protein_g"], 24, places=2)
+        self.assertEqual(foods.by_id(LIB)["gnocchi"]["per_100g"]["sodium_mg"], 512)       # 1.28 g salt
+
+    def test_contains_and_may_contain_match_the_label_text(self):
+        for f in self.BRANDED:
+            text = (f["source"]["ingredients"] + " " + f["source"]["allergen_statement"]).lower()
+            words = set(re.findall(r"[a-z]+", text))
+            with self.subTest(food=f["id"]):
+                self.assertTrue(f["allergens_checked"])
+                if "may contain" in text or "facility" in text:
+                    self.assertTrue(f["may_contain"])
+                if "milk" in words and "not manufactured" not in text:
+                    self.assertIn("dairy", f["contains"])
+                if "soy" in words and "not manufactured" not in text and "may contain" not in text:
+                    self.assertIn("soy", f["contains"])
+                if "wheat" in words and "not manufactured" not in text:
+                    self.assertIn("gluten", f["contains"])
+
+    def test_a_nut_avoider_never_sees_a_gel_or_powder_that_may_contain_nuts(self):
+        rider = {"avoid_foods": ["tree_nuts"]}
+        by = foods.by_id(LIB)
+        self.assertFalse(foods.allowed(by["maltodextrin"], rider))
+        self.assertFalse(foods.allowed(by["pea_protein"], rider))
+        self.assertTrue(foods.allowed(by["maurten_gel_100"], rider))
+        may_nuts = _food(id="gel_may_nuts", contains=[], may_contain=["peanuts", "tree_nuts"])
+        self.assertFalse(foods.allowed(may_nuts, {"avoid_foods": ["peanuts"]}))
+        lib = LIB + [may_nuts]
+        for phase, carbs, protein in (("during", 60, 0), ("during", 90, 0), ("after", 60, 25)):
+            for fid in _suggested_ids(foods.suggest(phase, carbs, protein, {"avoid_foods": ["peanuts", "tree_nuts"]},
+                                                    library=lib)):
+                self.assertNotIn(fid, {"gel_may_nuts", "maltodextrin", "pea_protein"})
+
+    def test_a_caffeine_avoider_never_sees_the_caffeinated_gel(self):
+        rider = {"avoid_foods": ["caffeine"]}
+        caf = foods.by_id(LIB)["maurten_gel_100_caf"]
+        self.assertEqual(caf["per_100g"]["caffeine_mg"], 250)                   # 100 mg per 40 g sachet
+        self.assertFalse(foods.allowed(caf, rider))
+        without_tag = dict(caf, contains=[])                                    # the caffeine value alone still blocks it
+        self.assertFalse(foods.allowed(without_tag, rider))
+        self.assertTrue(foods.allowed(foods.by_id(LIB)["maurten_gel_100"], rider))
+        for carbs in (25, 50, 60, 75, 100):
+            self.assertNotIn("maurten_gel_100_caf", _suggested_ids(foods.suggest("during", carbs, 0, rider)))
+
+    def test_dairy_and_soy_avoiders(self):
+        by = foods.by_id(LIB)
+        self.assertFalse(foods.allowed(by["whey_protein"], {"avoid_foods": ["dairy"]}))
+        self.assertFalse(foods.allowed(by["whey_protein"], {"diet": "vegan"}))
+        self.assertTrue(foods.allowed(by["pea_protein"], {"diet": "vegan"}))
+        for fid in ("whey_protein", "soy_chocolate_milk", "gnocchi", "pea_protein", "maltodextrin"):
+            self.assertFalse(foods.allowed(by[fid], {"avoid_foods": ["soy"]}), fid)
+        self.assertFalse(foods.allowed(by["gnocchi"], {"avoid_foods": ["gluten"]}))
 
 
 class AllowedTests(unittest.TestCase):
