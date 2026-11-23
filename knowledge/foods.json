@@ -1,5 +1,5 @@
 {
- "about": "Foods and recipe ingredients for fueling suggestions. Nutrient values are per 100 g exactly as USDA FoodData Central gives them (SR Legacy, looked up 2026-11-22), with the FDC ID and description for each. Serving sizes say where they came from: an FDC portion weight, or a common household measure set by the app. FDC has no allergen data: contains and may_contain are filled from the food itself for single ingredient foods, and allergens_checked is true only for those and plain dairy. Mixed foods stay unchecked until a labelled product is added. A null nutrient means FDC has no value for it.",
+ "about": "Foods and recipe ingredients for fueling suggestions. Nutrient values are per 100 g exactly as USDA FoodData Central gives them (SR Legacy, looked up 2026-11-22 and 2026-11-23), with the FDC ID and description for each. Branded foods come from the maker's label instead (read 2026-11-23), scaled from the label serving to 100 g, with the brand, page, label values, ingredients and allergen statement in source. Serving sizes say where they came from: an FDC portion weight, the label serving, or a common household measure set by the app. FDC has no allergen data: contains and may_contain are filled from the food itself for single ingredient foods, and from the label's contains and may contain text for branded foods. allergens_checked is true only for those, plain dairy, and labels where both the ingredients and allergen statement were read. Mixed foods stay unchecked until a labelled product is added. A null nutrient means the source has no value for it.",
  "allergens": [
   "gluten",
   "dairy",
@@ -2692,6 +2692,44 @@
    }
   },
   {
+   "id": "white_beans",
+   "name": "White beans, canned",
+   "serving": {
+    "label": "1/2 cup",
+    "g": 131,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 114.0,
+    "carbs_g": 21.2,
+    "protein_g": 7.26,
+    "fat_g": 0.29,
+    "fibre_g": 4.8,
+    "sodium_mg": 340.0,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Beans, water and salt. Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 175204,
+    "description": "Beans, white, mature seeds, canned"
+   }
+  },
+  {
    "id": "hummus",
    "name": "Hummus",
    "serving": {
@@ -3474,6 +3512,43 @@
     "data_type": "SR Legacy",
     "fdc_id": 170457,
     "description": "Tomatoes, red, ripe, raw, year round average"
+   }
+  },
+  {
+   "id": "tomatoes_canned",
+   "name": "Tomatoes, canned in juice",
+   "serving": {
+    "label": "1 can (190 g)",
+    "g": 190,
+    "unit": "g",
+    "from": "FDC portion"
+   },
+   "per_100g": {
+    "kcal": 16.0,
+    "carbs_g": 3.47,
+    "protein_g": 0.79,
+    "fat_g": 0.25,
+    "fibre_g": 1.9,
+    "sodium_mg": 115.0,
+    "caffeine_mg": 0.0
+   },
+   "phases": [
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Tomatoes and tomato juice. Single ingredient food, so contains comes from the food itself. Cross contact varies by brand, so check the label.",
+   "source": {
+    "database": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "fdc_id": 170051,
+    "description": "Tomatoes, red, ripe, canned, packed in tomato juice"
    }
   },
   {
@@ -4260,6 +4335,458 @@
     "data_type": "SR Legacy",
     "fdc_id": 171890,
     "description": "Beverages, coffee, brewed, prepared with tap water"
+   }
+  },
+  {
+   "id": "maurten_gel_100",
+   "name": "Maurten Gel 100",
+   "serving": {
+    "label": "1 sachet",
+    "g": 40,
+    "unit": "piece",
+    "from": "label"
+   },
+   "per_100g": {
+    "kcal": 250.0,
+    "carbs_g": 62.5,
+    "protein_g": 0.0,
+    "fat_g": 0.0,
+    "fibre_g": 0.0,
+    "sodium_mg": 50.0,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "before",
+    "during"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Read from the maker's label: ingredients and allergen statement below. No may contain text. The maker says the gel is not certified gluten free.",
+   "source": {
+    "database": "Maker's label",
+    "brand": "Maurten",
+    "product": "Gel 100",
+    "url": "https://www.maurten.com/products/gel-100-box",
+    "read": "2026-11-23",
+    "label_serving": "1 sachet 1.4oz. (40g)",
+    "label_per": "40 g serving",
+    "label_values": {
+     "kcal": 100,
+     "carbs_g": 25,
+     "protein_g": 0,
+     "fat_g": 0,
+     "fibre_g": 0,
+     "sodium_mg": 20,
+     "caffeine_mg": null
+    },
+    "ingredients": "Water, glucose, fructose, sodium alginate, gluconic acid, calcium carbonate.",
+    "allergen_statement": "While Maurten Gels are made using ingredients that are free from gluten and other common allergens, the final product is not certified as gluten-free.",
+    "nutrition_url": "https://maurten.imgix.net/photos/Products/Nutrition-Facts/GEL100_US.jpg",
+    "allergen_url": "https://www.maurten.com/faq/general-product"
+   }
+  },
+  {
+   "id": "maurten_gel_100_caf",
+   "name": "Maurten Gel 100 Caf 100 (100 mg caffeine)",
+   "serving": {
+    "label": "1 sachet",
+    "g": 40,
+    "unit": "piece",
+    "from": "label"
+   },
+   "per_100g": {
+    "kcal": 250.0,
+    "carbs_g": 62.5,
+    "protein_g": 0.0,
+    "fat_g": 0.0,
+    "fibre_g": 0.0,
+    "sodium_mg": 55.0,
+    "caffeine_mg": 250.0
+   },
+   "phases": [
+    "before",
+    "during"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "caffeine"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Read from the maker's label: ingredients and allergen statement below. No may contain text. The maker says the gel is not certified gluten free.",
+   "source": {
+    "database": "Maker's label",
+    "brand": "Maurten",
+    "product": "Gel 100 Caf 100",
+    "url": "https://www.maurten.com/products/gel-100-caf-100-box",
+    "read": "2026-11-23",
+    "label_serving": "1 sachet (40g)",
+    "label_per": "40 g serving",
+    "label_values": {
+     "kcal": 100,
+     "carbs_g": 25,
+     "protein_g": 0,
+     "fat_g": 0,
+     "fibre_g": 0,
+     "sodium_mg": 22,
+     "caffeine_mg": 100
+    },
+    "ingredients": "Water, glucose, fructose, sodium alginate, gluconic acid, calcium carbonate, caffeine. Contains caffeine 100mg/serving.",
+    "allergen_statement": "While Maurten Gels are made using ingredients that are free from gluten and other common allergens, the final product is not certified as gluten-free.",
+    "nutrition_url": "https://maurten.imgix.net/photos/Products/Nutrition-Facts/GEL100_CAF_US.jpg",
+    "allergen_url": "https://www.maurten.com/faq/general-product"
+   }
+  },
+  {
+   "id": "skratch_hydration",
+   "name": "Skratch Sport Hydration mix, Lemon + Lime",
+   "serving": {
+    "label": "1 scoop",
+    "g": 22,
+    "unit": "g",
+    "from": "label"
+   },
+   "per_100g": {
+    "kcal": 363.64,
+    "carbs_g": 90.91,
+    "protein_g": 0.0,
+    "fat_g": 0.0,
+    "fibre_g": 0.0,
+    "sodium_mg": 1818.18,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "during"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Read from the maker's label: ingredients and allergen statement below. The label says dairy free, gluten free and nut free, with no may contain text.",
+   "source": {
+    "database": "Maker's label",
+    "brand": "Skratch Labs",
+    "product": "Sport Hydration Drink Mix, Lemon + Lime",
+    "url": "https://www.skratchlabs.com/products/hydration-sport-drink-mix?variant=32766105157703",
+    "read": "2026-11-23",
+    "label_serving": "1 scoop (22g)",
+    "label_per": "22 g serving",
+    "label_values": {
+     "kcal": 80,
+     "carbs_g": 20,
+     "protein_g": 0,
+     "fat_g": 0,
+     "fibre_g": 0,
+     "sodium_mg": 400,
+     "caffeine_mg": null
+    },
+    "ingredients": "Cane Sugar, Sodium Citrate, Dextrose, Citric Acid, Calcium Citrate, Magnesium Carbonate, Potassium Citrate, Lemon Oil, Lime Oil, Lemon Juice, Lime Juice, Ascorbic Acid (Vitamin C).",
+    "allergen_statement": "Dairy-free. Gluten-free. Nut-free. Kosher. Vegan. Non-GMO.",
+    "nutrition_url": "https://www.skratchlabs.com/cdn/shop/files/SDM-LL-440g_032124_OL_NFP.svg"
+   }
+  },
+  {
+   "id": "maltodextrin",
+   "name": "Maltodextrin powder (NOW Carbo Gain)",
+   "serving": {
+    "label": "1/4 cup",
+    "g": 31.5,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 380.95,
+    "carbs_g": 95.24,
+    "protein_g": 0.0,
+    "fat_g": 0.0,
+    "fibre_g": 0.0,
+    "sodium_mg": 71.43,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "during",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [
+    "gluten",
+    "soy",
+    "dairy",
+    "eggs",
+    "fish_shellfish",
+    "tree_nuts",
+    "sesame"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Read from the maker's label: ingredients and allergen statement below. Pure maltodextrin, made in a facility that also handles wheat, soy, milk, egg, fish, shellfish, tree nuts and sesame. Peanuts are not named.",
+   "source": {
+    "database": "Maker's label",
+    "brand": "NOW Sports",
+    "product": "Carbo Gain Powder (maltodextrin)",
+    "url": "https://www.nowfoods.com/products/sports-nutrition/carbo-gain-powder",
+    "read": "2026-11-23",
+    "label_serving": "1/2 cup (63g)",
+    "label_per": "63 g serving",
+    "label_values": {
+     "kcal": 240,
+     "carbs_g": 60,
+     "protein_g": 0,
+     "fat_g": 0,
+     "fibre_g": 0,
+     "sodium_mg": 45,
+     "caffeine_mg": null
+    },
+    "ingredients": "Pure Maltodextrin (from Non-GMO corn).",
+    "allergen_statement": "Not manufactured with yeast, wheat, gluten, soy, milk, egg, fish, shellfish, tree nut or sesame ingredients. Produced in a GMP facility that processes other ingredients containing these allergens."
+   }
+  },
+  {
+   "id": "pea_protein",
+   "name": "Pea protein powder, unflavored (NOW)",
+   "serving": {
+    "label": "1 scoop",
+    "g": 33,
+    "unit": "g",
+    "from": "label"
+   },
+   "per_100g": {
+    "kcal": 363.64,
+    "carbs_g": 3.03,
+    "protein_g": 72.73,
+    "fat_g": 6.06,
+    "fibre_g": 0.0,
+    "sodium_mg": 969.7,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [],
+   "may_contain": [
+    "gluten",
+    "soy",
+    "dairy",
+    "eggs",
+    "fish_shellfish",
+    "tree_nuts",
+    "sesame"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Read from the maker's label: ingredients and allergen statement below. Pea protein isolate, made in a facility that also handles wheat, soy, milk, egg, fish, shellfish, tree nuts and sesame. Peanuts are not named.",
+   "source": {
+    "database": "Maker's label",
+    "brand": "NOW Sports",
+    "product": "Pea Protein, Unflavored",
+    "url": "https://www.nowfoods.com/products/sports-nutrition/pea-protein-unflavored-powder",
+    "read": "2026-11-23",
+    "label_serving": "1 level scoop (33g)",
+    "label_per": "33 g serving",
+    "label_values": {
+     "kcal": 120,
+     "carbs_g": 1,
+     "protein_g": 24,
+     "fat_g": 2,
+     "fibre_g": 0,
+     "sodium_mg": 320,
+     "caffeine_mg": null
+    },
+    "ingredients": "Yellow Pea Protein Isolate.",
+    "allergen_statement": "Not manufactured with wheat, gluten, soy, corn, milk, egg, fish, shellfish, tree nut or sesame ingredients. Produced in a GMP facility that processes other ingredients containing these allergens."
+   }
+  },
+  {
+   "id": "whey_protein",
+   "name": "Whey protein powder, chocolate (Optimum Nutrition)",
+   "serving": {
+    "label": "1 scoop",
+    "g": 31,
+    "unit": "g",
+    "from": "label"
+   },
+   "per_100g": {
+    "kcal": 387.1,
+    "carbs_g": 9.68,
+    "protein_g": 77.42,
+    "fat_g": 4.84,
+    "fibre_g": null,
+    "sodium_mg": 419.35,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "after",
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "dairy",
+    "soy"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Read from the maker's label: ingredients and allergen statement below. Contains milk and soy (lecithin). No may contain text.",
+   "source": {
+    "database": "Maker's label",
+    "brand": "Optimum Nutrition",
+    "product": "Gold Standard 100% Whey, Double Rich Chocolate",
+    "url": "https://www.optimumnutrition.com/en-us/products/gold-standard-100-whey-protein-powder",
+    "read": "2026-11-23",
+    "label_serving": "31g (About 1 Scoop)",
+    "label_per": "31 g serving",
+    "label_values": {
+     "kcal": 120,
+     "carbs_g": 3,
+     "protein_g": 24,
+     "fat_g": 1.5,
+     "fibre_g": null,
+     "sodium_mg": 130,
+     "caffeine_mg": null
+    },
+    "ingredients": "Protein Blend (Whey Protein Isolate, Whey Protein Concentrate, Hydrolyzed Whey Protein), Cocoa Powder (Processed with Alkali), Sunflower and/or Soy Lecithin, Natural and Artificial Flavor, Acesulfame Potassium.",
+    "allergen_statement": "CONTAINS: MILK, SOY.",
+    "nutrition_url": "https://www.optimumnutrition.com/cdn/shop/files/GSW_DRC_2lb_NFP.jpg",
+    "value_notes": "The label prints dietary fiber as <1g, so fibre is left null."
+   }
+  },
+  {
+   "id": "soy_chocolate_milk",
+   "name": "Soy chocolate milk (Silk)",
+   "serving": {
+    "label": "1 cup",
+    "g": 240,
+    "unit": "ml",
+    "from": "label"
+   },
+   "per_100g": {
+    "kcal": 62.5,
+    "carbs_g": 7.08,
+    "protein_g": 3.33,
+    "fat_g": 2.08,
+    "fibre_g": 1.25,
+    "sodium_mg": 33.33,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "after",
+    "everyday"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "soy"
+   ],
+   "may_contain": [],
+   "allergens_checked": true,
+   "allergen_source": "Read from the maker's label: ingredients and allergen statement below. Contains soy. No may contain text.",
+   "source": {
+    "database": "Maker's label",
+    "brand": "Silk",
+    "product": "Chocolate Soymilk (refrigerated)",
+    "url": "https://www.silk.com/plant-based-products/soymilk/chocolate-soymilk/",
+    "read": "2026-11-23",
+    "label_serving": "1 Cup (240ml)",
+    "label_per": "240 g serving",
+    "label_values": {
+     "kcal": 150,
+     "carbs_g": 17,
+     "protein_g": 8,
+     "fat_g": 5,
+     "fibre_g": 3,
+     "sodium_mg": 80,
+     "caffeine_mg": null
+    },
+    "ingredients": "Soymilk (Water, Soybeans), Cane Sugar, Cocoa (Processed with Alkali), Contains 2% or Less of: Vitamin and Mineral Blend (Calcium Carbonate, Vitamin A Palmitate, Vitamin E Acetate, Vitamin D2, Riboflavin [B2], Vitamin B12, Potassium Iodide), Sea Salt, Gellan Gum, Ascorbic Acid (Vitamin C To Protect Freshness), Natural Flavor.",
+    "allergen_statement": "Contains Soy.",
+    "value_notes": "The label serving is 240 ml. Like the other drinks in the library, 1 ml is counted as 1 g, so per_100g is per 100 ml."
+   }
+  },
+  {
+   "id": "gnocchi",
+   "name": "Potato gnocchi, shelf stable (De Cecco)",
+   "serving": {
+    "label": "100 g",
+    "g": 100,
+    "unit": "g",
+    "from": "app"
+   },
+   "per_100g": {
+    "kcal": 155.0,
+    "carbs_g": 32.0,
+    "protein_g": 3.3,
+    "fat_g": 1.0,
+    "fibre_g": 2.6,
+    "sodium_mg": 512.0,
+    "caffeine_mg": null
+   },
+   "phases": [
+    "everyday",
+    "ingredient"
+   ],
+   "diets": [
+    "vegan",
+    "vegetarian",
+    "pescatarian"
+   ],
+   "contains": [
+    "gluten"
+   ],
+   "may_contain": [
+    "soy"
+   ],
+   "allergens_checked": true,
+   "allergen_source": "Read from the maker's label: ingredients and allergen statement below. Contains wheat. May contain soy and mustard (mustard is not on the app's avoid list).",
+   "source": {
+    "database": "Maker's label",
+    "brand": "De Cecco",
+    "product": "Gnocchi di Patate (500 g, shelf stable)",
+    "url": "https://shop.dececco.com/en-ie/product/gnocchi-di-patate-pasta-shop-de-cecco",
+    "read": "2026-11-23",
+    "label_serving": "per 100 g (EU label)",
+    "label_per": "100 g",
+    "label_values": {
+     "kcal": 155,
+     "carbs_g": 32,
+     "protein_g": 3.3,
+     "fat_g": 1,
+     "fibre_g": 2.6,
+     "salt_g": 1.28,
+     "caffeine_mg": null
+    },
+    "ingredients": "potato puree 80%[water, dehytrated potato flakes 24%(potatoes 99%,spices)],potato starch, WHEAT flour, rice flour, spices, salt, acidity regulator: lactic acid, preservative: potassium sorbate.",
+    "allergen_statement": "May contain SOY and MUSTARD",
+    "value_notes": "The EU label gives salt, not sodium. Sodium is salt divided by 2.5 (EU Regulation 1169/2011, Annex I)."
    }
   }
  ]
