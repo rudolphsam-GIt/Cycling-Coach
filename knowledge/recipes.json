@@ -1,0 +1,806 @@
+{
+  "about": "Recipes for riders, written for this app in our own words (not copied from any cookbook or website). Every ingredient is a knowledge/foods.json id. Amounts are g, ml for drinks, or count for whole foods like eggs. Macros, diet tags and allergens are computed from the ingredients by metrics/recipes.py and are never typed here. A swap replaces one ingredient with the foods in its with list (an empty list means leave it out).",
+  "recipes": [
+    {
+      "id": "overnight_oats",
+      "name": "Overnight oats",
+      "slots": ["breakfast", "pre_ride"],
+      "servings": 1,
+      "prep_min": 5,
+      "cook_min": 0,
+      "ingredients": [
+        {"food": "oats", "g": 80},
+        {"food": "milk_2pct", "ml": 200},
+        {"food": "greek_yogurt", "g": 100},
+        {"food": "chia_seeds", "g": 12},
+        {"food": "maple_syrup", "g": 20},
+        {"food": "blueberries", "g": 75}
+      ],
+      "steps": [
+        "Stir the oats, milk, yogurt, chia seeds and maple syrup together in a jar.",
+        "Cover and leave in the fridge overnight, or at least 4 hours.",
+        "Top with the blueberries in the morning. Loosen with a splash of milk if it's too thick."
+      ],
+      "storage": {"fridge_days": 2, "freezes": false},
+      "why": "Ready the moment you wake up, with slow carbs from the oats and protein from the yogurt to start the day.",
+      "swaps": [
+        {"text": "Use soy milk for dairy free or vegan", "replace": "milk_2pct", "with": [{"food": "soy_milk", "ml": 200}]},
+        {"text": "Use soy yogurt for dairy free or vegan", "replace": "greek_yogurt", "with": [{"food": "soy_yogurt", "g": 100}]}
+      ]
+    },
+    {
+      "id": "banana_pancakes",
+      "name": "Banana oat pancakes",
+      "slots": ["breakfast"],
+      "servings": 2,
+      "prep_min": 10,
+      "cook_min": 15,
+      "ingredients": [
+        {"food": "banana", "count": 2},
+        {"food": "egg", "count": 2},
+        {"food": "oats", "g": 100},
+        {"food": "milk_2pct", "ml": 120},
+        {"food": "cinnamon", "g": 2},
+        {"food": "butter", "g": 10},
+        {"food": "maple_syrup", "g": 40}
+      ],
+      "steps": [
+        "Blend the oats to a coarse flour.",
+        "Add the bananas, eggs, milk and cinnamon and blend until smooth. Rest 5 minutes so it thickens.",
+        "Melt a little butter in a pan over medium heat and pour in small rounds of batter.",
+        "Flip when bubbles show on top, about 2 minutes a side.",
+        "Serve with the maple syrup."
+      ],
+      "storage": {"fridge_days": 2, "freezes": true},
+      "why": "A big carb breakfast that sits lighter than it looks, and the cooked pancakes freeze for rushed mornings.",
+      "swaps": [
+        {"text": "Use 2 tbsp ground flaxseed in 6 tbsp water for the eggs", "replace": "egg", "with": [{"food": "flaxseed", "g": 20}]},
+        {"text": "Use soy milk for dairy free or vegan", "replace": "milk_2pct", "with": [{"food": "soy_milk", "ml": 120}]},
+        {"text": "Use canola oil in the pan", "replace": "butter", "with": [{"food": "canola_oil", "g": 10}]}
+      ]
+    },
+    {
+      "id": "rice_porridge",
+      "name": "Rice porridge with maple and fruit",
+      "slots": ["breakfast", "pre_ride"],
+      "servings": 2,
+      "prep_min": 5,
+      "cook_min": 25,
+      "ingredients": [
+        {"food": "white_rice_raw", "g": 120},
+        {"food": "milk_2pct", "ml": 400},
+        {"food": "maple_syrup", "g": 30},
+        {"food": "cinnamon", "g": 2},
+        {"food": "raisins", "g": 40},
+        {"food": "banana", "count": 1}
+      ],
+      "steps": [
+        "Simmer the rice in 300 ml water until most of the water is gone, about 12 minutes.",
+        "Add the milk, cinnamon and raisins and simmer gently, stirring often, until creamy, about 12 minutes more.",
+        "Stir in the maple syrup and top with sliced banana."
+      ],
+      "storage": {"fridge_days": 3, "freezes": false},
+      "why": "Low in fibre and easy on the stomach, so it suits an early start before a hard or long ride.",
+      "swaps": [
+        {"text": "Use soy milk for dairy free or vegan", "replace": "milk_2pct", "with": [{"food": "soy_milk", "ml": 400}]}
+      ]
+    },
+    {
+      "id": "bagel_smoothie",
+      "name": "Bagel with jam and a banana smoothie",
+      "slots": ["breakfast", "pre_ride"],
+      "servings": 1,
+      "prep_min": 5,
+      "cook_min": 3,
+      "ingredients": [
+        {"food": "bagel", "count": 1},
+        {"food": "jam", "g": 30},
+        {"food": "banana", "count": 1},
+        {"food": "strawberries", "g": 100},
+        {"food": "milk_2pct", "ml": 200}
+      ],
+      "steps": [
+        "Toast the bagel and spread with jam.",
+        "Blend the banana, strawberries and milk until smooth."
+      ],
+      "storage": {"fridge_days": 0, "freezes": false},
+      "why": "Lots of quick carbs in a few minutes, about 2 to 3 hours before a ride.",
+      "swaps": [
+        {"text": "Use soy milk for dairy free", "replace": "milk_2pct", "with": [{"food": "soy_milk", "ml": 200}]},
+        {"text": "Use honey for jam", "replace": "jam", "with": [{"food": "honey", "g": 25}]}
+      ]
+    },
+    {
+      "id": "rice_egg_bowl",
+      "name": "Savoury rice and egg bowl",
+      "slots": ["breakfast", "lunch"],
+      "servings": 1,
+      "prep_min": 5,
+      "cook_min": 10,
+      "ingredients": [
+        {"food": "white_rice_cooked", "g": 250},
+        {"food": "egg", "count": 2},
+        {"food": "spinach", "g": 30},
+        {"food": "soy_sauce", "ml": 10},
+        {"food": "olive_oil", "g": 5},
+        {"food": "sesame_seeds", "g": 5}
+      ],
+      "steps": [
+        "Warm the rice in a pan with the oil.",
+        "Push it to one side, crack in the eggs and fry or scramble them.",
+        "Stir in the spinach until it wilts.",
+        "Season with the soy sauce and scatter over the sesame seeds."
+      ],
+      "storage": {"fridge_days": 1, "freezes": false},
+      "why": "A savoury start for riders who don't like sweet breakfasts, using rice cooked the day before.",
+      "swaps": [
+        {"text": "Use crumbled firm tofu for eggs", "replace": "egg", "with": [{"food": "tofu_firm", "g": 150}]},
+        {"text": "Use a pinch of salt for soy sauce (or a gluten free tamari)", "replace": "soy_sauce", "with": [{"food": "salt", "g": 1}]},
+        {"text": "Leave out the sesame seeds", "replace": "sesame_seeds", "with": []}
+      ]
+    },
+    {
+      "id": "rice_cakes_sweet",
+      "name": "Sweet rice cakes with dates",
+      "slots": ["pocket"],
+      "servings": 12,
+      "prep_min": 15,
+      "cook_min": 20,
+      "ingredients": [
+        {"food": "white_rice_raw", "g": 300},
+        {"food": "medjool_dates", "count": 6},
+        {"food": "maple_syrup", "g": 40},
+        {"food": "cinnamon", "g": 2},
+        {"food": "salt", "g": 1.5}
+      ],
+      "steps": [
+        "Cook the rice in 600 ml water, covered, until soft and sticky. Short grain or sushi rice holds together best.",
+        "Chop the dates and stir them in with the maple syrup, cinnamon and salt while the rice is hot.",
+        "Press firmly into a lined tray about 2 cm deep and let it cool.",
+        "Cut into 12 squares and wrap each in foil or paper."
+      ],
+      "storage": {"fridge_days": 3, "freezes": true},
+      "why": "Real food carbs that are easy to chew on the bike, with a little salt for longer rides.",
+      "swaps": []
+    },
+    {
+      "id": "rice_cakes_savoury",
+      "name": "Savoury rice cakes with egg",
+      "slots": ["pocket"],
+      "servings": 12,
+      "prep_min": 15,
+      "cook_min": 25,
+      "ingredients": [
+        {"food": "white_rice_raw", "g": 300},
+        {"food": "egg", "count": 3},
+        {"food": "soy_sauce", "ml": 20},
+        {"food": "olive_oil", "g": 10},
+        {"food": "salt", "g": 1.5}
+      ],
+      "steps": [
+        "Cook the rice in 600 ml water, covered, until soft and sticky.",
+        "Scramble the eggs in the oil and break them into small pieces.",
+        "Mix the eggs, soy sauce and salt through the rice.",
+        "Press into a lined tray about 2 cm deep, cool, then cut into 12 squares and wrap."
+      ],
+      "storage": {"fridge_days": 2, "freezes": true},
+      "why": "A salty break from sweet food on long days, with a little protein.",
+      "swaps": [
+        {"text": "Use crumbled firm tofu for eggs", "replace": "egg", "with": [{"food": "tofu_firm", "g": 150}]},
+        {"text": "Use a pinch more salt for soy sauce (or a gluten free tamari)", "replace": "soy_sauce", "with": [{"food": "salt", "g": 1.5}]}
+      ]
+    },
+    {
+      "id": "banana_bread",
+      "name": "Banana bread",
+      "slots": ["pocket", "snack"],
+      "servings": 10,
+      "prep_min": 15,
+      "cook_min": 55,
+      "ingredients": [
+        {"food": "flour_all_purpose", "g": 220},
+        {"food": "banana", "count": 3},
+        {"food": "egg", "count": 2},
+        {"food": "canola_oil", "g": 60},
+        {"food": "brown_sugar", "g": 80},
+        {"food": "baking_soda", "g": 5},
+        {"food": "cinnamon", "g": 2},
+        {"food": "salt", "g": 1.5}
+      ],
+      "steps": [
+        "Heat the oven to 175°C (350°F) and line a loaf tin.",
+        "Mash the bananas well, then beat in the eggs, oil and sugar.",
+        "Fold in the flour, baking soda, cinnamon and salt until just mixed.",
+        "Bake 50 to 55 minutes, until a skewer comes out clean. Cool before slicing into 10."
+      ],
+      "storage": {"fridge_days": 4, "freezes": true},
+      "why": "Dense and moist, so a wrapped slice survives a jersey pocket. Slices freeze well for the week.",
+      "swaps": [
+        {"text": "Use 2 tbsp ground flaxseed in 6 tbsp water for the eggs", "replace": "egg", "with": [{"food": "flaxseed", "g": 20}]}
+      ]
+    },
+    {
+      "id": "energy_balls",
+      "name": "Oat and date energy balls",
+      "slots": ["pocket", "snack"],
+      "servings": 12,
+      "prep_min": 20,
+      "cook_min": 0,
+      "ingredients": [
+        {"food": "oats", "g": 100},
+        {"food": "medjool_dates", "count": 8},
+        {"food": "peanut_butter", "g": 64},
+        {"food": "cocoa", "g": 10},
+        {"food": "chia_seeds", "g": 12},
+        {"food": "salt", "g": 1}
+      ],
+      "steps": [
+        "Blend the dates to a sticky paste. Soak them in hot water for 10 minutes first if they're dry.",
+        "Add the oats, peanut butter, cocoa, chia seeds and salt and pulse until it holds together.",
+        "Roll into 12 balls and chill for 30 minutes."
+      ],
+      "storage": {"fridge_days": 7, "freezes": true},
+      "why": "No baking, and they keep a week, so there's always something to grab before a ride.",
+      "swaps": [
+        {"text": "Use tahini for peanut butter", "replace": "peanut_butter", "with": [{"food": "tahini", "g": 60}]},
+        {"text": "Use cinnamon for cocoa", "replace": "cocoa", "with": [{"food": "cinnamon", "g": 3}]},
+        {"text": "Leave out the chia seeds", "replace": "chia_seeds", "with": []}
+      ]
+    },
+    {
+      "id": "jam_sandwich_squares",
+      "name": "Jam sandwich squares",
+      "slots": ["pocket"],
+      "servings": 2,
+      "prep_min": 5,
+      "cook_min": 0,
+      "ingredients": [
+        {"food": "white_bread", "count": 4},
+        {"food": "jam", "g": 50}
+      ],
+      "steps": [
+        "Spread jam thinly on two slices and close the sandwiches.",
+        "Trim the crusts if you like, cut each sandwich into 4 squares, and wrap in foil."
+      ],
+      "storage": {"fridge_days": 1, "freezes": true},
+      "why": "Cheap, quick and gentle on the stomach. White bread has little fibre, which helps when riding hard.",
+      "swaps": [
+        {"text": "Use honey for jam", "replace": "jam", "with": [{"food": "honey", "g": 50}]}
+      ]
+    },
+    {
+      "id": "sweet_potato_bites",
+      "name": "Baked sweet potato bites",
+      "slots": ["pocket", "snack"],
+      "servings": 4,
+      "prep_min": 10,
+      "cook_min": 35,
+      "ingredients": [
+        {"food": "sweet_potato_baked", "g": 450},
+        {"food": "olive_oil", "g": 5},
+        {"food": "maple_syrup", "g": 20},
+        {"food": "salt", "g": 1.5},
+        {"food": "cinnamon", "g": 1}
+      ],
+      "steps": [
+        "Heat the oven to 200°C (400°F).",
+        "Peel and cut the sweet potatoes into bite size cubes and toss with the oil, maple syrup, salt and cinnamon.",
+        "Roast 30 to 35 minutes, turning once, until soft with caramel edges.",
+        "Cool, then pack in a small bag or foil."
+      ],
+      "storage": {"fridge_days": 3, "freezes": false},
+      "why": "A salty sweet real food option with no gluten, for riders who tire of bars.",
+      "swaps": []
+    },
+    {
+      "id": "chocolate_milk_recovery",
+      "name": "Chocolate milk",
+      "slots": ["recovery"],
+      "servings": 1,
+      "prep_min": 1,
+      "cook_min": 0,
+      "ingredients": [
+        {"food": "chocolate_milk", "ml": 500}
+      ],
+      "steps": [
+        "Drink within about an hour of finishing, with a meal to follow later."
+      ],
+      "storage": {"fridge_days": 0, "freezes": false},
+      "why": "Carbs, protein and fluid in one bottle, ready the moment you get home.",
+      "swaps": [
+        {"text": "Use soy chocolate milk for dairy free or vegan", "replace": "chocolate_milk", "with": [{"food": "soy_chocolate_milk", "ml": 500}]}
+      ]
+    },
+    {
+      "id": "homemade_chocolate_milk",
+      "name": "Homemade chocolate milk",
+      "slots": ["recovery"],
+      "servings": 1,
+      "prep_min": 3,
+      "cook_min": 0,
+      "ingredients": [
+        {"food": "milk_2pct", "ml": 450},
+        {"food": "cocoa", "g": 10},
+        {"food": "sugar", "g": 30}
+      ],
+      "steps": [
+        "Stir the cocoa and sugar with a splash of warm milk to a smooth paste.",
+        "Whisk in the rest of the milk. Shake in a bottle if you're taking it with you."
+      ],
+      "storage": {"fridge_days": 2, "freezes": false},
+      "why": "The same recovery drink for less money, and you choose the sweetness.",
+      "swaps": [
+        {"text": "Use soy milk for dairy free or vegan", "replace": "milk_2pct", "with": [{"food": "soy_milk", "ml": 450}]}
+      ]
+    },
+    {
+      "id": "recovery_smoothie",
+      "name": "Recovery smoothie",
+      "slots": ["recovery", "breakfast"],
+      "servings": 1,
+      "prep_min": 5,
+      "cook_min": 0,
+      "ingredients": [
+        {"food": "banana", "count": 1},
+        {"food": "raspberries_frozen", "g": 100},
+        {"food": "greek_yogurt", "g": 150},
+        {"food": "oats", "g": 30},
+        {"food": "milk_2pct", "ml": 200},
+        {"food": "honey", "g": 15}
+      ],
+      "steps": [
+        "Put everything in a blender and blend until smooth. Add more milk if it's too thick."
+      ],
+      "storage": {"fridge_days": 1, "freezes": false},
+      "why": "Easy to get down when you're not hungry after a hard ride, with carbs and protein together.",
+      "swaps": [
+        {"text": "Use soy yogurt for dairy free or vegan", "replace": "greek_yogurt", "with": [{"food": "soy_yogurt", "g": 150}]},
+        {"text": "Use soy milk for dairy free or vegan", "replace": "milk_2pct", "with": [{"food": "soy_milk", "ml": 200}]},
+        {"text": "Use maple syrup for honey", "replace": "honey", "with": [{"food": "maple_syrup", "g": 15}]}
+      ]
+    },
+    {
+      "id": "greek_yogurt_bowl",
+      "name": "Greek yogurt bowl",
+      "slots": ["recovery", "breakfast", "snack"],
+      "servings": 1,
+      "prep_min": 5,
+      "cook_min": 0,
+      "ingredients": [
+        {"food": "greek_yogurt", "g": 250},
+        {"food": "banana", "count": 1},
+        {"food": "blueberries", "g": 100},
+        {"food": "honey", "g": 20},
+        {"food": "pumpkin_seeds", "g": 15}
+      ],
+      "steps": [
+        "Spoon the yogurt into a bowl.",
+        "Top with sliced banana, the blueberries, a drizzle of honey and the pumpkin seeds."
+      ],
+      "storage": {"fridge_days": 0, "freezes": false},
+      "why": "A high protein bowl for after rides, with fruit to refill carbs.",
+      "swaps": [
+        {"text": "Use soy yogurt for dairy free or vegan", "replace": "greek_yogurt", "with": [{"food": "soy_yogurt", "g": 250}]},
+        {"text": "Use maple syrup for honey", "replace": "honey", "with": [{"food": "maple_syrup", "g": 20}]},
+        {"text": "Leave out the seeds", "replace": "pumpkin_seeds", "with": []}
+      ]
+    },
+    {
+      "id": "eggs_on_toast",
+      "name": "Scrambled eggs on toast",
+      "slots": ["recovery", "breakfast"],
+      "servings": 1,
+      "prep_min": 3,
+      "cook_min": 7,
+      "ingredients": [
+        {"food": "wholewheat_bread", "count": 2},
+        {"food": "egg", "count": 3},
+        {"food": "butter", "g": 7},
+        {"food": "spinach", "g": 30},
+        {"food": "salt", "g": 0.5}
+      ],
+      "steps": [
+        "Toast the bread.",
+        "Melt the butter in a pan over low heat, add the beaten eggs and stir slowly until just set.",
+        "Fold in the spinach at the end and season."
+      ],
+      "storage": {"fridge_days": 0, "freezes": false},
+      "why": "Quick protein after a ride. Add a glass of juice or a banana on big days for more carbs.",
+      "swaps": [
+        {"text": "Scramble 150 g crumbled firm tofu instead of eggs", "replace": "egg", "with": [{"food": "tofu_firm", "g": 150}]},
+        {"text": "Use olive oil for butter", "replace": "butter", "with": [{"food": "olive_oil", "g": 7}]}
+      ]
+    },
+    {
+      "id": "burrito_bowl",
+      "name": "Burrito bowl",
+      "slots": ["lunch", "dinner"],
+      "servings": 2,
+      "prep_min": 15,
+      "cook_min": 20,
+      "ingredients": [
+        {"food": "white_rice_raw", "g": 150},
+        {"food": "black_beans", "g": 340},
+        {"food": "chicken_breast", "g": 250},
+        {"food": "red_pepper", "g": 120},
+        {"food": "onion", "g": 110},
+        {"food": "tomatoes", "g": 120},
+        {"food": "avocado", "g": 100},
+        {"food": "cumin", "g": 4},
+        {"food": "paprika", "g": 4},
+        {"food": "olive_oil", "g": 15},
+        {"food": "salt", "g": 2}
+      ],
+      "steps": [
+        "Cook the rice.",
+        "Slice the chicken, pepper and onion. Fry in the oil with the cumin, paprika and salt until the chicken is cooked through.",
+        "Warm the beans in a small pan.",
+        "Dice the tomato and avocado.",
+        "Build bowls with rice, beans, the chicken mix, tomato and avocado."
+      ],
+      "storage": {"fridge_days": 3, "freezes": false},
+      "why": "Rice and beans give plenty of carbs, and everything except the avocado packs well for lunch the next day.",
+      "swaps": [
+        {"text": "Use firm tofu for chicken", "replace": "chicken_breast", "with": [{"food": "tofu_firm", "g": 250}]}
+      ]
+    },
+    {
+      "id": "lentil_curry",
+      "name": "Lentil and tomato curry with rice",
+      "slots": ["dinner", "lunch"],
+      "servings": 3,
+      "prep_min": 15,
+      "cook_min": 30,
+      "ingredients": [
+        {"food": "lentils", "g": 400},
+        {"food": "white_rice_raw", "g": 210},
+        {"food": "tomatoes_canned", "g": 400},
+        {"food": "onion", "g": 110},
+        {"food": "garlic", "g": 9},
+        {"food": "ginger_ground", "g": 2},
+        {"food": "cumin", "g": 4},
+        {"food": "paprika", "g": 2},
+        {"food": "cinnamon", "g": 1},
+        {"food": "spinach", "g": 60},
+        {"food": "olive_oil", "g": 15},
+        {"food": "salt", "g": 2}
+      ],
+      "steps": [
+        "Cook the rice.",
+        "Soften the chopped onion in the oil for 8 minutes, then add the garlic and spices for 1 minute.",
+        "Add the tomatoes and cooked lentils and simmer 15 minutes, adding water if it gets thick.",
+        "Stir in the spinach until wilted, season, and serve over the rice."
+      ],
+      "storage": {"fridge_days": 4, "freezes": true},
+      "why": "Cheap, filling and full of carbs and plant protein. It tastes better the next day.",
+      "swaps": []
+    },
+    {
+      "id": "pasta_bake",
+      "name": "Tomato pasta bake",
+      "slots": ["dinner"],
+      "servings": 4,
+      "prep_min": 15,
+      "cook_min": 35,
+      "ingredients": [
+        {"food": "pasta_dry", "g": 350},
+        {"food": "ground_beef", "g": 400},
+        {"food": "tomatoes_canned", "g": 800},
+        {"food": "onion", "g": 110},
+        {"food": "garlic", "g": 9},
+        {"food": "spinach", "g": 60},
+        {"food": "mozzarella", "g": 120},
+        {"food": "olive_oil", "g": 10},
+        {"food": "salt", "g": 2}
+      ],
+      "steps": [
+        "Heat the oven to 200°C (400°F). Cook the pasta 2 minutes short of the packet time.",
+        "Brown the beef with the onion and garlic in the oil, then add the tomatoes and simmer 10 minutes.",
+        "Stir in the pasta and spinach, tip into a baking dish and top with the mozzarella.",
+        "Bake 20 minutes until bubbling."
+      ],
+      "storage": {"fridge_days": 4, "freezes": true},
+      "why": "A big tray of carbs that reheats well, so the night before a long ride is already sorted.",
+      "swaps": [
+        {"text": "Use cooked lentils for beef", "replace": "ground_beef", "with": [{"food": "lentils", "g": 400}]},
+        {"text": "Leave out the cheese", "replace": "mozzarella", "with": []}
+      ]
+    },
+    {
+      "id": "noodle_stir_fry",
+      "name": "Chicken or tofu stir fry with rice noodles",
+      "slots": ["dinner", "lunch"],
+      "servings": 2,
+      "prep_min": 15,
+      "cook_min": 15,
+      "ingredients": [
+        {"food": "rice_noodles_dry", "g": 200},
+        {"food": "chicken_breast", "g": 300},
+        {"food": "broccoli", "g": 180},
+        {"food": "red_pepper", "g": 120},
+        {"food": "carrots", "g": 120},
+        {"food": "soy_sauce", "ml": 30},
+        {"food": "garlic", "g": 6},
+        {"food": "ginger_ground", "g": 2},
+        {"food": "maple_syrup", "g": 10},
+        {"food": "canola_oil", "g": 15}
+      ],
+      "steps": [
+        "Soak or boil the noodles as the packet says, then drain.",
+        "Stir fry the sliced chicken in the oil over high heat until cooked, then set aside.",
+        "Stir fry the vegetables for 4 minutes so they keep some bite.",
+        "Mix the soy sauce, garlic, ginger and maple syrup, then toss everything together with the noodles."
+      ],
+      "storage": {"fridge_days": 2, "freezes": false},
+      "why": "Quick on a weeknight, with lean protein and noodles that digest easily.",
+      "swaps": [
+        {"text": "Use firm tofu for chicken", "replace": "chicken_breast", "with": [{"food": "tofu_firm", "g": 300}]},
+        {"text": "Use salt and a little more maple for soy sauce (or a gluten free tamari)", "replace": "soy_sauce", "with": [{"food": "salt", "g": 2}]}
+      ]
+    },
+    {
+      "id": "chickpea_traybake",
+      "name": "Chickpea and potato traybake",
+      "slots": ["dinner", "lunch"],
+      "servings": 3,
+      "prep_min": 15,
+      "cook_min": 40,
+      "ingredients": [
+        {"food": "potato_baked", "g": 700},
+        {"food": "chickpeas", "g": 330},
+        {"food": "red_pepper", "g": 240},
+        {"food": "onion", "g": 110},
+        {"food": "olive_oil", "g": 25},
+        {"food": "paprika", "g": 4},
+        {"food": "cumin", "g": 2},
+        {"food": "salt", "g": 2},
+        {"food": "greek_yogurt", "g": 150}
+      ],
+      "steps": [
+        "Heat the oven to 210°C (410°F).",
+        "Cut the potatoes into chunks and toss on a big tray with the oil, paprika, cumin and salt. Roast 20 minutes.",
+        "Add the drained chickpeas and sliced pepper and onion, toss, and roast 20 minutes more.",
+        "Serve with spoonfuls of yogurt."
+      ],
+      "storage": {"fridge_days": 3, "freezes": false},
+      "why": "One tray, little washing up, and lots of carbs from the potatoes.",
+      "swaps": [
+        {"text": "Use soy yogurt, or leave it out", "replace": "greek_yogurt", "with": []}
+      ]
+    },
+    {
+      "id": "salmon_rice_greens",
+      "name": "Salmon with rice and greens",
+      "slots": ["dinner"],
+      "servings": 2,
+      "prep_min": 10,
+      "cook_min": 20,
+      "ingredients": [
+        {"food": "salmon", "g": 250},
+        {"food": "white_rice_raw", "g": 150},
+        {"food": "broccoli", "g": 180},
+        {"food": "spinach", "g": 60},
+        {"food": "soy_sauce", "ml": 15},
+        {"food": "lemon_juice", "ml": 15},
+        {"food": "olive_oil", "g": 10}
+      ],
+      "steps": [
+        "Cook the rice.",
+        "Rub the salmon with half the oil and roast at 200°C (400°F) for 12 to 15 minutes.",
+        "Steam the broccoli for 5 minutes and wilt the spinach in the remaining oil.",
+        "Drizzle the soy sauce and lemon juice over the salmon and greens and serve with the rice."
+      ],
+      "storage": {"fridge_days": 2, "freezes": false},
+      "why": "Protein and omega 3 fats from the salmon, with rice to refill after training.",
+      "swaps": [
+        {"text": "Use tempeh for salmon", "replace": "salmon", "with": [{"food": "tempeh", "g": 250}]},
+        {"text": "Use a pinch of salt for soy sauce (or a gluten free tamari)", "replace": "soy_sauce", "with": [{"food": "salt", "g": 1}]}
+      ]
+    },
+    {
+      "id": "bean_chilli",
+      "name": "Bean chilli with rice",
+      "slots": ["dinner", "lunch"],
+      "servings": 4,
+      "prep_min": 15,
+      "cook_min": 40,
+      "ingredients": [
+        {"food": "kidney_beans", "g": 260},
+        {"food": "black_beans", "g": 340},
+        {"food": "tomatoes_canned", "g": 800},
+        {"food": "onion", "g": 220},
+        {"food": "red_pepper", "g": 120},
+        {"food": "garlic", "g": 9},
+        {"food": "cumin", "g": 6},
+        {"food": "paprika", "g": 5},
+        {"food": "cocoa", "g": 5},
+        {"food": "olive_oil", "g": 15},
+        {"food": "salt", "g": 3},
+        {"food": "white_rice_raw", "g": 280}
+      ],
+      "steps": [
+        "Soften the chopped onion and pepper in the oil for 8 minutes, then add the garlic, cumin and paprika for 1 minute.",
+        "Add the tomatoes, beans, cocoa and salt and simmer 30 minutes, stirring now and then.",
+        "Cook the rice while it simmers, and serve together."
+      ],
+      "storage": {"fridge_days": 4, "freezes": true},
+      "why": "Makes four big portions that freeze well, with carbs and plant protein in every bowl.",
+      "swaps": [
+        {"text": "Leave out the cocoa", "replace": "cocoa", "with": []}
+      ]
+    },
+    {
+      "id": "gnocchi_tomato_beans",
+      "name": "Gnocchi with tomato and white beans",
+      "slots": ["dinner", "lunch"],
+      "servings": 2,
+      "prep_min": 5,
+      "cook_min": 20,
+      "ingredients": [
+        {"food": "gnocchi", "g": 500},
+        {"food": "white_beans", "g": 260},
+        {"food": "tomatoes_canned", "g": 400},
+        {"food": "garlic", "g": 9},
+        {"food": "spinach", "g": 60},
+        {"food": "olive_oil", "g": 15},
+        {"food": "mozzarella", "g": 60},
+        {"food": "salt", "g": 1.5}
+      ],
+      "steps": [
+        "Warm the garlic in the oil for a minute, add the tomatoes and salt, and simmer 10 minutes.",
+        "Stir in the drained beans and the spinach.",
+        "Boil the gnocchi until they float, drain, and fold into the sauce.",
+        "Tear the mozzarella over the top and let it melt."
+      ],
+      "storage": {"fridge_days": 2, "freezes": false},
+      "why": "A fast carb dinner from the cupboard, ready in about 25 minutes.",
+      "swaps": [
+        {"text": "Leave out the cheese", "replace": "mozzarella", "with": []}
+      ]
+    },
+    {
+      "id": "hummus_pitta",
+      "name": "Hummus and pitta with crunchy veg",
+      "slots": ["snack", "lunch"],
+      "servings": 1,
+      "prep_min": 5,
+      "cook_min": 0,
+      "ingredients": [
+        {"food": "hummus", "g": 90},
+        {"food": "pita", "count": 1},
+        {"food": "cucumber", "g": 100},
+        {"food": "carrots", "g": 60}
+      ],
+      "steps": [
+        "Warm the pitta and cut into strips.",
+        "Cut the cucumber and carrot into sticks and dip everything in the hummus."
+      ],
+      "storage": {"fridge_days": 0, "freezes": false},
+      "why": "A filling snack between rides without much fuss.",
+      "swaps": []
+    },
+    {
+      "id": "cottage_cheese_fruit",
+      "name": "Cottage cheese with mango",
+      "slots": ["snack", "recovery"],
+      "servings": 1,
+      "prep_min": 3,
+      "cook_min": 0,
+      "ingredients": [
+        {"food": "cottage_cheese", "g": 170},
+        {"food": "mango", "g": 120},
+        {"food": "honey", "g": 10}
+      ],
+      "steps": [
+        "Spoon the cottage cheese into a bowl, top with the mango and drizzle with honey."
+      ],
+      "storage": {"fridge_days": 0, "freezes": false},
+      "why": "A protein snack that suits the evening, and some riders use it before bed.",
+      "swaps": [
+        {"text": "Use maple syrup for honey", "replace": "honey", "with": [{"food": "maple_syrup", "g": 10}]}
+      ]
+    },
+    {
+      "id": "salted_edamame",
+      "name": "Salted edamame",
+      "slots": ["snack"],
+      "servings": 1,
+      "prep_min": 1,
+      "cook_min": 5,
+      "ingredients": [
+        {"food": "edamame", "g": 155},
+        {"food": "lemon_juice", "ml": 5},
+        {"food": "salt", "g": 1}
+      ],
+      "steps": [
+        "Boil or microwave the frozen edamame for 4 to 5 minutes.",
+        "Drain and toss with the salt and a squeeze of lemon."
+      ],
+      "storage": {"fridge_days": 2, "freezes": false},
+      "why": "A plant protein snack that's ready in five minutes.",
+      "swaps": []
+    },
+    {
+      "id": "trail_mix",
+      "name": "Trail mix",
+      "slots": ["snack"],
+      "servings": 8,
+      "prep_min": 5,
+      "cook_min": 0,
+      "ingredients": [
+        {"food": "raisins", "g": 150},
+        {"food": "peanuts", "g": 100},
+        {"food": "almonds", "g": 100},
+        {"food": "pumpkin_seeds", "g": 60}
+      ],
+      "steps": [
+        "Mix everything in a jar and shake. A small handful is one serving."
+      ],
+      "storage": {"fridge_days": 30, "freezes": false},
+      "why": "Energy dense, so it's handy on busy days when meals run late.",
+      "swaps": [
+        {"text": "Use sunflower seeds for almonds", "replace": "almonds", "with": [{"food": "sunflower_seeds", "g": 100}]}
+      ]
+    },
+    {
+      "id": "seed_fruit_mix",
+      "name": "Seed and raisin mix",
+      "slots": ["snack"],
+      "servings": 8,
+      "prep_min": 5,
+      "cook_min": 0,
+      "ingredients": [
+        {"food": "pumpkin_seeds", "g": 120},
+        {"food": "sunflower_seeds", "g": 120},
+        {"food": "raisins", "g": 180}
+      ],
+      "steps": [
+        "Toast the seeds in a dry pan for 3 minutes if you like, cool, and mix with the raisins."
+      ],
+      "storage": {"fridge_days": 30, "freezes": false},
+      "why": "A trail mix without whole nuts. Seeds are often packed beside nuts, so check the label if you avoid them.",
+      "swaps": []
+    },
+    {
+      "id": "pb_banana_toast",
+      "name": "Peanut butter and banana toast",
+      "slots": ["pre_ride", "snack"],
+      "servings": 1,
+      "prep_min": 3,
+      "cook_min": 3,
+      "ingredients": [
+        {"food": "white_bread", "count": 2},
+        {"food": "peanut_butter", "g": 16},
+        {"food": "banana", "count": 1},
+        {"food": "honey", "g": 10}
+      ],
+      "steps": [
+        "Toast the bread, spread thinly with peanut butter, top with sliced banana and a little honey."
+      ],
+      "storage": {"fridge_days": 0, "freezes": false},
+      "why": "A small pre ride snack, about 60 to 90 minutes before you go, with only a little fat.",
+      "swaps": [
+        {"text": "Use maple syrup for honey", "replace": "honey", "with": [{"food": "maple_syrup", "g": 10}]}
+      ]
+    },
+    {
+      "id": "potato_salt_bites",
+      "name": "Salted baby potatoes",
+      "slots": ["pocket", "pre_ride"],
+      "servings": 4,
+      "prep_min": 5,
+      "cook_min": 20,
+      "ingredients": [
+        {"food": "potato_baked", "g": 600},
+        {"food": "salt", "g": 2}
+      ],
+      "steps": [
+        "Boil small potatoes in their skins until just tender, about 15 to 20 minutes.",
+        "Drain, toss with the salt while warm, cool, and pack in a small bag."
+      ],
+      "storage": {"fridge_days": 3, "freezes": false},
+      "why": "Plain carbs and salt with almost no fat or fibre. Kind to the stomach on long, hot rides.",
+      "swaps": []
+    }
+  ]
+}

@@ -90,3 +90,8 @@ def climb_input(label: str, meters: float, *, key: str, unit: str, min_m: float,
     shown = st.number_input(f"{label} ({climb_unit(unit)})", min_value=lo, max_value=hi, value=value,
                             step=int(step), key=f"{key}_{unit}", **kwargs)
     return m_from_climb(shown, unit)
+
+
+# ── Kitchen measures ──────────────────────────────────────────────────────────
+# The conversions live in metrics.units so tests and the coach can use them without Streamlit.
+from metrics.units import kitchen_measure, kitchen_parts, kitchen_text  # noqa: E402,F401
