@@ -16,6 +16,7 @@ from db import schema
 from metrics import fueling
 
 PAGE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pages", "03_Race_Prep.py")
+DASHBOARD = os.path.join(os.path.dirname(PAGE), "01_Dashboard.py")
 
 
 class SuggestTests(unittest.TestCase):
@@ -170,6 +171,251 @@ class PacingTabTests(unittest.TestCase):
         plan = at.dataframe[-1].value
         self.assertIn("30 g carbs + water", list(plan["Action"]))      # 90 g an hour, a third per feed
         self.assertTrue(any("fructose" in c.value for c in at.caption))
+
+
+# ── Before, during and after one ride (fueling.ride_plan) ──────────────────────────────────────
+
+ASKED = {"nutrition_referral": "0"}            # the health question answered no
+
+
+def _texts(ideas) -> str:
+    return " ".join(i["text"] for i in ideas).lower()
+
+
+class RidePlanTests(unittest.TestCase):
+    def test_no_weight_no_plan(self):
+        self.assertFalse(fueling.ride_plan(120, None, 0.7)["ok"])
+
+    def test_intensity_from_if_or_workout_type(self):
+        self.assertEqual(fueling.intensity_if(0.82), 0.82)
+        self.assertEqual(fueling.intensity_if("Threshold"), 0.95)
+        self.assertEqual(fueling.intensity_if("recovery"), 0.55)
+        self.assertIsNone(fueling.intensity_if("Other"))
+        self.assertEqual(fueling.ride_plan(60, 70, "VO2 Max")["effort"], "hard")
+
+    def test_before_a_long_ride_is_1_to_4_g_per_kg_with_ideas(self):
+        before = fueling.ride_plan(180, 70, "Endurance", settings={"usual_ride_time": "midday"})["before"]
+        self.assertEqual((before["g"], before["low"], before["high"]), (140, 70, 280))
+        self.assertEqual(before["timing"], "2 to 3 hours before")
+        self.assertFalse(before["early"])
+        self.assertTrue(before["why"])
+        self.assertTrue(2 <= len(before["ideas"]) <= 3)
+        self.assertEqual(before["ideas"][0]["kind"], "recipe")
+
+    def test_short_easy_ride_needs_nothing_before_but_short_hard_one_gets_a_snack(self):
+        self.assertEqual(fueling.ride_plan(45, 70, 0.70)["before"]["g"], 0)
+        hard = fueling.ride_plan(45, 70, 0.95)["before"]
+        self.assertEqual(hard["g"], 70)                           # about 1 g/kg
+        self.assertEqual(hard["timing"], "30 to 60 minutes before")
+        self.assertTrue(hard["ideas"])
+
+    def test_early_ride_from_start_time_gets_a_snack_and_a_big_dinner(self):
+        plan = fueling.ride_plan(150, 70, 0.75, start_time="06:30")
+        before = plan["before"]
+        self.assertTrue(before["early"])
+        self.assertEqual(before["g"], 70)
+        self.assertEqual(before["timing"], "30 to 60 minutes before")
+        self.assertIn("dinner", before["why"])
+        self.assertIsNotNone(before["night_before"])
+        self.assertTrue(all(i["kind"] == "food" for i in before["ideas"]))
+
+    def test_early_ride_from_usual_ride_time_and_start_time_wins(self):
+        early = {"usual_ride_time": "early"}
+        self.assertTrue(fueling.ride_plan(150, 70, 0.75, settings=early)["before"]["early"])
+        self.assertFalse(fueling.ride_plan(150, 70, 0.75, start_time="12:00", settings=early)["before"]["early"])
+        self.assertFalse(fueling.ride_plan(150, 70, 0.75, settings={"usual_ride_time": "evening"})["before"]["early"])
+
+    def test_early_snack_ideas_are_gut_friendly(self):
+        from metrics import foods
+        before = fueling.ride_plan(150, 70, 0.75, start_time="06:00")["before"]
+        combos = foods.suggest("before", 70, 0, {"gut_sensitive": True})["combos"]
+        self.assertEqual([c["text"] for c in combos], [i["text"] for i in before["ideas"]])
+
+    def test_fasted_option_only_on_easy_short_rides_with_the_health_question_answered_no(self):
+        self.assertIsNotNone(fueling.ride_plan(60, 70, "Recovery", settings=ASKED)["fasted"])
+        self.assertIsNone(fueling.ride_plan(60, 70, 0.95, settings=ASKED)["fasted"])       # hard day
+        self.assertIsNone(fueling.ride_plan(60, 70, 0.75, settings=ASKED)["fasted"])       # steady
+        self.assertIsNone(fueling.ride_plan(120, 70, 0.60, settings=ASKED)["fasted"])      # long ride
+        self.assertIsNone(fueling.ride_plan(60, 70, 0.60, settings=ASKED, race=True)["fasted"])
+        self.assertIsNone(fueling.ride_plan(60, 70, 0.60, settings={"nutrition_referral": "1"})["fasted"])
+        self.assertIsNone(fueling.ride_plan(60, 70, 0.60, settings={"nutrition_referral": True})["fasted"])
+        self.assertIsNone(fueling.ride_plan(60, 70, 0.60, settings={})["fasted"])           # unanswered
+
+    def test_caffeine_only_on_key_sessions_and_never_for_avoiders(self):
+        hard = fueling.ride_plan(90, 70, 0.95)
+        self.assertIsNotNone(hard["caffeine"])
+        self.assertLessEqual(hard["caffeine"]["mg"], 3 * 70)
+        self.assertIsNone(fueling.ride_plan(90, 70, 0.70)["caffeine"])
+        avoid = {"avoid_foods": "caffeine"}
+        plan = fueling.ride_plan(240, 70, 0.95, settings=avoid, race=True)
+        self.assertIsNone(plan["caffeine"])
+        rest = {k: v for k, v in plan.items() if k != "caffeine"}
+        self.assertNotIn("caf", str(rest).lower())
+
+    def test_evening_caffeine_warns_about_sleep(self):
+        plan = fueling.ride_plan(90, 70, 0.95, start_time="18:30")
+        self.assertIn("sleep", plan["caffeine"]["message"])
+
+    def test_no_caffeinated_food_in_any_idea(self):
+        from metrics import foods
+        lib = foods.by_id()
+        plan = fueling.ride_plan(240, 70, 0.95, race=True, day_carbs_g=600)
+        for combo in plan["during"]["ideas"]["combos"]:
+            self.assertFalse(any(foods.has_caffeine(lib[p["id"]]) for p in combo["items"]))
+        self.assertNotIn("caf", _texts(plan["before"]["ideas"] + plan["after"]["ideas"]))
+
+    def test_during_reuses_during_and_adds_hydration(self):
+        plan = fueling.ride_plan(180, 70, 0.70, indoor=True, race_on_calendar=True)
+        d = plan["during"]
+        self.assertEqual(d["carbs"], fueling.during(180, 0.70))
+        self.assertNotIn("caffeine", d)
+        self.assertEqual(d["feeds"], fueling.feeds(3, 60))
+        lines = " ".join(d["hydration"]["lines"])
+        self.assertIn("0.6 to 0.8 L an hour", lines)
+        self.assertIn("sodium", lines)
+        self.assertIn("never finish heavier", lines)
+        self.assertIn("Indoors", lines)
+        self.assertIn("limited", d["hydration"]["gut_training"]["text"])
+
+    def test_recovery_spin_needs_no_carbs_during_and_drinks_to_thirst(self):
+        d = fueling.ride_plan(50, 70, "Recovery")["during"]
+        self.assertEqual(d["carbs"]["g_per_h"], 0)
+        self.assertIn("drink to thirst", d["hydration"]["lines"][0])
+        self.assertIsNone(d["hydration"]["gut_training"])
+
+    def test_after_a_long_ride_is_protein_plus_carbs(self):
+        after = fueling.ride_plan(180, 70, 0.70, day_carbs_g=560)["after"]
+        self.assertEqual(after["protein_g"], 21)                  # 0.3 g/kg
+        self.assertEqual(after["carbs_g"], 84)                    # the recovery share of the day
+        self.assertIsNone(after["refuel"])
+        self.assertIn("repair", after["why"])
+        self.assertTrue(2 <= len(after["ideas"]) <= 3)
+        self.assertIn("1.25 to 1.5 L", after["rehydrate"])
+
+    def test_refuel_when_the_next_hard_session_is_under_8_hours_away(self):
+        after = fueling.ride_plan(120, 70, 0.95, next_hard_in_h=5)["after"]
+        self.assertEqual((after["refuel"]["g_per_h"], after["refuel"]["high_per_h"]), (70, 84))
+        self.assertEqual(after["refuel"]["hours"], 4)
+        self.assertIsNone(fueling.ride_plan(120, 70, 0.95, next_hard_in_h=10)["after"]["refuel"])
+
+    def test_short_easy_ride_after_is_the_next_meal(self):
+        after = fueling.ride_plan(45, 70, 0.6)["after"]
+        self.assertEqual(after["protein_g"], 0)
+        self.assertEqual(after["ideas"], [])
+        self.assertIsNone(after["rehydrate"])
+
+    def test_every_idea_respects_the_rider_settings(self):
+        from metrics import foods
+        from metrics import recipes as rec
+        lib = foods.by_id()
+        vegan_nut_free = {"diet": "vegan", "avoid_foods": "peanuts,tree_nuts", "usual_ride_time": "early"}
+        allowed_recipes = {r["id"] for r in rec.allowed_recipes(vegan_nut_free)}
+        for minutes, intensity in ((180, 0.7), (45, 0.95), (120, 0.9)):
+            plan = fueling.ride_plan(minutes, 70, intensity, settings=vegan_nut_free, day_carbs_g=500,
+                                     next_hard_in_h=4)
+            ideas = plan["before"]["ideas"] + plan["after"]["ideas"]
+            for idea in ideas:
+                if idea["kind"] == "recipe":
+                    self.assertIn(idea["id"], allowed_recipes)
+            if plan["before"]["night_before"]:
+                self.assertIn(plan["before"]["night_before"]["id"], allowed_recipes)
+            for combo in plan["during"]["ideas"].get("combos", []):
+                self.assertTrue(all(foods.allowed(lib[p["id"]], vegan_nut_free) for p in combo["items"]))
+
+
+class TodayPageTests(unittest.TestCase):
+    """The Fuel today tile on pages/01_Dashboard.py."""
+
+    def setUp(self):
+        from db import queries as q
+        self.q = q
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        for p in (mock.patch.object(schema, "DB_PATH", os.path.join(self.tmp.name, "t.db")),
+                  # Page links only resolve inside the full app, and Garmin reads tokens from home.
+                  mock.patch("streamlit.page_link"),
+                  mock.patch("auth.garmin.is_connected", return_value=False)):
+            p.start()
+            self.addCleanup(p.stop)
+        schema.run_migrations()
+        q._settings_cache.clear()
+        self.addCleanup(q._settings_cache.clear)
+
+    def _run(self):
+        return AppTest.from_file(DASHBOARD, default_timeout=90).run()
+
+    def _plan(self, minutes, tss, kind="Endurance", day=None):
+        import json
+        from datetime import date
+        steps = json.dumps([{"kind": "interval", "minutes": minutes, "low_pct": 65, "high_pct": 75,
+                             "repeat_count": None, "repeat_steps": None}])
+        conn = schema.get_conn()
+        conn.execute("INSERT INTO workouts (date, name, workout_type, structured_json, tss_planned, completed) "
+                     "VALUES (?,?,?,?,?,0)", (day or date.today().isoformat(), f"{kind} ride", kind, steps, tss))
+        conn.commit()
+        conn.close()
+
+    def _markdown(self, at) -> str:
+        return " ".join(m.value for m in at.markdown)
+
+    def test_empty_database_asks_for_weight(self):
+        at = self._run()
+        self.assertFalse(at.exception)
+        self.assertIn("Add your weight in Settings to see daily fuel targets.", self._markdown(at))
+        self.assertTrue(any(b.label == "Add your weight" for b in at.button))
+        self.assertTrue(any(e.label == "Fueling basics" for e in at.expander))
+
+    def test_no_ride_shows_targets_and_a_sample_day_only(self):
+        self.q.set_setting("weight_kg", "70")
+        at = self._run()
+        self.assertFalse(at.exception)
+        self.assertEqual([m.label for m in at.metric], ["Carbs", "Protein", "Calories"])
+        text = self._markdown(at)
+        self.assertIn("A sample day", text)
+        self.assertNotIn("**Before**", text)
+        self.assertTrue(any(b.label == "Set a base" for b in at.button))
+
+    def test_planned_ride_shows_before_during_and_after(self):
+        from datetime import date, timedelta
+        self.q.set_setting("weight_kg", "70")
+        self.q.set_setting("ftp_watts", "250")
+        self.q.set_setting("base_kcal", "2000")
+        self._plan(180, 170)
+        self._plan(150, 140, day=(date.today() + timedelta(days=1)).isoformat())
+        at = self._run()
+        self.assertFalse(at.exception)
+        text = self._markdown(at)
+        for part in ("**Before**", "**During**", "**After**", "60 g carbs an hour", "21 g protein",
+                     "A sample day"):
+            self.assertIn(part, text)
+        self.assertIn("Tomorrow is 2.5 hours", text)
+        self.assertTrue(any(m.label == "Calories" and "kcal" in m.value for m in at.metric))
+
+    def test_sample_day_opens_the_recipe(self):
+        self.q.set_setting("weight_kg", "70")
+        at = self._run()
+        with mock.patch("streamlit.switch_page") as go:
+            next(b for b in at.button if b.key == "fuel_rec_breakfast").click().run()
+        self.assertTrue(at.session_state["rec_open"])
+
+    def test_referral_message_shows_first(self):
+        from metrics import diet
+        self.q.set_setting("weight_kg", "70")
+        self.q.set_setting("nutrition_referral", "1")
+        at = self._run()
+        self.assertFalse(at.exception)
+        self.assertTrue(any(diet.REFERRAL_MESSAGE == w.value for w in at.warning))
+
+    def test_caffeine_avoider_sees_no_caffeine_on_a_hard_day(self):
+        self.q.set_setting("weight_kg", "70")
+        self.q.set_setting("ftp_watts", "250")
+        self._plan(90, 140, kind="Threshold")
+        at = self._run()
+        self.assertTrue(any("caffeine" in c.value for c in at.caption))
+        self.q.set_setting("avoid_foods", "caffeine")
+        at = self._run()
+        self.assertFalse(at.exception)
+        self.assertFalse(any("caffeine" in c.value.lower() for c in at.caption))
 
 
 if __name__ == "__main__":
